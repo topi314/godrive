@@ -1,0 +1,56 @@
+{{ template "head.gohtml" . }}
+<body>
+<div id="error-popup" style="display: none;"></div>
+<dialog id="upload-dialog">
+    <div class="upload-dialog-header">
+        <h2>Upload</h2>
+        <button id="upload-dialog-close" class="icon-btn"></button>
+    </div>
+    <div class="share-dialog-main">
+        <label for="path">Path</label>
+        <input id="path" type="text" name="path" value="{{ .Path }}}">
+
+        <label for="name">Name</label>
+        <input id="name" type="text" name="name" value="">
+
+        <label for="description">Description</label>
+        <input id="description" type="text" name="description" value="">
+
+        <label for="private">Private</label>
+        <input id="private" type="checkbox" name="private" value="">
+
+        <label for="file"></label>
+        <input id="file" type="file" name="file" required>
+
+        <button id="upload">Upload</button>
+    </div>
+</dialog>
+{{ template "header.gohtml" . }}
+<main>
+    <div id="top-bar">
+        <div class="path">
+            <a href="/">/</a>
+            {{ range $path := .PathParts }}
+                <span>/</span>
+                <a href="/{{ $path }}">{{ $path }}</a>
+            {{ end }}
+        </div>
+        <button id="upload-btn" class="btn">Upload</button>
+    </div>
+    <div id="files">
+        {{ range $file := .Files }}
+            <div class="file">
+                <span class="file-name">{{ $file.FullName }}</span>
+                <span class="file-size">{{ $file.Size }}</span>
+                <span class="file-date">{{ $file.CreatedAt }}</span>
+                <span class="file-description">{{ $file.Description }}</span>
+                <span class="file-private">{{ $file.Private }}</span>
+                <a class="file-download" href="/{{ $file.FullName }}">Download</a>
+            </div>
+        {{ end }}
+    </div>
+</main>
+<script src="/assets/theme.js" defer></script>
+<script src="/assets/script.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+.github/
+.gitignore
+README.md
+LICENSE
+Dockerfile
+godrive.json
+example.godrive.json
