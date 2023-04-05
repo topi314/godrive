@@ -1,28 +1,29 @@
 {{ template "head.gohtml" . }}
 <body>
 <div id="error-popup" style="display: none;"></div>
-<dialog id="upload-dialog">
-    <div class="upload-dialog-header">
+<dialog id="upload-dialog" class="dialog">
+    <div class="dialog-header">
         <h2>Upload</h2>
-        <button id="upload-dialog-close" class="icon-btn"></button>
+        <button id="upload-dialog-close" class="dialog-header-close icon-btn"></button>
     </div>
-    <div class="share-dialog-main">
-        <label for="path">Path</label>
-        <input id="path" type="text" name="path" value="{{ .Path }}}">
+    <div class="dialog-main">
+        <label for="upload-dir">Dir</label>
+        <input id="upload-dir" type="text" name="dir" value="{{ .Path }}">
 
-        <label for="name">Name</label>
-        <input id="name" type="text" name="name" value="">
+        <label for="upload-name">Name</label>
+        <input id="upload-name" type="text" name="name" value="">
 
-        <label for="description">Description</label>
-        <input id="description" type="text" name="description" value="">
+        <label for="upload-description">Description</label>
+        <input id="upload-description" type="text" name="description" value="">
 
-        <label for="private">Private</label>
-        <input id="private" type="checkbox" name="private" value="">
+        <label for="upload-private">Private</label>
+        <input id="upload-private" type="checkbox" name="private" value="">
 
-        <label for="file"></label>
-        <input id="file" type="file" name="file" required>
-
-        <button id="upload">Upload</button>
+        <label for="upload-file">File</label>
+        <input id="upload-file" type="file" name="file" required>
+    </div>
+    <div class="dialog-footer">
+        <button id="upload-btn" class="btn success">Upload</button>
     </div>
 </dialog>
 {{ template "header.gohtml" . }}
@@ -30,22 +31,27 @@
     <div id="top-bar">
         <div class="path">
             <a href="/">/</a>
-            {{ range $path := .PathParts }}
-                <span>/</span>
-                <a href="/{{ $path }}">{{ $path }}</a>
+            {{ range $index, $path := .PathParts }}
+                <a href="/{{ assemblePath $.PathParts $index }}">{{ $path }}{{ if not (isLast $.PathParts $index) }}/{{end}}</a>
             {{ end }}
         </div>
-        <button id="upload-btn" class="btn">Upload</button>
+        <button id="upload-dialog-btn" class="btn success">Upload</button>
     </div>
     <div id="files">
         {{ range $file := .Files }}
             <div class="file">
-                <span class="file-name">{{ $file.FullName }}</span>
-                <span class="file-size">{{ $file.Size }}</span>
-                <span class="file-date">{{ $file.CreatedAt }}</span>
-                <span class="file-description">{{ $file.Description }}</span>
-                <span class="file-private">{{ $file.Private }}</span>
-                <a class="file-download" href="/{{ $file.FullName }}">Download</a>
+                <div><span class="icon {{ if $file.IsDir }}folder{{ else }}file{{ end }}-icon"></span></div>
+                <div><a class="file-name" href="{{ $file.FullName }}">{{ $file.Name }}</a></div>
+                <div><span class="file-size">{{ humanizeBytes $file.Size }}</span></div>
+                <div><span class="file-date">{{ humanizeTime $file.Date }}</span></div>
+                <div><span class="file-description">{{ $file.Description }}</span></div>
+                <div>
+                    {{ if not $file.IsDir }}
+                        <a class="file-download" href="{{ $file.FullName }}?dl=1">Download</a>
+                    {{ else }}
+                        <a class="file-download" href="{{ $file.FullName }}">Open</a>
+                    {{ end }}
+                </div>
             </div>
         {{ end }}
     </div>

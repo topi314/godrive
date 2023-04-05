@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/go-chi/httprate"
 	"github.com/go-jose/go-jose/v3"
 )
 
@@ -28,18 +27,6 @@ func NewServer(version string, cfg Config, db *DB, signer jose.Signer, storage S
 	s.server = &http.Server{
 		Addr:    cfg.ListenAddr,
 		Handler: s.Routes(),
-	}
-
-	if cfg.RateLimit != nil && cfg.RateLimit.Requests > 0 && cfg.RateLimit.Duration > 0 {
-		s.rateLimitHandler = httprate.NewRateLimiter(
-			cfg.RateLimit.Requests,
-			cfg.RateLimit.Duration,
-			httprate.WithLimitHandler(s.rateLimit),
-			httprate.WithKeyFuncs(
-				httprate.KeyByIP,
-				httprate.KeyByEndpoint,
-			),
-		).Handler
 	}
 
 	return s

@@ -3,29 +3,24 @@ package godrive
 import (
 	"fmt"
 	"strings"
-	"time"
 )
 
 type Config struct {
-	DevMode     bool             `cfg:"dev_mode"`
-	Debug       bool             `cfg:"debug"`
-	ListenAddr  string           `cfg:"listen_addr"`
-	HTTPTimeout time.Duration    `cfg:"http_timeout"`
-	Database    DatabaseConfig   `cfg:"database"`
-	Storage     StorageConfig    `cfg:"storage"`
-	RateLimit   *RateLimitConfig `cfg:"rate_limit"`
-	JWTSecret   string           `cfg:"jwt_secret"`
+	DevMode    bool           `cfg:"dev_mode"`
+	Debug      bool           `cfg:"debug"`
+	ListenAddr string         `cfg:"listen_addr"`
+	Database   DatabaseConfig `cfg:"database"`
+	Storage    StorageConfig  `cfg:"storage"`
+	JWTSecret  string         `cfg:"jwt_secret"`
 }
 
 func (c Config) String() string {
-	return fmt.Sprintf("\n DevMode: %t\n Debug: %t\n ListenAddr: %s\n HTTPTimeout: %s\n Database: %s\n Storage: %s\n RateLimit: %s\n JWTSecret: %s\n",
+	return fmt.Sprintf("\n DevMode: %t\n Debug: %t\n ListenAddr: %s\n Database: %s\n Storage: %s\n JWTSecret: %s\n",
 		c.DevMode,
 		c.Debug,
 		c.ListenAddr,
-		c.HTTPTimeout,
 		c.Database,
 		c.Storage,
-		c.RateLimit,
 		strings.Repeat("*", len(c.JWTSecret)),
 	)
 }
@@ -128,20 +123,4 @@ func (c StorageConfig) String() string {
 		str += "Invalid storage type!"
 	}
 	return str
-}
-
-type RateLimitConfig struct {
-	Requests  int           `cfg:"requests"`
-	Duration  time.Duration `cfg:"duration"`
-	Whitelist []string      `cfg:"whitelist"`
-	Blacklist []string      `cfg:"blacklist"`
-}
-
-func (c RateLimitConfig) String() string {
-	return fmt.Sprintf("\n  Requests: %d\n  Duration: %s\n  Whitelist: %v\n  Blacklist: %v",
-		c.Requests,
-		c.Duration,
-		c.Whitelist,
-		c.Blacklist,
-	)
 }

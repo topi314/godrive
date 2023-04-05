@@ -21,7 +21,7 @@ func NewStorage(ctx context.Context, config StorageConfig) (Storage, error) {
 
 type Storage interface {
 	GetObject(ctx context.Context, name string) (io.ReadCloser, error)
-	PutObject(ctx context.Context, name string, size int64, reader io.Reader, contentType string) error
+	PutObject(ctx context.Context, name string, size uint64, reader io.Reader, contentType string) error
 	DeleteObject(ctx context.Context, name string) error
 }
 
@@ -39,7 +39,7 @@ func (l *localStorage) GetObject(ctx context.Context, name string) (io.ReadClose
 	return os.Open(l.path + "/" + name)
 }
 
-func (l *localStorage) PutObject(ctx context.Context, name string, _ int64, reader io.Reader, _ string) error {
+func (l *localStorage) PutObject(ctx context.Context, name string, _ uint64, reader io.Reader, _ string) error {
 	file, err := os.Create(l.path + "/" + name)
 	if err != nil {
 		return err
@@ -91,8 +91,8 @@ func (s *s3Storage) GetObject(ctx context.Context, name string) (io.ReadCloser, 
 	return s.client.GetObject(ctx, s.bucket, name, minio.GetObjectOptions{})
 }
 
-func (s *s3Storage) PutObject(ctx context.Context, name string, size int64, reader io.Reader, contentType string) error {
-	_, err := s.client.PutObject(ctx, s.bucket, name, reader, size, minio.PutObjectOptions{
+func (s *s3Storage) PutObject(ctx context.Context, name string, size uint64, reader io.Reader, contentType string) error {
+	_, err := s.client.PutObject(ctx, s.bucket, name, reader, int64(size), minio.PutObjectOptions{
 		ContentType: contentType,
 	})
 	return err

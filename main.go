@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"reflect"
 	"strings"
 	"syscall"
 	"time"
@@ -115,7 +116,14 @@ func main() {
 	)
 
 	funcs := template.FuncMap{
-		"humanizeTime": humanize.Time,
+		"humanizeTime":  humanize.Time,
+		"humanizeBytes": humanize.Bytes,
+		"isLast": func(slice any, index int) bool {
+			return reflect.ValueOf(slice).Len()-1 == index
+		},
+		"assemblePath": func(slice []string, index int) string {
+			return strings.Join(slice[:index+1], "/")
+		},
 	}
 
 	if cfg.DevMode {
