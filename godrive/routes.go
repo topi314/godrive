@@ -152,7 +152,7 @@ func (s *Server) serveFiles(w http.ResponseWriter, r *http.Request, rPath string
 		fullName := path.Join(file.Dir, file.Name)
 		var fw io.Writer
 		fw, err = zw.CreateHeader(&zip.FileHeader{
-			Name:               fullName,
+			Name:               strings.TrimPrefix(fullName, "/"),
 			UncompressedSize64: file.Size,
 			Modified:           file.UpdatedAt,
 			Comment:            file.Description,

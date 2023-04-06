@@ -34,11 +34,5 @@
     "bucket": "godrive",
     "region": "",
     "secure": false
-  },
-  "rate_limit": {
-    "requests": 10,
-    "duration": "1m",
-    "whitelist": ["127.0.0.1"],
-    "blacklist": ["123.456.789.0"]
   }
 }

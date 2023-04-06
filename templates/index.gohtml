@@ -1,29 +1,16 @@
 {{ template "head.gohtml" . }}
 <body>
 <div id="error-popup" style="display: none;"></div>
-<dialog id="upload-dialog" class="dialog">
+<dialog id="upload-popup" class="dialog">
     <div class="dialog-header">
         <h2>Upload</h2>
-        <button id="upload-dialog-close" class="dialog-header-close icon-btn"></button>
     </div>
-    <div class="dialog-main">
-        <label for="upload-dir">Dir</label>
-        <input id="upload-dir" type="text" name="dir" value="{{ .Path }}">
+    <div id="upload-popup-files" class="dialog-main">
 
-        <label for="upload-name">Name</label>
-        <input id="upload-name" type="text" name="name" value="">
-
-        <label for="upload-description">Description</label>
-        <input id="upload-description" type="text" name="description" value="">
-
-        <label for="upload-private">Private</label>
-        <input id="upload-private" type="checkbox" name="private" value="">
-
-        <label for="upload-file">File</label>
-        <input id="upload-file" type="file" name="file" required>
     </div>
     <div class="dialog-footer">
-        <button id="upload-btn" class="btn success">Upload</button>
+        <button class="btn danger">Cancel</button>
+        <button class="btn success">Upload</button>
     </div>
 </dialog>
 {{ template "header.gohtml" . }}
@@ -35,7 +22,6 @@
                 <a href="/{{ assemblePath $.PathParts $index }}">{{ $path }}{{ if not (isLast $.PathParts $index) }}/{{end}}</a>
             {{ end }}
         </div>
-        <button id="upload-dialog-btn" class="btn success">Upload</button>
     </div>
     <div id="files">
         {{ range $file := .Files }}
@@ -54,6 +40,13 @@
                 </div>
             </div>
         {{ end }}
+    </div>
+    <div id="file-upload">
+        <input type="file" id="file" name="files[]" data-multiple-caption="{count} files selected" multiple hidden>
+        <label for="file">
+            Choose a file
+            or drop it here.
+        </label>
     </div>
 </main>
 <script src="/assets/theme.js" defer></script>

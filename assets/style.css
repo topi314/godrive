@@ -11,6 +11,7 @@
 .dark {
     --bg-primary: #282c34;
     --bg-secondary: #1f2228;
+    --bg-secondary-active: #15171a;
     --nav-button-bg: #373b41;
     --text-primary: #ffffff;
     --text-secondary: #828997;
@@ -40,6 +41,7 @@
 .light {
     --bg-primary: #fafafa;
     --bg-secondary: #ebecef;
+    --bg-secondary-active: #d1d5da;
     --nav-button-bg: #d1d5da;
     --text-primary: #282c34;
     --text-secondary: #1f2228;
@@ -260,44 +262,37 @@ main {
 }
 
 .dialog {
-    color: var(--text-primary);
-    border: none;
-    border-radius: 1rem;
-    padding: 1rem;
-    background-color: var(--bg-secondary);
-}
+    width: 70vw;
+    height: 70vh;
 
-.dialog::backdrop {
-    background-color: rgba(0, 0, 0, 0.7);
+    background-color: var(--bg-primary);
+    border-radius: 1rem;
+    border: 1px solid var(--bg-secondary);
 }
 
 .dialog-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    gap: 1rem;
-}
-
-.dialog-header h2 {
-    margin: 0;
-}
-
-.dialog-header-close {
-    background-image: var(--close);
+    justify-content: space-between;
+    border-bottom: 1px solid var(--bg-secondary);
 }
 
 .dialog-main {
     display: grid;
     grid-template-columns: auto 1fr;
-    justify-items: start;
-    gap: 1rem;
     padding: 1rem;
+    gap: 1rem;
 }
 
 .dialog-footer {
     display: flex;
-    justify-content: flex-end;
-    gap: 1rem;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid var(--bg-secondary);
+}
+
+dialog::backdrop {
+    background-color: rgba(0, 0, 0, 0.7);
 }
 
 main {
@@ -357,6 +352,29 @@ main {
 #theme-toggle + label {
     background-image: var(--theme);
 }
+
+#file-upload {
+    display: flex;
+    padding: 0.2rem;
+    border-radius: 1rem;
+    background-color: var(--bg-secondary);
+    transition: background-color 0.2s ease;
+}
+
+#file-upload.active,
+#file-upload:hover {
+    background-color: var(--bg-secondary-active);
+}
+
+#file + label {
+    flex-grow: 1;
+    border: 2px dashed var(--bg-primary);
+    border-radius: 1rem;
+    text-align: center;
+    padding: 1rem;
+    cursor: pointer;
+}
+
 
 .file-icon {
     background-image: var(--file);

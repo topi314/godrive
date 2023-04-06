@@ -1,53 +1,105 @@
-document.querySelector("#upload-dialog-btn").addEventListener("click", async () => {
-    document.querySelector("#upload-dialog").showModal();
+let files = [];
+
+document.querySelector("#file-upload").addEventListener("dragover", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    document.querySelector("#file-upload").classList.add("active");
 });
 
-document.querySelector("#upload-dialog-close").addEventListener("click", () => {
-    document.querySelector("#upload-dialog").close();
+document.querySelector("#file-upload").addEventListener("dragenter", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    document.querySelector("#file-upload").classList.add("active");
 });
 
-document.querySelector("#upload-file").addEventListener("change", () => {
-    const name = document.querySelector("#upload-name")
-    if (!name.value) {
-        name.value = document.querySelector("#upload-file").files[0].name;
+document.querySelector("#file-upload").addEventListener("dragleave", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    document.querySelector("#file-upload").classList.remove("active");
+});
+
+document.querySelector("#file-upload").addEventListener("drop", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    document.querySelector("#file-upload").classList.remove("active");
+    files = e.dataTransfer.files;
+    openUploadPopup();
+});
+
+document.querySelector("#file").addEventListener("change", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    files = e.target.files;
+    openUploadPopup();
+})
+
+function openUploadPopup() {
+    console.log("openUploadPopup", files);
+    const main = document.querySelector("#upload-popup-files");
+    main.innerHTML = "";
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const label = document.createElement("label");
+        label.innerText = file.name;
+        label.htmlFor = `file-${i}-name`;
+        main.appendChild(label);
+
+        const name = document.createElement("input");
+        name.type = "text";
+        name.id = `file-${i}-name`;
+        name.value = file.name;
+        name.placeholder = "Name";
+
+        main.appendChild(name);
     }
-});
+    document.querySelector("#upload-popup").showModal();
+}
 
-document.querySelector("#upload-btn").addEventListener("click", async () => {
-    const file = document.querySelector("#upload-file").files[0];
+function uploadFiles(files) {
     const data = new FormData();
-    data.append("json", JSON.stringify({
-        dir: document.querySelector("#upload-dir").value,
-        size: file.size,
-        description: document.querySelector("#upload-description").value,
-        private: document.querySelector("#upload-private").checked,
-    }));
-    data.append("file", file, document.querySelector("#upload-name").value || file.name);
+    const json = [];
+    for (let [i, file] of files.entries()) {
+        json.push({
+            dir: window.location.pathname,
+            size: file.size,
+            description: document.querySelector(`#file-${i}-description`).value,
+            private: document.querySelector(`#file-${i}-private`).checked,
+        });
+        data.append("file", file, file.name);
+    }
+    data.append("json", JSON.stringify(json));
 
-    const btn = document.querySelector("#upload-btn");
-    btn.disabled = true;
-    btn.classList.add("loading");
-
-    const response = await fetch("/api/files", {
-        method: "POST",
-        body: data,
-    });
-    let body = await response.text();
-    try {
-        body = JSON.parse(body);
-    } catch (e) {
-        body = {message: body};
+    for (let [i, file] of files.entries()) {
+        data.append(`files[${i}]`, file, document.querySelector(`#file-${i}-name`).value || file.name);
     }
 
-    btn.classList.remove("loading");
-    btn.disabled = false;
-
-    document.querySelector("#upload-dialog").close();
-    if (!response.ok) {
-        console.error("error uploading file:", response);
-        showErrorPopup(body.message || response.statusText);
+    const rq = new XMLHttpRequest();
+    rq.open("POST", "/api/files");
+    rq.onload = () => {
+        if (rq.status === 200) {
+            window.location.reload();
+        } else {
+            console.error("error uploading file:", rq);
+            showErrorPopup(rq.statusText);
+        }
     }
-});
+    rq.onerror = () => {
+        console.error("error uploading file:", rq);
+        showErrorPopup(rq.statusText);
+    }
+    rq.onprogress = (e) => {
+        if (e.lengthComputable) {
+            const percent = Math.round((e.loaded / e.total) * 100);
+            document.querySelector("#upload-progress").style.width = `${percent}%`;
+        }
+    }
+    rq.send(data);
+
+}
 
 function showErrorPopup(message) {
     const popup = document.getElementById("error-popup");
