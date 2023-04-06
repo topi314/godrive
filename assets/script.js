@@ -1,7 +1,3 @@
-document.querySelector(".icon-btn.more").addEventListener("click", (e) => {
-    document.querySelector("#more-menu").classList.toggle("show");
-});
-
 let files = [];
 
 document.querySelector("#file-upload").addEventListener("dragover", (e) => {
