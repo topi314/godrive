@@ -435,6 +435,8 @@ select:hover {
     text-align: center;
     padding: 5rem 1rem 1rem 1rem;
     cursor: pointer;
+    font-size: 1rem;
+    font-weight: bold;
     background-image: var(--upload);
     background-repeat: no-repeat;
     background-position: top;
