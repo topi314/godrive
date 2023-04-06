@@ -15,7 +15,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"golang.org/x/exp/slices"
 )
 
 type (
@@ -36,7 +35,6 @@ type (
 	}
 
 	FileRequest struct {
-		Dir         string `json:"dir"`
 		Size        uint64 `json:"size"`
 		Description string `json:"description"`
 		Private     bool   `json:"private"`
@@ -92,21 +90,12 @@ func (s *Server) Routes() http.Handler {
 	r.Handle("/favicon-light.png", s.file("/assets/favicon-light.png"))
 	r.Handle("/robots.txt", s.file("/assets/robots.txt"))
 	r.Group(func(r chi.Router) {
-		r.Route("/api", func(r chi.Router) {
-			r.Route("/files", func(r chi.Router) {
-				r.Post("/", s.PostFile)
-				//r.Get("/", s.GetFiles)
-				r.Route("/{id}", func(r chi.Router) {
-					//r.Get("/", s.GetFile)
-					//r.Head("/", s.GetFile)
-					//r.Patch("/", s.PatchFile)
-					//r.Delete("/", s.DeleteFile)
-				})
-			})
-		})
 		r.Get("/version", s.GetVersion)
-		r.Get("/*", s.GetHome)
-		r.Head("/*", s.GetHome)
+		r.Get("/*", s.GetFiles)
+		r.Head("/*", s.GetFiles)
+		r.Post("/*", s.PostFiles)
+		r.Patch("/*", s.PatchFiles)
+		r.Delete("/*", s.DeleteFiles)
 	})
 	r.NotFound(s.notFound)
 
@@ -184,173 +173,8 @@ func (s *Server) writeFile(ctx context.Context, w io.Writer, fullName string) er
 	return nil
 }
 
-func (s *Server) GetHome(w http.ResponseWriter, r *http.Request) {
-	rPath := r.URL.Path
-
-	dl := r.URL.Query().Get("dl")
-	if dl != "" && dl != "0" {
-		s.serveFiles(w, r, rPath)
-		return
-	}
-
-	files, err := s.db.FindFiles(r.Context(), rPath)
-	if err != nil {
-		s.error(w, r, err, http.StatusInternalServerError)
-		return
-	}
-
-	if len(files) == 1 && path.Join(files[0].Dir, files[0].Name) == rPath {
-		w.Header().Set("Content-Type", files[0].ContentType)
-		w.Header().Set("Content-Length", strconv.FormatUint(files[0].Size, 10))
-		if err = s.writeFile(r.Context(), w, rPath); err != nil {
-			s.error(w, r, err, http.StatusInternalServerError)
-			return
-		}
-		return
-	}
-
-	var templateFiles []TemplateFile
-	for _, file := range files {
-		if file.Private {
-			continue
-		}
-		updatedAt := file.UpdatedAt
-		if updatedAt.IsZero() {
-			updatedAt = file.CreatedAt
-		}
-
-		relativePath := strings.TrimPrefix(file.Dir, rPath)
-		if relativePath != "" {
-			if strings.Count(relativePath, "") > 0 {
-				parts := strings.Split(relativePath, "/")
-				if len(parts) > 1 {
-					relativePath = parts[1]
-				} else {
-					relativePath = parts[0]
-				}
-			}
-
-			index := slices.IndexFunc(templateFiles, func(f TemplateFile) bool {
-				return f.Name == relativePath
-			})
-			if index > -1 {
-				templateFiles[index].Size += file.Size
-				if templateFiles[index].Date.Before(updatedAt) {
-					templateFiles[index].Date = updatedAt
-				}
-				continue
-			}
-
-			templateFiles = append(templateFiles, TemplateFile{
-				IsDir:       true,
-				Name:        relativePath,
-				Dir:         rPath,
-				Size:        file.Size,
-				Description: "",
-				Date:        updatedAt,
-			})
-			continue
-		}
-
-		templateFiles = append(templateFiles, TemplateFile{
-			IsDir:       false,
-			Name:        file.Name,
-			Dir:         file.Dir,
-			Size:        file.Size,
-			Description: file.Description,
-			Date:        updatedAt,
-		})
-	}
-
-	vars := TemplateVariables{
-		Path:      rPath,
-		PathParts: strings.FieldsFunc(rPath, func(r rune) bool { return r == '/' }),
-		Files:     templateFiles,
-		Theme:     "dark",
-	}
-	if err = s.tmpl(w, "index.gohtml", vars); err != nil {
-		log.Println("failed to execute template:", err)
-	}
-}
-
-func (s *Server) PostFile(w http.ResponseWriter, r *http.Request) {
-	mr, err := r.MultipartReader()
-	if err != nil {
-		s.error(w, r, err, http.StatusBadRequest)
-		return
-	}
-
-	part, err := mr.NextPart()
-	if err != nil {
-		s.error(w, r, err, http.StatusBadRequest)
-		return
-	}
-	defer part.Close()
-
-	if part.FormName() != "json" {
-		s.error(w, r, errors.New("json field not found"), http.StatusBadRequest)
-		return
-	}
-
-	var file FileRequest
-	if err = json.NewDecoder(part).Decode(&file); err != nil {
-		s.error(w, r, err, http.StatusBadRequest)
-		return
-	}
-
-	part, err = mr.NextPart()
-	if err != nil {
-		s.error(w, r, err, http.StatusBadRequest)
-		return
-	}
-	defer part.Close()
-
-	if part.FormName() != "file" {
-		s.error(w, r, errors.New("file field not found"), http.StatusBadRequest)
-		return
-	}
-	fileName := part.FileName()
-	if file.Dir == "" {
-		file.Dir = "/"
-	}
-	contentType := part.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "application/octet-stream"
-	}
-
-	createdFile, err := s.db.CreateFile(r.Context(), file.Dir, fileName, file.Size, contentType, file.Description, file.Private)
-	if err != nil {
-		if errors.Is(err, ErrFileAlreadyExists) {
-			s.error(w, r, err, http.StatusConflict)
-			return
-		}
-		s.error(w, r, err, http.StatusInternalServerError)
-		return
-	}
-
-	if err = s.storage.PutObject(r.Context(), path.Join(file.Dir, fileName), file.Size, part, contentType); err != nil {
-		s.error(w, r, err, http.StatusInternalServerError)
-		return
-	}
-
-	s.ok(w, r, FileResponse{
-		Dir:         createdFile.Dir,
-		Name:        createdFile.Name,
-		Size:        createdFile.Size,
-		ContentType: createdFile.ContentType,
-		Description: createdFile.Description,
-		Private:     createdFile.Private,
-		CreatedAt:   createdFile.CreatedAt,
-		UpdatedAt:   createdFile.UpdatedAt,
-	})
-}
-
 func (s *Server) GetVersion(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte(s.version))
-}
-
-func (s *Server) redirectRoot(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
@@ -364,23 +188,6 @@ func (s *Server) log(r *http.Request, logType string, err error) {
 		return
 	}
 	log.Printf("Error while handling %s(%s) %s: %s\n", logType, middleware.GetReqID(r.Context()), r.RequestURI, err)
-}
-
-func (s *Server) prettyError(w http.ResponseWriter, r *http.Request, err error, status int) {
-	if status == http.StatusInternalServerError {
-		s.log(r, "pretty request", err)
-	}
-	w.WriteHeader(status)
-
-	vars := map[string]any{
-		"Error":     err.Error(),
-		"Status":    status,
-		"RequestID": middleware.GetReqID(r.Context()),
-		"Path":      r.URL.Path,
-	}
-	if tmplErr := s.tmpl(w, "error.gohtml", vars); tmplErr != nil && tmplErr != http.ErrHandlerTimeout {
-		s.log(r, "template", tmplErr)
-	}
 }
 
 func (s *Server) error(w http.ResponseWriter, r *http.Request, err error, status int) {

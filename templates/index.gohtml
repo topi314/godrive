@@ -2,15 +2,27 @@
 <body>
 <div id="error-popup" style="display: none;"></div>
 <dialog id="upload-popup" class="dialog">
-    <div class="dialog-header">
-        <h2>Upload</h2>
-    </div>
-    <div id="upload-popup-files" class="dialog-main">
-
-    </div>
-    <div class="dialog-footer">
-        <button class="btn danger">Cancel</button>
-        <button class="btn success">Upload</button>
+    <div>
+        <div class="dialog-header">
+            <h2>Upload</h2>
+        </div>
+        <div id="upload-files" class="dialog-main">
+            <div>
+                <label for="upload-file-dir">Directory</label>
+                <input id="upload-file-dir" type="text" value="{{ .Path }}" autocomplete="off">
+            </div>
+            <div id="upload-popup-files"></div>
+        </div>
+        <div id="upload-files-feedback" class="dialog-main">
+            <div id="upload-popup-error"></div>
+            <div id="upload-popup-progress">
+                <div id="upload-popup-progress-bar"></div>
+            </div>
+        </div>
+        <div class="dialog-footer">
+            <button id="cancel-btn" class="btn danger">Cancel</button>
+            <button id="upload-btn" class="btn success">Upload</button>
+        </div>
     </div>
 </dialog>
 {{ template "header.gohtml" . }}
@@ -24,29 +36,28 @@
         </div>
     </div>
     <div id="files">
-        {{ range $file := .Files }}
+        {{ range $index, $file := .Files }}
             <div class="file">
                 <div><span class="icon {{ if $file.IsDir }}folder{{ else }}file{{ end }}-icon"></span></div>
                 <div><a class="file-name" href="{{ $file.FullName }}">{{ $file.Name }}</a></div>
                 <div><span class="file-size">{{ humanizeBytes $file.Size }}</span></div>
                 <div><span class="file-date">{{ humanizeTime $file.Date }}</span></div>
                 <div><span class="file-description">{{ $file.Description }}</span></div>
+                <div><a class="file-download" href="{{ $file.FullName }}?dl=1">Download</a></div>
                 <div>
-                    {{ if not $file.IsDir }}
-                        <a class="file-download" href="{{ $file.FullName }}?dl=1">Download</a>
-                    {{ else }}
-                        <a class="file-download" href="{{ $file.FullName }}">Open</a>
-                    {{ end }}
+                    <select class="file-more" data-file="{{ $file.FullName }}" autocomplete="off">
+                        <option value="none" selected disabled hidden>More</option>
+                        <option value="edit">Edit</option>
+                        <option value="delete">Delete</option>
+                        <option value="share">Share</option>
+                    </select>
                 </div>
             </div>
         {{ end }}
     </div>
     <div id="file-upload">
-        <input type="file" id="file" name="files[]" data-multiple-caption="{count} files selected" multiple hidden>
-        <label for="file">
-            Choose a file
-            or drop it here.
-        </label>
+        <input type="file" id="file" multiple hidden>
+        <label for="file">Choose files or drop here.</label>
     </div>
 </main>
 <script src="/assets/theme.js" defer></script>
