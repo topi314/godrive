@@ -183,11 +183,12 @@ func (s *Server) writeFile(ctx context.Context, w io.Writer, fullName string, st
 
 func (s *Server) PostFiles(w http.ResponseWriter, r *http.Request) {
 	if err := s.parseMultipart(r, func(file ParsedFile, reader io.Reader) error {
-		if _, err := s.db.CreateFile(r.Context(), file.Dir, file.Name, file.Size, file.ContentType, file.Description, file.Private); err != nil {
+		if err := s.storage.PutObject(r.Context(), path.Join(file.Dir, file.Name), file.Size, reader, file.ContentType); err != nil {
 			return err
 		}
 
-		return s.storage.PutObject(r.Context(), path.Join(file.Dir, file.Name), file.Size, reader, file.ContentType)
+		_, err := s.db.CreateFile(r.Context(), file.Dir, file.Name, file.Size, file.ContentType, file.Description, file.Private)
+		return err
 	}); err != nil {
 		s.error(w, r, err, http.StatusInternalServerError)
 		return
