@@ -330,7 +330,7 @@ dialog::backdrop {
 
 #files {
     display: grid;
-    grid-template-columns: repeat(7, auto);
+    grid-template-columns: 3rem repeat(5, auto) 8rem;
     overflow: auto;
     align-items: stretch;
     justify-content: stretch;
@@ -368,12 +368,6 @@ dialog::backdrop {
     color: var(--text-primary);
 }
 
-.file-more {
-
-    background-image: var(--arrow-down);
-
-}
-
 select {
     appearance: none;
     font-family: inherit;
@@ -393,6 +387,16 @@ select {
 
 select:hover {
     filter: opacity(0.7);
+}
+
+.file-more {
+    background-image: var(--arrow-down);
+    font-size: 1rem;
+    padding: 0 1rem 0 0;
+}
+
+.file-more:hover {
+    background-color: var(--bg-secondary);
 }
 
 #theme-toggle {
@@ -458,7 +462,7 @@ select:hover {
     background-color: var(--bg-primary);
 }
 
-#upload-popup-files  {
+#upload-popup-files {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;

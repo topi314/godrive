@@ -3,6 +3,7 @@ package godrive
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"io"
@@ -20,7 +21,7 @@ func NewStorage(ctx context.Context, config StorageConfig) (Storage, error) {
 }
 
 type Storage interface {
-	GetObject(ctx context.Context, name string) (io.ReadCloser, error)
+	GetObject(ctx context.Context, name string, start *int64, end *int64) (io.ReadCloser, error)
 	PutObject(ctx context.Context, name string, size uint64, reader io.Reader, contentType string) error
 	DeleteObject(ctx context.Context, name string) error
 }
@@ -35,8 +36,34 @@ type localStorage struct {
 	path string
 }
 
-func (l *localStorage) GetObject(ctx context.Context, name string) (io.ReadCloser, error) {
-	return os.Open(l.path + "/" + name)
+func (l *localStorage) GetObject(ctx context.Context, name string, start *int64, end *int64) (io.ReadCloser, error) {
+	file, err := os.Open(l.path + "/" + name)
+	if err != nil {
+		return nil, err
+	}
+
+	if start != nil && end != nil {
+		if _, err = file.Seek(*start, io.SeekStart); err != nil {
+			return nil, err
+		}
+
+		return &limitedReader{
+			Reader: io.LimitReader(file, *end-*start),
+		}, nil
+	}
+
+	return file, nil
+}
+
+type limitedReader struct {
+	io.Reader
+}
+
+func (l *limitedReader) Close() error {
+	if c, ok := l.Reader.(io.Closer); ok {
+		return c.Close()
+	}
+	return nil
 }
 
 func (l *localStorage) PutObject(ctx context.Context, name string, _ uint64, reader io.Reader, _ string) error {
@@ -87,8 +114,14 @@ type s3Storage struct {
 	bucket string
 }
 
-func (s *s3Storage) GetObject(ctx context.Context, name string) (io.ReadCloser, error) {
-	return s.client.GetObject(ctx, s.bucket, name, minio.GetObjectOptions{})
+func (s *s3Storage) GetObject(ctx context.Context, name string, start *int64, end *int64) (io.ReadCloser, error) {
+	opts := minio.GetObjectOptions{}
+	if start != nil && end != nil {
+		if err := opts.SetRange(*start, *end); err != nil {
+			return nil, fmt.Errorf("failed to set range: %w", err)
+		}
+	}
+	return s.client.GetObject(ctx, s.bucket, name, opts)
 }
 
 func (s *s3Storage) PutObject(ctx context.Context, name string, size uint64, reader io.Reader, contentType string) error {
