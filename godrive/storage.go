@@ -13,7 +13,7 @@ import (
 func NewStorage(ctx context.Context, config StorageConfig) (Storage, error) {
 	switch config.Type {
 	case StorageTypeLocal:
-		return newLocalStorage(config), nil
+		return newLocalStorage(config)
 	case StorageTypeS3:
 		return newS3Storage(ctx, config)
 	}
@@ -26,10 +26,13 @@ type Storage interface {
 	DeleteObject(ctx context.Context, name string) error
 }
 
-func newLocalStorage(config StorageConfig) Storage {
+func newLocalStorage(config StorageConfig) (Storage, error) {
+	if err := os.MkdirAll(config.Path, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create storage directory: %w", err)
+	}
 	return &localStorage{
 		path: config.Path,
-	}
+	}, nil
 }
 
 type localStorage struct {

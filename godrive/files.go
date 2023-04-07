@@ -46,8 +46,8 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	file := files[0]
-	if len(files) == 1 && (rPath != "/" || path.Join(file.Dir, file.Name) == rPath) {
+	if len(files) == 1 && (rPath != "/" || path.Join(files[0].Dir, files[0].Name) == rPath) {
+		file := files[0]
 		if download {
 			w.Header().Set("Content-Disposition", "attachment; filename="+file.Name)
 		}
@@ -77,7 +77,7 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 
 		zw := zip.NewWriter(w)
 		defer zw.Close()
-		for _, file = range files {
+		for _, file := range files {
 			if file.Private {
 				continue
 			}
@@ -107,7 +107,7 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var templateFiles []TemplateFile
-	for _, file = range files {
+	for _, file := range files {
 		if file.Private {
 			continue
 		}

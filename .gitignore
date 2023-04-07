@@ -1,4 +1,5 @@
 .idea/
+storage/
 godrive.json
 .godrive
 godrive.db
