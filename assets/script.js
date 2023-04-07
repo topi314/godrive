@@ -92,13 +92,9 @@ function getDialogFileElement(i, file) {
 
 function uploadFiles(files) {
     const data = new FormData();
-    const json = {
-        dir: document.querySelector("#upload-file-dir").value,
-        files: []
-    }
+    const json = [];
     for (let i = 0; i < files.length; i++) {
-        json.files.push({
-            dir: window.location.pathname,
+        json.push({
             size: files[i].size,
             description: document.querySelector(`#file-${i}-description`).value,
             private: document.querySelector(`#file-${i}-private`).checked,
@@ -140,7 +136,7 @@ function uploadFiles(files) {
             document.querySelector("#upload-popup-progress-bar").style.width = `${percent}%`;
         }
     });
-    rq.open("POST", "/api/files");
+    rq.open("POST", document.querySelector("#upload-file-dir").value);
     rq.send(data);
 }
 
