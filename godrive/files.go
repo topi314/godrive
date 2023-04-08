@@ -34,16 +34,10 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var (
-		start *int64
-		end   *int64
-	)
-	if rangeHeader := r.Header.Get("Range"); rangeHeader != "" {
-		fmt.Println("rangeHeader:", rangeHeader)
-		if _, err = fmt.Sscanf(rangeHeader, "bytes=%d-%d", start, end); err != nil {
-			s.error(w, r, errors.New("invalid range header"), http.StatusRequestedRangeNotSatisfiable)
-			return
-		}
+	start, end, err := parseRange(r.Header.Get("Range"))
+	if err != nil {
+		s.error(w, r, err, http.StatusRequestedRangeNotSatisfiable)
+		return
 	}
 
 	if len(files) == 1 && (rPath != "/" || path.Join(files[0].Dir, files[0].Name) == rPath) {
@@ -248,6 +242,32 @@ type ParsedFile struct {
 	ContentType string
 	Description string
 	Private     bool
+}
+
+func parseRange(rangeHeader string) (*int64, *int64, error) {
+	if rangeHeader == "" {
+		return nil, nil, nil
+	}
+
+	if !strings.HasPrefix(rangeHeader, "bytes=") {
+		return nil, nil, errors.New("invalid range header, must start with 'bytes='")
+	}
+
+	var (
+		start int64
+		end   int64
+	)
+	if _, err := fmt.Sscanf(rangeHeader, "bytes=%d-%d", &start, &end); err == nil {
+		return &start, &end, nil
+	}
+	if _, err := fmt.Sscanf(rangeHeader, "bytes=-%d", &end); err == nil {
+		return nil, &end, nil
+	}
+	if _, err := fmt.Sscanf(rangeHeader, "bytes=%d-", &start); err == nil {
+		return &start, nil, nil
+	}
+
+	return nil, nil, fmt.Errorf("invalid range header: %s", rangeHeader)
 }
 
 func (s *Server) parseMultipart(r *http.Request, fileFunc func(file ParsedFile, reader io.Reader) error) error {
