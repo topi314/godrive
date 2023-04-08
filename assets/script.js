@@ -1,4 +1,5 @@
 let files = [];
+let rq = null;
 
 document.querySelector("#file-upload").addEventListener("dragover", (e) => {
     e.preventDefault();
@@ -27,42 +28,45 @@ document.querySelector("#file-upload").addEventListener("drop", (e) => {
 
     document.querySelector("#file-upload").classList.remove("active");
     files = e.dataTransfer.files;
-    openUploadPopup();
+    openUploadDialog();
 });
 
-document.querySelector("#file").addEventListener("change", (e) => {
+document.querySelector("#files").addEventListener("change", (e) => {
     e.preventDefault();
     e.stopPropagation();
     files = e.target.files;
-    openUploadPopup();
+    openUploadDialog();
 });
 
-document.querySelector("#cancel-btn").addEventListener("click", (e) => {
-    document.querySelector("#upload-popup").close();
+document.querySelector("#cancel-btn").addEventListener("click", () => {
+    document.querySelector("#upload-dialog").close();
 });
 
-document.querySelector("#upload-btn").addEventListener("click", (e) => {
+document.querySelector("#confirm-btn").addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
     uploadFiles(files);
 });
 
 
-document.querySelector("#upload-popup").addEventListener("close", () => {
+document.querySelector("#upload-dialog").addEventListener("close", () => {
+    if (rq) {
+        rq.abort();
+    }
     files = [];
-    document.querySelector("#upload-popup-files").replaceChildren();
-    document.querySelector("#upload-popup-error").textContent = "";
-    document.querySelector("#upload-popup-progress-bar").style.width = "0";
+    document.querySelector("#upload-files").replaceChildren();
+    document.querySelector("#upload-error").textContent = "";
+    document.querySelector("#upload-progress-bar").style.width = "0";
     document.querySelector("#upload-files").style.display = "flex";
-    document.querySelector("#upload-files-feedback").style.display = "none";
+    document.querySelector("#upload-feedback").style.display = "none";
 });
 
-function openUploadPopup() {
-    const main = document.querySelector("#upload-popup-files");
+function openUploadDialog() {
+    const main = document.querySelector("#upload-files");
     for (let i = 0; i < files.length; i++) {
         main.appendChild(getDialogFileElement(i, files[i]));
     }
-    document.querySelector("#upload-popup").showModal();
+    document.querySelector("#upload-dialog").showModal();
 }
 
 function getDialogFileElement(i, file) {
@@ -108,7 +112,7 @@ function uploadFiles(files) {
     }
 
     document.querySelector("#upload-files").style.display = "none";
-    document.querySelector("#upload-files-feedback").style.display = "flex";
+    document.querySelector("#upload-feedback").style.display = "flex";
 
     const rq = new XMLHttpRequest();
     rq.responseType = "json";
@@ -121,8 +125,6 @@ function uploadFiles(files) {
         }
     });
     rq.upload.addEventListener("error", () => {
-        console.log("error", rq);
-
         if (rq.response) {
             setUploadError(rq.response.message || rq.statusText);
             return;
@@ -130,10 +132,9 @@ function uploadFiles(files) {
         setUploadError(rq.statusText);
     });
     rq.upload.addEventListener("progress", (e) => {
-        console.log(e);
         if (e.lengthComputable) {
             const percent = Math.round((e.loaded / e.total) * 100);
-            document.querySelector("#upload-popup-progress-bar").style.width = `${percent}%`;
+            document.querySelector("#upload-progress-bar").style.width = `${percent}%`;
         }
     });
     rq.open("POST", document.querySelector("#upload-file-dir").value);
@@ -141,5 +142,5 @@ function uploadFiles(files) {
 }
 
 function setUploadError(message) {
-    document.querySelector("#upload-popup-error").textContent = message || "Unknown error";
+    document.querySelector("#upload-error").textContent = message || "Unknown error";
 }

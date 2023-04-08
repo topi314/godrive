@@ -1,41 +1,41 @@
 {{ template "head.gohtml" . }}
 <body>
-<div id="error-popup" style="display: none;"></div>
-<dialog id="upload-popup" class="dialog">
+<dialog id="upload-dialog">
     <div>
         <div class="dialog-header">
             <h2>Upload</h2>
         </div>
-        <div id="upload-files" class="dialog-main">
-            <div>
-                <label for="upload-file-dir">Directory</label>
-                <input id="upload-file-dir" type="text" value="{{ .Path }}" autocomplete="off">
+        <div class="dialog-main">
+            <div id="upload-files">
+                <label for="upload-file-dir">Directory
+                    <input id="upload-file-dir" type="text" value="{{ .Path }}" autocomplete="off">
+                </label>
+                <div id="upload-files"></div>
             </div>
-            <div id="upload-popup-files"></div>
-        </div>
-        <div id="upload-files-feedback" class="dialog-main">
-            <div id="upload-popup-error"></div>
-            <div id="upload-popup-progress">
-                <div id="upload-popup-progress-bar"></div>
+            <div id="upload-feedback">
+                <div id="upload-error"></div>
+                <div id="upload-progress">
+                    <div id="upload-progress-bar"></div>
+                </div>
             </div>
         </div>
         <div class="dialog-footer">
+            <button id="confirm-btn" class="btn primary">Upload</button>
             <button id="cancel-btn" class="btn danger">Cancel</button>
-            <button id="upload-btn" class="btn success">Upload</button>
         </div>
     </div>
 </dialog>
 {{ template "header.gohtml" . }}
 <main>
-    <div id="top-bar">
-        <div class="path">
+    <div id="navigation">
+        <div class="navigation-path">
             <a href="/">/</a>
             {{ range $index, $path := .PathParts }}
                 <a href="/{{ assemblePath $.PathParts $index }}">{{ $path }}{{ if not (isLast $.PathParts $index) }}/{{end}}</a>
             {{ end }}
         </div>
     </div>
-    <div id="files">
+    <div id="file-list">
         {{ range $index, $file := .Files }}
             <div class="file">
                 <div><span class="icon {{ if $file.IsDir }}folder{{ else }}file{{ end }}-icon"></span></div>
@@ -56,8 +56,8 @@
         {{ end }}
     </div>
     <div id="file-upload">
-        <input type="file" id="file" multiple hidden>
-        <label for="file">Choose files or drop here.</label>
+        <input type="file" id="files" multiple hidden>
+        <label for="files">Choose files or drop here.</label>
     </div>
 </main>
 <script src="/assets/theme.js" defer></script>

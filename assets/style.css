@@ -1,13 +1,6 @@
 :root {
-    --bg-error: #a65757;
-    --text-error: #fff;
-
-    --bg-progress: #0ac231;
-
-    --btn-success: #0ac231;
-    --btn-danger: #bd1818;
-    --btn-warning: #efc645;
-    --btn-info: #166ede;
+    --primary: #7212c2;
+    --danger: #b75050;
 }
 
 .dark {
@@ -22,18 +15,11 @@
     --bg-scrollbar-thumb-hover: #232529;
 
     --arrow-down: url("/assets/icons/dark/arrow-down.png");
-    --copy: url("/assets/icons/dark/copy.png");
     --delete: url("/assets/icons/dark/delete.png");
     --edit: url("/assets/icons/dark/edit.png");
     --github: url("/assets/icons/dark/github.svg");
-    --language: url("/assets/icons/dark/language.png");
-    --new: url("/assets/icons/dark/new.png");
-    --raw: url("/assets/icons/dark/raw.png");
-    --save: url("/assets/icons/dark/save.png");
-    --style: url("/assets/icons/dark/style.png");
     --share: url("/assets/icons/dark/share.png");
     --close: url("/assets/icons/dark/close.png");
-    --version: url("/assets/icons/dark/version.png");
     --theme: url("/assets/icons/dark/theme.png");
     --upload: url("/assets/icons/dark/upload.png");
     --file: url("/assets/icons/dark/file.png");
@@ -52,18 +38,11 @@
     --bg-scrollbar-thumb-hover: #c3c8ce;
 
     --arrow-down: url("/assets/icons/light/arrow-down.png");
-    --copy: url("/assets/icons/light/copy.png");
     --delete: url("/assets/icons/light/delete.png");
     --edit: url("/assets/icons/light/edit.png");
     --github: url("/assets/icons/light/github.svg");
-    --language: url("/assets/icons/light/language.png");
-    --new: url("/assets/icons/light/new.png");
-    --raw: url("/assets/icons/light/raw.png");
-    --save: url("/assets/icons/light/save.png");
-    --style: url("/assets/icons/light/style.png");
     --share: url("/assets/icons/light/share.png");
     --close: url("/assets/icons/light/close.png");
-    --version: url("/assets/icons/light/version.png");
     --theme: url("/assets/icons/light/theme.png");
     --upload: url("/assets/icons/light/upload.png");
     --file: url("/assets/icons/light/file.png");
@@ -95,40 +74,6 @@ html {
     background-color: var(--bg-scrollbar-thumb-hover);
 }
 
-#error-popup {
-    position: absolute;
-    top: 0.5rem;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 1rem;
-    background-color: var(--bg-error);
-    color: var(--text-error);
-    border-radius: 1rem;
-    transition: all 0.5s ease;
-}
-
-.error {
-    text-align: center;
-    margin-left: auto;
-    margin-right: auto;
-}
-
-.error h1 {
-    font-weight: bolder;
-}
-
-.error-details {
-    text-align: start;
-}
-
-.error p {
-    color: var(--bg-error);
-}
-
-.error a {
-    color: var(--text-primary);
-}
-
 body {
     display: flex;
     flex-direction: column;
@@ -138,17 +83,6 @@ body {
     font-family: monospace;
     overflow: hidden;
     color: var(--text-primary);
-}
-
-input[type="text"],
-textarea {
-    background-color: var(--bg-secondary);
-    border: none;
-    border-radius: 0.5rem;
-    padding: 0.5rem;
-    color: var(--text-primary);
-    font-family: monospace;
-    outline: none;
 }
 
 header {
@@ -177,31 +111,15 @@ main {
     padding: 0.5rem;
 }
 
-#top-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.5rem 1rem 0.5rem 1rem;
-    border-bottom: 1px solid var(--bg-secondary);
-}
-
-.path {
-    display: flex;
-    align-items: center;
-    font-size: 1.5rem;
-    font-weight: bold;
+input[type="text"],
+textarea {
+    background-color: var(--bg-secondary);
+    border: none;
+    border-radius: 0.5rem;
+    padding: 0.5rem;
     color: var(--text-primary);
-}
-
-.path a {
-    text-decoration: none;
-    color: var(--text-primary);
-}
-
-.path a:hover {
-    text-decoration: underline;
-    text-decoration-thickness: 2px;
+    font-family: monospace;
+    outline: none;
 }
 
 .icon {
@@ -264,23 +182,15 @@ main {
     filter: opacity(0.2);
 }
 
-.btn.success {
-    background-color: var(--btn-success);
+.btn.primary {
+    background-color: var(--primary);
 }
 
 .btn.danger {
-    background-color: var(--btn-danger);
+    background-color: var(--danger);
 }
 
-.btn.warning {
-    background-color: var(--btn-warning);
-}
-
-.btn.info {
-    background-color: var(--btn-info);
-}
-
-.dialog {
+dialog {
     width: 70vw;
     height: 70vh;
 
@@ -290,7 +200,11 @@ main {
     color: var(--text-primary);
 }
 
-.dialog > div {
+dialog::backdrop {
+    background-color: rgba(0, 0, 0, 0.7);
+}
+
+dialog > div {
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -324,11 +238,35 @@ main {
     border-top: 1px solid var(--bg-secondary);
 }
 
-dialog::backdrop {
-    background-color: rgba(0, 0, 0, 0.7);
+
+#navigation {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.5rem 1rem 0.5rem 1rem;
+    border-bottom: 1px solid var(--bg-secondary);
 }
 
-#files {
+.navigation-path {
+    display: flex;
+    align-items: center;
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--text-primary);
+}
+
+.navigation-path a {
+    text-decoration: none;
+    color: var(--text-primary);
+}
+
+.navigation-path a:hover {
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+}
+
+#file-list {
     display: grid;
     grid-template-columns: 3rem repeat(5, auto) 8rem;
     overflow: auto;
@@ -399,7 +337,7 @@ select:hover {
     background-color: var(--bg-secondary);
 }
 
-#theme-toggle {
+#theme {
     display: none;
 }
 
@@ -411,7 +349,7 @@ select:hover {
     background-image: var(--close);
 }
 
-#theme-toggle + label {
+#theme + label {
     background-image: var(--theme);
 }
 
@@ -432,7 +370,7 @@ select:hover {
     background-color: var(--bg-secondary-active);
 }
 
-#file + label {
+#files + label {
     flex-grow: 1;
     border: 2px dashed var(--bg-primary);
     border-radius: 1rem;
@@ -457,12 +395,12 @@ select:hover {
     border-radius: 1rem;
 }
 
-#upload-popup-files input[type="text"],
-#upload-popup-files textarea {
+#upload-files input,
+#upload-files textarea {
     background-color: var(--bg-primary);
 }
 
-#upload-popup-files {
+#upload-files {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -475,23 +413,23 @@ select:hover {
     grid-gap: 0.5rem;
 }
 
-#upload-files-feedback {
+#upload-feedback {
     display: none;
     flex-direction: column;
     gap: 0.5rem;
     padding: 0.5rem;
 }
 
-#upload-popup-progress {
+#upload-progress {
     width: 100%;
     height: 1rem;
     background-color: var(--bg-secondary-active);
 }
 
-#upload-popup-progress-bar {
+#upload-progress-bar {
     width: 0;
     height: 1rem;
-    background-color: var(--bg-progress);
+    background-color: var(--primary);
 }
 
 .file-icon {

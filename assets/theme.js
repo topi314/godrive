@@ -10,7 +10,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setTheme(theme);
 });
 
-document.querySelector("#theme-toggle").addEventListener("click", () => {
+document.querySelector("#theme").addEventListener("click", () => {
     const theme = getCookie("theme");
     setTheme(theme === "dark" ? "light" : "dark");
 });
