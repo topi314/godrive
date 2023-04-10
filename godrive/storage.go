@@ -134,30 +134,6 @@ func (s *s3Storage) PutObject(ctx context.Context, name string, size uint64, rea
 	return err
 }
 
-func (s *s3Storage) UpdateObject(ctx context.Context, oldName string, name string, size uint64, reader io.Reader, contentType string) error {
-	if reader == nil {
-		if _, err := s.client.CopyObject(ctx,
-			minio.CopyDestOptions{
-				Bucket: s.bucket,
-				Object: name,
-			},
-			minio.CopySrcOptions{
-				Bucket: s.bucket,
-				Object: oldName,
-			},
-		); err != nil {
-			return err
-		}
-	}
-
-	_ = s.client.RemoveObject(ctx, s.bucket, oldName, minio.RemoveObjectOptions{})
-
-	_, err := s.client.PutObject(ctx, s.bucket, name, reader, int64(size), minio.PutObjectOptions{
-		ContentType: contentType,
-	})
-	return err
-}
-
 func (s *s3Storage) DeleteObject(ctx context.Context, name string) error {
 	return s.client.RemoveObject(ctx, s.bucket, name, minio.RemoveObjectOptions{})
 }
