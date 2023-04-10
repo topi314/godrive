@@ -6,25 +6,25 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/stdlib"
+	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/tracelog"
+	"github.com/jmoiron/sqlx"
 	"log"
 	"modernc.org/sqlite"
+	_ "modernc.org/sqlite"
 	"path"
 	"time"
-
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/stdlib"
-	"github.com/jackc/pgx/v5/tracelog"
-
-	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/jmoiron/sqlx"
-	_ "modernc.org/sqlite"
 )
 
 var (
 	ErrFileNotFound      = errors.New("file not found")
 	ErrFileAlreadyExists = errors.New("file already exists")
 )
+
+var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 func NewDB(ctx context.Context, cfg DatabaseConfig, schema string) (*DB, error) {
 	var (
@@ -74,11 +74,24 @@ func NewDB(ctx context.Context, cfg DatabaseConfig, schema string) (*DB, error) 
 type File struct {
 	Dir         string    `db:"dir"`
 	Name        string    `db:"name"`
+	ID          string    `db:"id"`
 	Size        uint64    `db:"size"`
 	ContentType string    `db:"content_type"`
 	Description string    `db:"description"`
 	Private     bool      `db:"private"`
 	CreatedAt   time.Time `db:"created_at"`
+	UpdatedAt   time.Time `db:"updated_at"`
+}
+
+type UpdateFile struct {
+	Dir         string    `db:"dir"`
+	Name        string    `db:"name"`
+	NewDir      string    `db:"new_dir"`
+	NewName     string    `db:"new_name"`
+	Size        uint64    `db:"size"`
+	ContentType string    `db:"content_type"`
+	Description string    `db:"description"`
+	Private     bool      `db:"private"`
 	UpdatedAt   time.Time `db:"updated_at"`
 }
 
@@ -124,17 +137,18 @@ func (d *DB) GetFile(ctx context.Context, path string, name string) (*File, erro
 	return file, nil
 }
 
-func (d *DB) CreateFile(ctx context.Context, dir string, name string, size uint64, contentType string, description string, private bool) (*File, error) {
+func (d *DB) CreateFile(ctx context.Context, dir string, name string, id string, size uint64, contentType string, description string, private bool) (*File, error) {
 	file := &File{
 		Dir:         dir,
 		Name:        name,
+		ID:          id,
 		Size:        size,
 		ContentType: contentType,
 		Description: description,
 		Private:     private,
 		CreatedAt:   time.Now(),
 	}
-	_, err := d.dbx.NamedExecContext(ctx, "INSERT INTO files (dir, name, size, content_type, description, private, created_at, updated_at) VALUES (:dir, :name, :size, :content_type, :description, :private, :created_at, :updated_at)", file)
+	_, err := d.dbx.NamedExecContext(ctx, "INSERT INTO files (dir, name, id, size, content_type, description, private, created_at, updated_at) VALUES (:dir, :name, :id, :size, :content_type, :description, :private, :created_at, :updated_at)", file)
 	if err != nil {
 		var (
 			sqliteErr *sqlite.Error
@@ -151,17 +165,23 @@ func (d *DB) CreateFile(ctx context.Context, dir string, name string, size uint6
 	return file, nil
 }
 
-func (d *DB) UpdateFile(ctx context.Context, dir string, name string, size uint64, contentType string, description string, private bool) error {
-	file := &File{
+func (d *DB) UpdateFile(ctx context.Context, dir string, name string, newDir string, newName string, size uint64, contentType string, description string, private bool) error {
+	file := &UpdateFile{
 		Dir:         dir,
 		Name:        name,
+		NewDir:      newDir,
+		NewName:     newName,
 		Size:        size,
 		ContentType: contentType,
 		Description: description,
 		Private:     private,
 		UpdatedAt:   time.Now(),
 	}
-	_, err := d.dbx.NamedExecContext(ctx, "UPDATE files SET size = :size, content_type = :content_type, description = :description, private = :private, updated_at = :updated_at WHERE dir = :dir AND name = :name", file)
+	query := "UPDATE files SET dir = :new_dir, name = :new_name, description = :description, private = :private, updated_at = :updated_at WHERE name = :name AND dir = :dir"
+	if size > 0 {
+		query = "UPDATE files SET dir = :new_dir, name = :new_name, size = :size, content_type = :content_type, description = :description, private = :private, updated_at = :updated_at WHERE name = :name AND dir = :dir"
+	}
+	_, err := d.dbx.NamedExecContext(ctx, query, file)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			err = ErrFileNotFound
@@ -171,14 +191,14 @@ func (d *DB) UpdateFile(ctx context.Context, dir string, name string, size uint6
 	return nil
 }
 
-func (d *DB) DeleteFile(ctx context.Context, dir string, name string) error {
-	_, err := d.dbx.ExecContext(ctx, "DELETE FROM files WHERE dir = $1 AND name = $2", dir, name)
-	if err != nil {
+func (d *DB) DeleteFile(ctx context.Context, dir string, name string) (string, error) {
+	var id string
+	if err := d.dbx.GetContext(ctx, &id, "DELETE FROM files WHERE dir = $1 AND name = $2 RETURNING id", dir, name); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			err = ErrFileNotFound
 		}
-		return fmt.Errorf("error deleting file: %w", err)
+		return "", fmt.Errorf("error deleting file: %w", err)
 	}
 
-	return nil
+	return id, nil
 }

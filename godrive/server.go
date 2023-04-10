@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"runtime"
 	"time"
@@ -22,6 +23,7 @@ func NewServer(version string, cfg Config, db *DB, signer jose.Signer, storage S
 		storage: storage,
 		assets:  assets,
 		tmpl:    tmpl,
+		rand:    rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 
 	s.server = &http.Server{
@@ -33,15 +35,15 @@ func NewServer(version string, cfg Config, db *DB, signer jose.Signer, storage S
 }
 
 type Server struct {
-	version          string
-	cfg              Config
-	db               *DB
-	server           *http.Server
-	signer           jose.Signer
-	storage          Storage
-	assets           http.FileSystem
-	tmpl             ExecuteTemplateFunc
-	rateLimitHandler func(http.Handler) http.Handler
+	version string
+	cfg     Config
+	db      *DB
+	server  *http.Server
+	signer  jose.Signer
+	storage Storage
+	assets  http.FileSystem
+	tmpl    ExecuteTemplateFunc
+	rand    *rand.Rand
 }
 
 func (s *Server) Start() {
@@ -58,6 +60,14 @@ func (s *Server) Close() {
 	if err := s.db.Close(); err != nil {
 		log.Println("Error while closing database:", err)
 	}
+}
+
+func (s *Server) newID() string {
+	b := make([]rune, 16)
+	for i := range b {
+		b[i] = letters[s.rand.Intn(len(letters))]
+	}
+	return string(b)
 }
 
 func FormatBuildVersion(version string, commit string, buildTime string) string {

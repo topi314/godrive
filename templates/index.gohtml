@@ -6,22 +6,62 @@
             <h2>Upload</h2>
         </div>
         <div class="dialog-main">
-            <div id="upload-files">
-                <label for="upload-file-dir">Directory
+            <div id="upload-files" class="dialog-main-content">
+                <label for="upload-file-dir">
+                    Directory
                     <input id="upload-file-dir" type="text" value="{{ .Path }}" autocomplete="off">
                 </label>
                 <div id="upload-files"></div>
             </div>
-            <div id="upload-feedback">
+            <div id="upload-feedback" class="dialog-main-feedback">
                 <div id="upload-error"></div>
-                <div id="upload-progress">
+                <div class="progress">
                     <div id="upload-progress-bar"></div>
                 </div>
             </div>
         </div>
         <div class="dialog-footer">
-            <button id="confirm-btn" class="btn primary">Upload</button>
-            <button id="cancel-btn" class="btn danger">Cancel</button>
+            <button id="upload-confirm-btn" class="btn primary">Upload</button>
+            <button id="upload-cancel-btn" class="btn danger">Cancel</button>
+        </div>
+    </div>
+</dialog>
+
+<dialog id="edit-dialog">
+    <div>
+        <div class="dialog-header">
+            <h2>Edit</h2>
+        </div>
+        <div class="dialog-main">
+            <div id="edit-file" class="dialog-main-content">
+                <input id="edit-file-name" type="text" autocomplete="off" hidden>
+                <label for="edit-file-new-name">
+                    Name
+                    <input id="edit-file-new-name" type="text" autocomplete="off">
+                </label>
+                <label for="edit-file-description">
+                    Description
+                    <input id="edit-file-description" type="text" autocomplete="off">
+                </label>
+                <label for="edit-file-private">
+                    Private
+                    <input id="edit-file-private" type="checkbox">
+                </label>
+                <div class="file-upload">
+                    <input type="file" id="file" hidden>
+                    <label for="file">Choose file or drop here.</label>
+                </div>
+            </div>
+            <div id="edit-feedback" class="dialog-main-feedback">
+                <div id="edit-error"></div>
+                <div class="progress">
+                    <div id="edit-progress-bar"></div>
+                </div>
+            </div>
+        </div>
+        <div class="dialog-footer">
+            <button id="edit-confirm-btn" class="btn primary">Edit</button>
+            <button id="edit-cancel-btn" class="btn danger">Cancel</button>
         </div>
     </div>
 </dialog>
@@ -45,17 +85,19 @@
                 <div><span class="file-description">{{ $file.Description }}</span></div>
                 <div><a class="file-download" href="{{ $file.FullName }}?dl=1">Download</a></div>
                 <div>
-                    <select class="file-more" data-file="{{ $file.FullName }}" autocomplete="off">
+                    <select class="file-more" data-file="{{ $file.FullName }}" data-name="{{ $file.Name }}" data-description="{{ $file.Description }}" data-private="{{ $file.Private}}" autocomplete="off">
                         <option value="none" selected disabled hidden>More</option>
-                        <option value="edit">Edit</option>
+                        {{ if not $file.IsDir }}
+                            <option value="edit">Edit</option>
+                        {{ end }}
                         <option value="delete">Delete</option>
-                        <option value="share">Share</option>
+{{/*                        <option value="share">Share</option>*/}}
                     </select>
                 </div>
             </div>
         {{ end }}
     </div>
-    <div id="file-upload">
+    <div class="file-upload">
         <input type="file" id="files" multiple hidden>
         <label for="files">Choose files or drop here.</label>
     </div>

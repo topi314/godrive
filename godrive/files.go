@@ -56,7 +56,7 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if err = s.writeFile(r.Context(), w, path.Join(file.Dir, file.Name), start, end); err != nil {
+		if err = s.writeFile(r.Context(), w, file.ID, start, end); err != nil {
 			s.log(r, "error writing file", err)
 		}
 		return
@@ -133,12 +133,11 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 			}
 
 			templateFiles = append(templateFiles, TemplateFile{
-				IsDir:       true,
-				Name:        relativePath,
-				Dir:         rPath,
-				Size:        file.Size,
-				Description: "",
-				Date:        updatedAt,
+				IsDir: true,
+				Name:  relativePath,
+				Dir:   rPath,
+				Size:  file.Size,
+				Date:  updatedAt,
 			})
 			continue
 		}
@@ -149,6 +148,7 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 			Dir:         file.Dir,
 			Size:        file.Size,
 			Description: file.Description,
+			Private:     file.Private,
 			Date:        updatedAt,
 		})
 	}
@@ -164,8 +164,8 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) writeFile(ctx context.Context, w io.Writer, fullName string, start *int64, end *int64) error {
-	obj, err := s.storage.GetObject(ctx, fullName, start, end)
+func (s *Server) writeFile(ctx context.Context, w io.Writer, id string, start *int64, end *int64) error {
+	obj, err := s.storage.GetObject(ctx, id, start, end)
 	if err != nil {
 		return err
 	}
@@ -176,68 +176,75 @@ func (s *Server) writeFile(ctx context.Context, w io.Writer, fullName string, st
 }
 
 func (s *Server) PostFiles(w http.ResponseWriter, r *http.Request) {
-	if err := s.parseMultipart(r, func(file ParsedFile, reader io.Reader) error {
-		if err := s.storage.PutObject(r.Context(), path.Join(file.Dir, file.Name), file.Size, reader, file.ContentType); err != nil {
+	if err := s.parseMultiparts(r, func(file ParsedFile, reader io.Reader) error {
+		id := s.newID()
+		if err := s.storage.PutObject(r.Context(), id, file.Size, reader, file.ContentType); err != nil {
 			return err
 		}
 
-		_, err := s.db.CreateFile(r.Context(), file.Dir, file.Name, file.Size, file.ContentType, file.Description, file.Private)
+		_, err := s.db.CreateFile(r.Context(), file.Dir, file.Name, id, file.Size, file.ContentType, file.Description, file.Private)
 		return err
 	}); err != nil {
 		s.error(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
-	s.ok(w, r, nil)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) PatchFiles(w http.ResponseWriter, r *http.Request) {
 	if err := s.parseMultipart(r, func(file ParsedFile, reader io.Reader) error {
-		if err := s.db.UpdateFile(r.Context(), file.Dir, file.Name, file.Size, file.ContentType, file.Description, file.Private); err != nil {
-			return err
-		}
-
-		return s.storage.PutObject(r.Context(), path.Join(file.Dir, file.Name), file.Size, reader, file.ContentType)
+		return s.db.UpdateFile(r.Context(), file.Dir, file.Name, file.Dir, file.NewName, file.Size, file.ContentType, file.Description, file.Private)
 	}); err != nil {
 		s.error(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
-	s.ok(w, r, nil)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) DeleteFiles(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
-	var files []string
-	if err := json.NewDecoder(r.Body).Decode(&files); err != nil {
+	var fileNames []string
+	if err := json.NewDecoder(r.Body).Decode(&fileNames); err != nil && err != io.EOF {
 		s.error(w, r, err, http.StatusBadRequest)
 		return
 	}
 
-	var finalErr error
-	for _, file := range files {
-		if err := s.db.DeleteFile(r.Context(), r.URL.Path, file); err != nil {
-			finalErr = errors.Join(finalErr, err)
-			continue
-		}
-		if err := s.storage.DeleteObject(r.Context(), path.Join(r.URL.Path, file)); err != nil {
-			finalErr = errors.Join(finalErr, err)
-			continue
-		}
-	}
-
-	if finalErr != nil {
-		s.error(w, r, finalErr, http.StatusInternalServerError)
+	files, err := s.db.FindFiles(r.Context(), r.URL.Path)
+	if err != nil {
 		return
 	}
 
-	s.json(w, r, nil, http.StatusNoContent)
+	var errs error
+	for _, file := range files {
+		if len(fileNames) > 0 && !slices.Contains(fileNames, file.Name) {
+			continue
+		}
+		id, err := s.db.DeleteFile(r.Context(), file.Dir, file.Name)
+		if err != nil {
+			errs = errors.Join(errs, err)
+			continue
+		}
+		if err = s.storage.DeleteObject(r.Context(), id); err != nil {
+			errs = errors.Join(errs, err)
+			continue
+		}
+	}
+
+	if errs != nil {
+		s.error(w, r, errs, http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 type ParsedFile struct {
-	Dir         string
 	Name        string
+	Dir         string
+	NewName     string
 	Size        uint64
 	ContentType string
 	Description string
@@ -270,7 +277,7 @@ func parseRange(rangeHeader string) (*int64, *int64, error) {
 	return nil, nil, fmt.Errorf("invalid range header: %s", rangeHeader)
 }
 
-func (s *Server) parseMultipart(r *http.Request, fileFunc func(file ParsedFile, reader io.Reader) error) error {
+func (s *Server) parseMultiparts(r *http.Request, fileFunc func(file ParsedFile, reader io.Reader) error) error {
 	defer r.Body.Close()
 
 	mr, err := r.MultipartReader()
@@ -320,5 +327,58 @@ func (s *Server) parseMultipart(r *http.Request, fileFunc func(file ParsedFile, 
 		}
 
 	}
+	return nil
+}
+
+func (s *Server) parseMultipart(r *http.Request, fileFunc func(file ParsedFile, reader io.Reader) error) error {
+	defer r.Body.Close()
+
+	mr, err := r.MultipartReader()
+	if err != nil {
+		return err
+	}
+
+	part, err := mr.NextPart()
+	if err != nil {
+		return err
+	}
+
+	if part.FormName() != "json" {
+		return errors.New("json field not found")
+	}
+
+	var file FileRequest
+	if err = json.NewDecoder(part).Decode(&file); err != nil {
+		return err
+	}
+
+	part, err = mr.NextPart()
+	if err == io.EOF {
+		return errors.New("not enough files")
+	}
+	if err != nil {
+		return err
+	}
+
+	contentType := part.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	dir, name := path.Split(r.URL.Path)
+	parsedFile := ParsedFile{
+		Dir:         dir,
+		Name:        name,
+		NewName:     part.FileName(),
+		Size:        file.Size,
+		ContentType: contentType,
+		Description: file.Description,
+		Private:     file.Private,
+	}
+
+	if err = fileFunc(parsedFile, part); err != nil {
+		return err
+	}
+
 	return nil
 }

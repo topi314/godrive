@@ -29,6 +29,7 @@ type (
 		Name        string
 		Size        uint64
 		Description string
+		Private     bool
 		Date        time.Time
 	}
 

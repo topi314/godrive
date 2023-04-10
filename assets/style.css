@@ -357,7 +357,7 @@ select:hover {
     padding: 0.5rem;
 }
 
-#file-upload {
+.file-upload {
     display: flex;
     padding: 0.2rem;
     border-radius: 1rem;
@@ -365,8 +365,8 @@ select:hover {
     transition: background-color 0.2s ease;
 }
 
-#file-upload.active,
-#file-upload:hover {
+.file-upload.active,
+.file-upload:hover {
     background-color: var(--bg-secondary-active);
 }
 
@@ -400,33 +400,33 @@ select:hover {
     background-color: var(--bg-primary);
 }
 
-#upload-files {
+.dialog-main-content {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
 }
 
-.upload-file-fields {
+#upload-file-fields {
     flex-grow: 1;
     display: grid;
     grid-template-columns: auto 1fr;
     grid-gap: 0.5rem;
 }
 
-#upload-feedback {
+.dialog-main-feedback {
     display: none;
     flex-direction: column;
     gap: 0.5rem;
     padding: 0.5rem;
 }
 
-#upload-progress {
+.progress {
     width: 100%;
     height: 1rem;
     background-color: var(--bg-secondary-active);
 }
 
-#upload-progress-bar {
+.progress > div {
     width: 0;
     height: 1rem;
     background-color: var(--primary);

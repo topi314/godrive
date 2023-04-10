@@ -1,32 +1,28 @@
 let files = [];
 let rq = null;
 
-document.querySelector("#file-upload").addEventListener("dragover", (e) => {
+function registerAll(query, event, callback) {
+    document.querySelectorAll(query).forEach(element => {
+        element.addEventListener(event, callback);
+    });
+}
+
+function toggleUploadActive(e, active) {
     e.preventDefault();
     e.stopPropagation();
+    e.target.classList.toggle("active", active);
+}
 
-    document.querySelector("#file-upload").classList.add("active");
-});
+registerAll(".file-upload", "dragover", (e) => toggleUploadActive(e, true));
 
-document.querySelector("#file-upload").addEventListener("dragenter", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+registerAll(".file-upload", "dragenter", (e) => toggleUploadActive(e, true));
 
-    document.querySelector("#file-upload").classList.add("active");
-});
+registerAll(".file-upload", "dragleave", (e) => toggleUploadActive(e, false));
 
-document.querySelector("#file-upload").addEventListener("dragleave", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+registerAll(".file-upload", "dragend", (e) => toggleUploadActive(e, false));
 
-    document.querySelector("#file-upload").classList.remove("active");
-});
-
-document.querySelector("#file-upload").addEventListener("drop", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    document.querySelector("#file-upload").classList.remove("active");
+registerAll(".file-upload", "drop", (e) => {
+    toggleUploadActive(e, false);
     files = e.dataTransfer.files;
     openUploadDialog();
 });
@@ -38,16 +34,15 @@ document.querySelector("#files").addEventListener("change", (e) => {
     openUploadDialog();
 });
 
-document.querySelector("#cancel-btn").addEventListener("click", () => {
+document.querySelector("#upload-cancel-btn").addEventListener("click", () => {
     document.querySelector("#upload-dialog").close();
 });
 
-document.querySelector("#confirm-btn").addEventListener("click", (e) => {
+document.querySelector("#upload-confirm-btn").addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
     uploadFiles(files);
 });
-
 
 document.querySelector("#upload-dialog").addEventListener("close", () => {
     if (rq) {
@@ -59,6 +54,56 @@ document.querySelector("#upload-dialog").addEventListener("close", () => {
     document.querySelector("#upload-progress-bar").style.width = "0";
     document.querySelector("#upload-files").style.display = "flex";
     document.querySelector("#upload-feedback").style.display = "none";
+});
+
+registerAll(".file-more", "change", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (e.target.value === "edit") {
+        openEditDialog(e.target.dataset);
+    } else if (e.target.value === "delete") {
+        if (!confirm("Are you sure you want to delete this file or folder?")) {
+            e.target.value = "none";
+            return;
+        }
+        const rq = new XMLHttpRequest();
+        rq.responseType = "json";
+        rq.addEventListener("load", () => {
+            if (rq.status >= 200 && rq.status < 300) {
+                window.location.reload();
+            } else {
+                alert(rq.response.message || rq.statusText);
+            }
+        })
+        rq.open("DELETE", e.target.dataset.file);
+        rq.send();
+    } else if (e.target.value === "share") {
+        document.querySelector("#share-dialog").showModal();
+    }
+    e.target.value = "none";
+});
+
+
+document.querySelector("#edit-cancel-btn").addEventListener("click", () => {
+    document.querySelector("#edit-dialog").close();
+});
+
+document.querySelector("#edit-confirm-btn").addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    let file;
+    if (files && files.length > 0) {
+        file = files[0];
+    }
+    uploadFile(file);
+});
+
+document.querySelector("#edit-dialog").addEventListener("close", () => {
+    document.querySelector("#edit-error").textContent = "";
+    document.querySelector("#edit-progress-bar").style.width = "0";
+    document.querySelector("#edit-file").style.display = "flex";
+    document.querySelector("#edit-feedback").style.display = "none";
 });
 
 function openUploadDialog() {
@@ -77,7 +122,7 @@ function getDialogFileElement(i, file) {
         <span class="icon icon-large file-icon"></span>
     </div>
     
-    <div class="upload-file-fields">
+    <div id="upload-file-fields">
         <label for="file-${i}-name">Name</label>
         <div><input type="text" id="file-${i}-name" value="${file.name}"></div>
 
@@ -92,6 +137,38 @@ function getDialogFileElement(i, file) {
         <button id="close" class="icon-btn" onclick="this.parentElement.parentElement.remove() "></button>
     </div>`;
     return div;
+}
+
+function openEditDialog(dataset) {
+    document.querySelector("#edit-file-name").value = dataset.name;
+    document.querySelector("#edit-file-new-name").value = dataset.name;
+    document.querySelector("#edit-file-description").value = dataset.description;
+    document.querySelector("#edit-file-private").checked = dataset.private === "true";
+    document.querySelector("#edit-dialog").showModal();
+}
+
+function uploadFile(file) {
+    const data = new FormData();
+    const json = {
+        size: file ? file.size : null,
+        description: document.querySelector(`#edit-file-description`).value,
+        private: document.querySelector(`#edit-file-private`).checked,
+    };
+    data.append("json", JSON.stringify(json));
+    if (file) {
+        data.append("file", file, document.querySelector(`#edit-file-new-name`).value || file.name);
+    } else {
+        data.append("file", new Blob([""]), document.querySelector(`#edit-file-new-name`).value);
+    }
+
+    document.querySelector("#edit-file").style.display = "none";
+    document.querySelector("#edit-feedback").style.display = "flex";
+
+    let url = window.location.pathname;
+    if (!url.endsWith("/")) {
+        url += "/";
+    }
+    upload("PATCH", url + document.querySelector("#edit-file-name").value, data, "#edit-error", "#edit-progress-bar");
 }
 
 function uploadFiles(files) {
@@ -114,33 +191,39 @@ function uploadFiles(files) {
     document.querySelector("#upload-files").style.display = "none";
     document.querySelector("#upload-feedback").style.display = "flex";
 
+    upload("POST", document.querySelector("#upload-file-dir").value, data, "#upload-error", "#upload-progress-bar");
+}
+
+function upload(method, url, data, errorID, progressID) {
     const rq = new XMLHttpRequest();
     rq.responseType = "json";
     rq.addEventListener("load", () => {
-        console.log("load", rq.status);
-        if (rq.status === 200) {
+        if (rq.status >= 200 && rq.status < 300) {
             window.location.reload();
         } else {
-            setUploadError(rq.response.message || rq.statusText);
+            setUploadError(errorID, rq.response.message || rq.statusText);
+            console.error("failed to upload:", rq.response.message || rq.statusText)
         }
     });
     rq.upload.addEventListener("error", () => {
         if (rq.response) {
-            setUploadError(rq.response.message || rq.statusText);
+            setUploadError(errorID, rq.response.message || rq.statusText);
+            console.error("error uploading:", rq.response.message || rq.statusText)
             return;
         }
-        setUploadError(rq.statusText);
+        setUploadError(errorID, rq.statusText);
+        console.error("error uploading:", rq.statusText)
     });
     rq.upload.addEventListener("progress", (e) => {
         if (e.lengthComputable) {
             const percent = Math.round((e.loaded / e.total) * 100);
-            document.querySelector("#upload-progress-bar").style.width = `${percent}%`;
+            document.querySelector(progressID).style.width = `${percent}%`;
         }
     });
-    rq.open("POST", document.querySelector("#upload-file-dir").value);
+    rq.open(method, url);
     rq.send(data);
 }
 
-function setUploadError(message) {
-    document.querySelector("#upload-error").textContent = message || "Unknown error";
+function setUploadError(errorID, message) {
+    document.querySelector(errorID).textContent = message || "Unknown error";
 }

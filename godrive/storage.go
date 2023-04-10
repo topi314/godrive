@@ -21,9 +21,9 @@ func NewStorage(ctx context.Context, config StorageConfig) (Storage, error) {
 }
 
 type Storage interface {
-	GetObject(ctx context.Context, name string, start *int64, end *int64) (io.ReadCloser, error)
-	PutObject(ctx context.Context, name string, size uint64, reader io.Reader, contentType string) error
-	DeleteObject(ctx context.Context, name string) error
+	GetObject(ctx context.Context, id string, start *int64, end *int64) (io.ReadCloser, error)
+	PutObject(ctx context.Context, id string, size uint64, reader io.Reader, contentType string) error
+	DeleteObject(ctx context.Context, id string) error
 }
 
 func newLocalStorage(config StorageConfig) (Storage, error) {
@@ -128,6 +128,30 @@ func (s *s3Storage) GetObject(ctx context.Context, name string, start *int64, en
 }
 
 func (s *s3Storage) PutObject(ctx context.Context, name string, size uint64, reader io.Reader, contentType string) error {
+	_, err := s.client.PutObject(ctx, s.bucket, name, reader, int64(size), minio.PutObjectOptions{
+		ContentType: contentType,
+	})
+	return err
+}
+
+func (s *s3Storage) UpdateObject(ctx context.Context, oldName string, name string, size uint64, reader io.Reader, contentType string) error {
+	if reader == nil {
+		if _, err := s.client.CopyObject(ctx,
+			minio.CopyDestOptions{
+				Bucket: s.bucket,
+				Object: name,
+			},
+			minio.CopySrcOptions{
+				Bucket: s.bucket,
+				Object: oldName,
+			},
+		); err != nil {
+			return err
+		}
+	}
+
+	_ = s.client.RemoveObject(ctx, s.bucket, oldName, minio.RemoveObjectOptions{})
+
 	_, err := s.client.PutObject(ctx, s.bucket, name, reader, int64(size), minio.PutObjectOptions{
 		ContentType: contentType,
 	})
