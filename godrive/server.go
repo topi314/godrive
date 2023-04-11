@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"runtime"
 	"time"
-
-	"github.com/go-jose/go-jose/v3"
 )
 
 type (
@@ -17,12 +15,12 @@ type (
 	WriterFunc          func(w io.Writer) error
 )
 
-func NewServer(version string, cfg Config, db *DB, signer jose.Signer, storage Storage, assets http.FileSystem, tmpl ExecuteTemplateFunc, js WriterFunc, css WriterFunc) *Server {
+func NewServer(version string, cfg Config, db *DB, auth *Auth, storage Storage, assets http.FileSystem, tmpl ExecuteTemplateFunc, js WriterFunc, css WriterFunc) *Server {
 	s := &Server{
 		version: version,
 		cfg:     cfg,
 		db:      db,
-		signer:  signer,
+		auth:    auth,
 		storage: storage,
 		assets:  assets,
 		tmpl:    tmpl,
@@ -44,7 +42,7 @@ type Server struct {
 	cfg     Config
 	db      *DB
 	server  *http.Server
-	signer  jose.Signer
+	auth    *Auth
 	storage Storage
 	assets  http.FileSystem
 	tmpl    ExecuteTemplateFunc

@@ -5,4 +5,13 @@
 
     <input id="theme" type="checkbox">
     <label title="Theme" class="icon-btn" for="theme"></label>
+
+    {{ if .Auth }}
+        {{ if .User }}
+            <span>{{ .User.Name }}</span>
+            <a class="btn" href="/auth/logout">Logout</a>
+        {{ else }}
+            <a class="btn" href="/auth/login">Login</a>
+        {{ end }}
+    {{ end }}
 </header>

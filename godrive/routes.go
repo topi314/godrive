@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"html/template"
 	"io"
 	"log"
 	"net/http"
@@ -21,6 +22,14 @@ type (
 		PathParts []string
 		Files     []TemplateFile
 		Theme     string
+		Auth      bool
+		User      *TemplateUser
+	}
+
+	TemplateUser struct {
+		Name  string
+		Email string
+		Icon  template.URL
 	}
 
 	TemplateFile struct {
@@ -66,7 +75,9 @@ func (s *Server) Routes() http.Handler {
 	))
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Heartbeat("/ping"))
-	r.Use(s.JWTMiddleware)
+	if s.cfg.Auth != nil {
+		r.Use(s.Auth)
+	}
 
 	if s.cfg.Debug {
 		r.Mount("/debug", middleware.Profiler())
@@ -81,13 +92,35 @@ func (s *Server) Routes() http.Handler {
 	r.Handle("/favicon.png", s.file("/assets/favicon.png"))
 	r.Handle("/favicon-light.png", s.file("/assets/favicon-light.png"))
 	r.Handle("/robots.txt", s.file("/assets/robots.txt"))
+
+	r.Get("/version", s.GetVersion)
+
+	if s.cfg.Auth != nil {
+		r.Route("/auth", func(r chi.Router) {
+			r.Get("/login", s.Login)
+			r.Get("/callback", s.Callback)
+			r.Get("/logout", s.Logout)
+
+		})
+	}
 	r.Group(func(r chi.Router) {
-		r.Get("/version", s.GetVersion)
+		if s.cfg.Auth != nil {
+			r.Use(s.CheckAuth(func(r *http.Request, info *UserInfo) bool {
+				if s.cfg.Auth.RequireLogin && info == nil {
+					return false
+				}
+				if r.Method == http.MethodGet || r.Method == http.MethodHead {
+					return true
+				}
+				return info != nil
+			}))
+		}
 		r.Get("/*", s.GetFiles)
 		r.Head("/*", s.GetFiles)
 		r.Post("/*", s.PostFiles)
 		r.Patch("/*", s.PatchFiles)
 		r.Delete("/*", s.DeleteFiles)
+
 	})
 	r.NotFound(s.notFound)
 

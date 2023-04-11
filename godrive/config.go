@@ -11,17 +11,17 @@ type Config struct {
 	ListenAddr string         `cfg:"listen_addr"`
 	Database   DatabaseConfig `cfg:"database"`
 	Storage    StorageConfig  `cfg:"storage"`
-	JWTSecret  string         `cfg:"jwt_secret"`
+	Auth       *AuthConfig    `cfg:"auth"`
 }
 
 func (c Config) String() string {
-	return fmt.Sprintf("\n DevMode: %t\n Debug: %t\n ListenAddr: %s\n Database: %s\n Storage: %s\n JWTSecret: %s\n",
+	return fmt.Sprintf("\n DevMode: %t\n Debug: %t\n ListenAddr: %s\n Database: %s\n Storage: %s\n Auth: %s\n",
 		c.DevMode,
 		c.Debug,
 		c.ListenAddr,
 		c.Database,
 		c.Storage,
-		strings.Repeat("*", len(c.JWTSecret)),
+		c.Auth,
 	)
 }
 
@@ -123,4 +123,40 @@ func (c StorageConfig) String() string {
 		str += "Invalid storage type!"
 	}
 	return str
+}
+
+type AuthConfig struct {
+	Secure       bool       `cfg:"secure"`
+	Issuer       string     `cfg:"issuer"`
+	ClientID     string     `cfg:"client_id"`
+	ClientSecret string     `cfg:"client_secret"`
+	RedirectURL  string     `cfg:"redirect_url"`
+	RequireLogin bool       `cfg:"require_login"`
+	Groups       AuthGroups `cfg:"groups"`
+}
+
+func (c AuthConfig) String() string {
+	return fmt.Sprintf("\n  Secure: %t\n  Issuer: %s\n  ClientID: %s\n  ClientSecret: %s\n  RedirectURL: %s\n  RequireLogin: %t\n  Groups: %s",
+		c.Secure,
+		c.Issuer,
+		c.ClientID,
+		strings.Repeat("*", len(c.ClientSecret)),
+		c.RedirectURL,
+		c.RequireLogin,
+		c.Groups,
+	)
+}
+
+type AuthGroups struct {
+	Admin  string `cfg:"admin"`
+	User   string `cfg:"user"`
+	Viewer string `cfg:"viewer"`
+}
+
+func (c AuthGroups) String() string {
+	return fmt.Sprintf("\n    Admin: %s\n    User: %s\n    Viewer: %s",
+		c.Admin,
+		c.User,
+		c.Viewer,
+	)
 }

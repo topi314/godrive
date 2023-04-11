@@ -153,11 +153,21 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	var user *TemplateUser
+	userInfo := GetUserInfo(r)
+	if userInfo != nil {
+		user = &TemplateUser{
+			Name: "User",
+		}
+	}
+
 	vars := TemplateVariables{
 		Path:      rPath,
 		PathParts: strings.FieldsFunc(rPath, func(r rune) bool { return r == '/' }),
 		Files:     templateFiles,
 		Theme:     "dark",
+		Auth:      s.cfg.Auth != nil,
+		User:      user,
 	}
 	if err = s.tmpl(w, "index.gohtml", vars); err != nil {
 		log.Println("failed to execute template:", err)
