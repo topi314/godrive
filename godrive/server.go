@@ -12,9 +12,12 @@ import (
 	"github.com/go-jose/go-jose/v3"
 )
 
-type ExecuteTemplateFunc func(wr io.Writer, name string, data any) error
+type (
+	ExecuteTemplateFunc func(w io.Writer, name string, data any) error
+	WriterFunc          func(w io.Writer) error
+)
 
-func NewServer(version string, cfg Config, db *DB, signer jose.Signer, storage Storage, assets http.FileSystem, tmpl ExecuteTemplateFunc) *Server {
+func NewServer(version string, cfg Config, db *DB, signer jose.Signer, storage Storage, assets http.FileSystem, tmpl ExecuteTemplateFunc, js WriterFunc, css WriterFunc) *Server {
 	s := &Server{
 		version: version,
 		cfg:     cfg,
@@ -23,6 +26,8 @@ func NewServer(version string, cfg Config, db *DB, signer jose.Signer, storage S
 		storage: storage,
 		assets:  assets,
 		tmpl:    tmpl,
+		js:      js,
+		css:     css,
 		rand:    rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 
@@ -43,6 +48,8 @@ type Server struct {
 	storage Storage
 	assets  http.FileSystem
 	tmpl    ExecuteTemplateFunc
+	js      WriterFunc
+	css     WriterFunc
 	rand    *rand.Rand
 }
 

@@ -72,7 +72,11 @@ func (s *Server) Routes() http.Handler {
 		r.Mount("/debug", middleware.Profiler())
 	}
 
-	r.Mount("/assets", http.FileServer(s.assets))
+	r.Route("/assets", func(r chi.Router) {
+		r.Handle("/script.js", s.handleWriter(s.js, "application/javascript"))
+		r.Handle("/style.css", s.handleWriter(s.css, "text/css"))
+		r.Mount("/", http.FileServer(s.assets))
+	})
 	r.Handle("/favicon.ico", s.file("/assets/favicon.png"))
 	r.Handle("/favicon.png", s.file("/assets/favicon.png"))
 	r.Handle("/favicon-light.png", s.file("/assets/favicon-light.png"))
@@ -88,6 +92,15 @@ func (s *Server) Routes() http.Handler {
 	r.NotFound(s.notFound)
 
 	return r
+}
+
+func (s *Server) handleWriter(wf WriterFunc, mediatype string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", mediatype)
+		if err := wf(w); err != nil {
+			s.log(r, "writer", err)
+		}
+	})
 }
 
 func (s *Server) GetVersion(w http.ResponseWriter, _ *http.Request) {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"flag"
@@ -110,11 +111,6 @@ func main() {
 		log.Fatalln("Error while creating storage:", err)
 	}
 
-	var (
-		tmplFunc godrive.ExecuteTemplateFunc
-		assets   http.FileSystem
-	)
-
 	funcs := template.FuncMap{
 		"humanizeTime":  humanize.Time,
 		"humanizeBytes": humanize.Bytes,
@@ -126,6 +122,12 @@ func main() {
 		},
 	}
 
+	var (
+		tmplFunc godrive.ExecuteTemplateFunc
+		jsFunc   godrive.WriterFunc
+		cssFunc  godrive.WriterFunc
+		assets   http.FileSystem
+	)
 	if cfg.DevMode {
 		log.Println("Development mode enabled")
 		tmplFunc = func(wr io.Writer, name string, data any) error {
@@ -133,15 +135,36 @@ func main() {
 			tmpl = template.Must(tmpl.ParseGlob("templates/*"))
 			return tmpl.ExecuteTemplate(wr, name, data)
 		}
+		jsFunc = writeDir("assets/js")
+		cssFunc = writeDir("assets/css")
 		assets = http.Dir(".")
 	} else {
 		tmpl := template.New("").Funcs(funcs)
 		tmpl = template.Must(tmpl.ParseFS(Templates, "templates/*"))
 		tmplFunc = tmpl.ExecuteTemplate
+
+		jsBuff := new(bytes.Buffer)
+		if err = writeDir("assets/js")(jsBuff); err != nil {
+			log.Fatalln("Error while minifying js:", err)
+		}
+
+		cssBuff := new(bytes.Buffer)
+		if err = writeDir("assets/css")(cssBuff); err != nil {
+			log.Fatalln("Error while minifying css:", err)
+		}
+
+		jsFunc = func(w io.Writer) error {
+			_, err = jsBuff.WriteTo(w)
+			return err
+		}
+		cssFunc = func(w io.Writer) error {
+			_, err = cssBuff.WriteTo(w)
+			return err
+		}
 		assets = http.FS(Assets)
 	}
 
-	s := godrive.NewServer(godrive.FormatBuildVersion(version, commit, buildTime), cfg, db, signer, storage, assets, tmplFunc)
+	s := godrive.NewServer(godrive.FormatBuildVersion(version, commit, buildTime), cfg, db, signer, storage, assets, tmplFunc, jsFunc, cssFunc)
 	log.Println("godrive listening on:", cfg.ListenAddr)
 	go s.Start()
 	defer s.Close()
@@ -149,4 +172,16 @@ func main() {
 	si := make(chan os.Signal, 1)
 	signal.Notify(si, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-si
+}
+
+func writeDir(directory string) func(w io.Writer) error {
+	return func(w io.Writer) error {
+		fr, err := newFolderReader(directory)
+		if err != nil {
+			return err
+		}
+		defer fr.Close()
+		_, err = io.Copy(w, fr)
+		return err
+	}
 }

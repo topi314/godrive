@@ -1,0 +1,185 @@
+html {
+    background-color: var(--bg-primary);
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+::-webkit-scrollbar {
+    background-color: var(--bg-scrollbar);
+    border-radius: 1rem;
+    width: 0.5rem;
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: var(--bg-scrollbar-thumb);
+    border-radius: 1rem;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background-color: var(--bg-scrollbar-thumb-hover);
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding: 0;
+    margin: 0;
+    font-family: monospace;
+    overflow: hidden;
+    color: var(--text-primary);
+}
+
+input[type="text"],
+textarea {
+    background-color: var(--bg-secondary);
+    border: none;
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    color: var(--text-primary);
+    font-family: monospace;
+    outline: none;
+}
+
+
+.icon {
+    display: inline-block;
+    flex-shrink: 0;
+    border: none;
+    width: 1.5rem;
+    height: 1.5rem;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 1.5rem;
+}
+
+.icon-large {
+    width: 2rem;
+    height: 2rem;
+    background-size: 2rem;
+}
+
+.icon-btn {
+    flex-shrink: 0;
+    border: none;
+    border-radius: 1rem;
+    width: 2rem;
+    height: 2rem;
+    background-color: var(--nav-button-bg);
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 1rem;
+    cursor: pointer;
+    color: var(--text-primary);
+}
+
+.icon-btn:hover {
+    filter: opacity(0.7);
+}
+
+.icon-btn:disabled {
+    cursor: not-allowed;
+    filter: opacity(0.2);
+}
+
+.btn {
+    flex-shrink: 0;
+    border: none;
+    border-radius: 1rem;
+    padding: 0.5rem;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    color: var(--text-primary);
+}
+
+.btn:hover {
+    filter: opacity(0.7);
+}
+
+.btn:disabled {
+    cursor: not-allowed;
+    filter: opacity(0.2);
+}
+
+.btn.primary {
+    background-color: var(--primary);
+}
+
+.btn.danger {
+    background-color: var(--danger);
+}
+
+
+dialog {
+    width: 70vw;
+    height: 70vh;
+
+    background-color: var(--bg-primary);
+    border-radius: 1rem;
+    border: 1px solid var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+dialog::backdrop {
+    background-color: rgba(0, 0, 0, 0.7);
+}
+
+dialog > div {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--bg-secondary);
+}
+
+.dialog-header h2 {
+    font-weight: bold;
+    margin: 0;
+}
+
+.dialog-main {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+}
+
+.dialog-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 1rem;
+    border-top: 1px solid var(--bg-secondary);
+}
+
+select {
+    appearance: none;
+    font-family: inherit;
+    user-select: none;
+    padding: 0.5rem 1.5rem 0.5rem 0.5rem;
+
+    color: var(--text-primary);
+    border: none;
+    border-radius: 1rem;
+    cursor: pointer;
+
+    background-color: transparent;
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center, left 0.5rem center;
+    background-size: 1rem;
+}
+
+select:hover {
+    filter: opacity(0.7);
+}

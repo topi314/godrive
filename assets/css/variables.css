@@ -1,0 +1,50 @@
+:root {
+    --primary: #7212c2;
+    --danger: #b75050;
+}
+
+.dark {
+    --bg-primary: #282c34;
+    --bg-secondary: #1f2228;
+    --bg-secondary-active: #15171a;
+    --nav-button-bg: #373b41;
+    --text-primary: #ffffff;
+    --text-secondary: #828997;
+    --bg-scrollbar: #373b41;
+    --bg-scrollbar-thumb: #1f2228;
+    --bg-scrollbar-thumb-hover: #232529;
+
+    --arrow-down: url("/assets/icons/dark/arrow-down.png");
+    --delete: url("/assets/icons/dark/delete.png");
+    --edit: url("/assets/icons/dark/edit.png");
+    --github: url("/assets/icons/dark/github.svg");
+    --share: url("/assets/icons/dark/share.png");
+    --close: url("/assets/icons/dark/close.png");
+    --theme: url("/assets/icons/dark/theme.png");
+    --upload: url("/assets/icons/dark/upload.png");
+    --file: url("/assets/icons/dark/file.png");
+    --folder: url("/assets/icons/dark/folder.png");
+}
+
+.light {
+    --bg-primary: #fafafa;
+    --bg-secondary: #ebecef;
+    --bg-secondary-active: #d1d5da;
+    --nav-button-bg: #d1d5da;
+    --text-primary: #282c34;
+    --text-secondary: #1f2228;
+    --bg-scrollbar: #ebecef;
+    --bg-scrollbar-thumb: #d4d5dc;
+    --bg-scrollbar-thumb-hover: #c3c8ce;
+
+    --arrow-down: url("/assets/icons/light/arrow-down.png");
+    --delete: url("/assets/icons/light/delete.png");
+    --edit: url("/assets/icons/light/edit.png");
+    --github: url("/assets/icons/light/github.svg");
+    --share: url("/assets/icons/light/share.png");
+    --close: url("/assets/icons/light/close.png");
+    --theme: url("/assets/icons/light/theme.png");
+    --upload: url("/assets/icons/light/upload.png");
+    --file: url("/assets/icons/light/file.png");
+    --folder: url("/assets/icons/light/folder.png");
+}
