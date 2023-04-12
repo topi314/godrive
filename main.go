@@ -13,6 +13,7 @@ import (
 	"golang.org/x/oauth2"
 	"html/template"
 	"io"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -154,8 +155,8 @@ func main() {
 			tmpl = template.Must(tmpl.ParseGlob("templates/*"))
 			return tmpl.ExecuteTemplate(wr, name, data)
 		}
-		jsFunc = writeDir("assets/js")
-		cssFunc = writeDir("assets/css")
+		jsFunc = writeDir(os.DirFS("assets"), "assets/js*")
+		cssFunc = writeDir(os.DirFS("assets"), "assets/css/*")
 		assets = http.Dir(".")
 	} else {
 		tmpl := template.New("").Funcs(funcs)
@@ -163,21 +164,21 @@ func main() {
 		tmplFunc = tmpl.ExecuteTemplate
 
 		jsBuff := new(bytes.Buffer)
-		if err = writeDir("assets/js")(jsBuff); err != nil {
+		if err = writeDir(Assets, "assets/js/*")(jsBuff); err != nil {
 			log.Fatalln("Error while minifying js:", err)
 		}
 
 		cssBuff := new(bytes.Buffer)
-		if err = writeDir("assets/css")(cssBuff); err != nil {
+		if err = writeDir(Assets, "assets/css/*")(cssBuff); err != nil {
 			log.Fatalln("Error while minifying css:", err)
 		}
 
 		jsFunc = func(w io.Writer) error {
-			_, err = jsBuff.WriteTo(w)
+			_, err = w.Write(jsBuff.Bytes())
 			return err
 		}
 		cssFunc = func(w io.Writer) error {
-			_, err = cssBuff.WriteTo(w)
+			_, err = w.Write(cssBuff.Bytes())
 			return err
 		}
 		assets = http.FS(Assets)
@@ -193,9 +194,9 @@ func main() {
 	<-si
 }
 
-func writeDir(directory string) func(w io.Writer) error {
+func writeDir(fs fs.FS, pattern string) func(w io.Writer) error {
 	return func(w io.Writer) error {
-		fr, err := newFolderReader(directory)
+		fr, err := newFolderReader(fs, pattern)
 		if err != nil {
 			return err
 		}

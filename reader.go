@@ -2,8 +2,8 @@ package main
 
 import (
 	"io"
+	"io/fs"
 	"os"
-	"path"
 )
 
 type eofReader struct{}
@@ -27,26 +27,17 @@ type folderReader struct {
 // newFolderReader reads from a directory, and lazily loads files as it needs it.
 // It is a reader that reads a concatenation of those files separated by the separator.
 // You must call Close to close the last file in the list.
-func newFolderReader(directory string) (*folderReader, error) {
-	entries, err := os.ReadDir(directory)
+func newFolderReader(fss fs.FS, pattern string) (*folderReader, error) {
+	filenames, err := fs.Glob(fss, pattern)
 	if err != nil {
 		return nil, err
 	}
-	filenames := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		info, err := entry.Info()
-		if err != nil {
-			return nil, err
-		}
-		filenames = append(filenames, path.Join(directory, info.Name()))
-	}
 	var cur io.ReadCloser
-	if len(entries) > 0 {
+	if len(filenames) > 0 {
 		var filename string
 		filename, filenames = filenames[0], filenames[1:]
 
-		var err error
-		if cur, err = os.Open(filename); err != nil {
+		if cur, err = fss.Open(filename); err != nil {
 			return nil, err
 		}
 	} else {
@@ -62,7 +53,7 @@ func (r *folderReader) Read(p []byte) (int, error) {
 
 	// current reader is finished, load in the new reader
 	if err == io.EOF && len(r.filenames) > 0 {
-		if err := r.cur.Close(); err != nil {
+		if err = r.cur.Close(); err != nil {
 			return n, err
 		}
 

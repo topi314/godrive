@@ -131,9 +131,9 @@ func (s *Server) Routes() http.Handler {
 	return r
 }
 
-func (s *Server) handleWriter(wf WriterFunc, mediatype string) http.Handler {
+func (s *Server) handleWriter(wf WriterFunc, mediaType string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", mediatype)
+		w.Header().Set("Content-Type", mediaType)
 		if err := wf(w); err != nil {
 			s.log(r, "writer", err)
 		}
