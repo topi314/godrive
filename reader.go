@@ -3,7 +3,6 @@ package main
 import (
 	"io"
 	"io/fs"
-	"os"
 )
 
 type eofReader struct{}
@@ -17,6 +16,7 @@ func (r eofReader) Close() error {
 }
 
 type folderReader struct {
+	fs        fs.FS
 	filenames []string
 	sep       []byte
 
@@ -43,7 +43,13 @@ func newFolderReader(fss fs.FS, pattern string) (*folderReader, error) {
 	} else {
 		cur = eofReader{}
 	}
-	return &folderReader{filenames, []byte("\n"), cur, 0}, nil
+	return &folderReader{
+		fs:        fss,
+		filenames: filenames,
+		sep:       []byte("\n"),
+		cur:       cur,
+		sepLeft:   0,
+	}, nil
 }
 
 func (r *folderReader) Read(p []byte) (int, error) {
@@ -59,7 +65,7 @@ func (r *folderReader) Read(p []byte) (int, error) {
 
 		var filename string
 		filename, r.filenames = r.filenames[0], r.filenames[1:]
-		if r.cur, err = os.Open(filename); err != nil {
+		if r.cur, err = r.fs.Open(filename); err != nil {
 			return n, err
 		}
 		r.sepLeft = len(r.sep)
