@@ -1,4 +1,6 @@
 :root {
+    --bg-error: #a65757;
+    --text-error: #fff;
     --primary: #7212c2;
     --danger: #b75050;
 }

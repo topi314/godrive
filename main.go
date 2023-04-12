@@ -3,10 +3,14 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
 	"embed"
 	"flag"
+	"fmt"
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/dustin/go-humanize"
 	"github.com/topisenpai/godrive/godrive"
+	"golang.org/x/oauth2"
 	"html/template"
 	"io"
 	"log"
@@ -18,7 +22,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-jose/go-jose/v3"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
 )
@@ -89,6 +92,28 @@ func main() {
 		log.SetFlags(log.LstdFlags | log.Lshortfile)
 	}
 
+	var auth *godrive.Auth
+	if cfg.Auth != nil {
+		provider, err := oidc.NewProvider(context.Background(), cfg.Auth.Issuer)
+		if err != nil {
+			log.Fatalln("Error while creating Auth provider:", err)
+		}
+
+		auth = &godrive.Auth{
+			Provider: provider,
+			Verifier: provider.Verifier(&oidc.Config{
+				ClientID: cfg.Auth.ClientID,
+			}),
+			Config: &oauth2.Config{
+				ClientID:     cfg.Auth.ClientID,
+				ClientSecret: cfg.Auth.ClientSecret,
+				Endpoint:     provider.Endpoint(),
+				RedirectURL:  cfg.Auth.RedirectURL,
+				Scopes:       []string{oidc.ScopeOpenID, "groups", "email", "profile", oidc.ScopeOfflineAccess},
+			},
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	db, err := godrive.NewDB(ctx, cfg.Database, Schema)
@@ -96,15 +121,6 @@ func main() {
 		log.Fatalln("Error while connecting to database:", err)
 	}
 	defer db.Close()
-
-	key := jose.SigningKey{
-		Algorithm: jose.HS512,
-		Key:       []byte(cfg.JWTSecret),
-	}
-	signer, err := jose.NewSigner(key, nil)
-	if err != nil {
-		log.Fatalln("Error while creating signer:", err)
-	}
 
 	storage, err := godrive.NewStorage(context.Background(), cfg.Storage)
 	if err != nil {
@@ -119,6 +135,9 @@ func main() {
 		},
 		"assemblePath": func(slice []string, index int) string {
 			return strings.Join(slice[:index+1], "/")
+		},
+		"gravatarURL": func(email string) string {
+			return fmt.Sprintf("https://www.gravatar.com/avatar/%x?s=%d&d=retro", md5.Sum([]byte(strings.ToLower(email))), 80)
 		},
 	}
 
@@ -164,7 +183,7 @@ func main() {
 		assets = http.FS(Assets)
 	}
 
-	s := godrive.NewServer(godrive.FormatBuildVersion(version, commit, buildTime), cfg, db, signer, storage, assets, tmplFunc, jsFunc, cssFunc)
+	s := godrive.NewServer(godrive.FormatBuildVersion(version, commit, buildTime), cfg, db, auth, storage, assets, tmplFunc, jsFunc, cssFunc)
 	log.Println("godrive listening on:", cfg.ListenAddr)
 	go s.Start()
 	defer s.Close()

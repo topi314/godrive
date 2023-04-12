@@ -1,10 +1,15 @@
 header {
     background: var(--bg-secondary);
     display: flex;
-    gap: 1rem;
-    align-items: center;
+    justify-content: space-between;
     height: 4rem;
     padding: 1rem;
+}
+
+header > div {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
 }
 
 main {
@@ -53,7 +58,7 @@ main {
 
 #file-list {
     display: grid;
-    grid-template-columns: 3rem repeat(5, auto) 8rem;
+    grid-template-columns: 3rem repeat(6, auto) 8rem;
     overflow: auto;
     align-items: stretch;
     justify-content: stretch;
@@ -96,6 +101,7 @@ main {
     background-image: var(--arrow-down);
     font-size: 1rem;
     padding: 0 1rem 0 0;
+    border-radius: 0;
 }
 
 .file-more:hover {

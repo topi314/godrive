@@ -21,6 +21,13 @@ type (
 		PathParts []string
 		Files     []TemplateFile
 		Theme     string
+		Auth      bool
+		User      *TemplateUser
+	}
+
+	TemplateUser struct {
+		Name  string
+		Email string
 	}
 
 	TemplateFile struct {
@@ -31,6 +38,7 @@ type (
 		Description string
 		Private     bool
 		Date        time.Time
+		Owner       string
 	}
 
 	FileRequest struct {
@@ -50,6 +58,7 @@ type (
 func (f TemplateFile) FullName() string {
 	return path.Join(f.Dir, f.Name)
 }
+
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.CleanPath)
@@ -66,7 +75,9 @@ func (s *Server) Routes() http.Handler {
 	))
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Heartbeat("/ping"))
-	r.Use(s.JWTMiddleware)
+	if s.cfg.Auth != nil {
+		r.Use(s.Auth)
+	}
 
 	if s.cfg.Debug {
 		r.Mount("/debug", middleware.Profiler())
@@ -81,13 +92,39 @@ func (s *Server) Routes() http.Handler {
 	r.Handle("/favicon.png", s.file("/assets/favicon.png"))
 	r.Handle("/favicon-light.png", s.file("/assets/favicon-light.png"))
 	r.Handle("/robots.txt", s.file("/assets/robots.txt"))
+
+	r.Get("/version", s.GetVersion)
+
+	if s.cfg.Auth != nil {
+		r.Group(func(r chi.Router) {
+			r.Get("/login", s.Login)
+			r.Get("/callback", s.Callback)
+			r.Get("/logout", s.Logout)
+			r.Route("/settings", func(r chi.Router) {
+				//r.Get("/", s.GetSettings)
+				//r.Head("/", s.GetSettings)
+				//r.Patch("/", s.PatchSettings)
+			})
+		})
+	}
 	r.Group(func(r chi.Router) {
-		r.Get("/version", s.GetVersion)
+		if s.cfg.Auth != nil {
+			r.Use(s.CheckAuth(func(r *http.Request, info *UserInfo) AuthAction {
+				if s.hasAccess(info) {
+					return AuthActionAllow
+				}
+				if r.Method == http.MethodGet {
+					return AuthActionLogin
+				}
+				return AuthActionDeny
+			}))
+		}
 		r.Get("/*", s.GetFiles)
 		r.Head("/*", s.GetFiles)
 		r.Post("/*", s.PostFiles)
 		r.Patch("/*", s.PatchFiles)
 		r.Delete("/*", s.DeleteFiles)
+
 	})
 	r.NotFound(s.notFound)
 
@@ -133,6 +170,23 @@ func (s *Server) error(w http.ResponseWriter, r *http.Request, err error, status
 		Path:      r.URL.Path,
 		RequestID: middleware.GetReqID(r.Context()),
 	}, status)
+}
+
+func (s *Server) prettyError(w http.ResponseWriter, r *http.Request, err error, status int) {
+	if status == http.StatusInternalServerError {
+		s.log(r, "pretty request", err)
+	}
+	w.WriteHeader(status)
+
+	vars := map[string]any{
+		"Error":     err.Error(),
+		"Status":    status,
+		"RequestID": middleware.GetReqID(r.Context()),
+		"Path":      r.URL.Path,
+	}
+	if tmplErr := s.tmpl(w, "error.gohtml", vars); tmplErr != nil {
+		s.log(r, "template", tmplErr)
+	}
 }
 
 func (s *Server) ok(w http.ResponseWriter, r *http.Request, v any) {

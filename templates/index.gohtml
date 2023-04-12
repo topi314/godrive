@@ -5,20 +5,12 @@
         <div class="dialog-header">
             <h2>Upload</h2>
         </div>
-        <div class="dialog-main">
-            <div id="upload-files" class="dialog-main-content">
-                <label for="upload-file-dir">
-                    Directory
-                    <input id="upload-file-dir" type="text" value="{{ .Path }}" autocomplete="off">
-                </label>
-                <div id="upload-files"></div>
-            </div>
-            <div id="upload-feedback" class="dialog-main-feedback">
-                <div id="upload-error"></div>
-                <div class="progress">
-                    <div id="upload-progress-bar"></div>
-                </div>
-            </div>
+        <div id="upload-files" class="dialog-main">
+            <label for="upload-file-dir">
+                Directory
+                <input id="upload-file-dir" type="text" value="{{ .Path }}" autocomplete="off">
+            </label>
+            <div id="upload-files"></div>
         </div>
         <div class="dialog-footer">
             <button id="upload-confirm-btn" class="btn primary">Upload</button>
@@ -83,15 +75,18 @@
                 <div><span class="file-size">{{ humanizeBytes $file.Size }}</span></div>
                 <div><span class="file-date">{{ humanizeTime $file.Date }}</span></div>
                 <div><span class="file-description">{{ $file.Description }}</span></div>
+                <div><span class="file-owner">{{ $file.Owner }}</span></div>
                 <div><a class="file-download" href="{{ $file.FullName }}?dl=1">Download</a></div>
                 <div>
-                    <select class="file-more" data-file="{{ $file.FullName }}" data-name="{{ $file.Name }}" data-description="{{ $file.Description }}" data-private="{{ $file.Private}}" autocomplete="off">
+                    <select class="file-more" data-file="{{ $file.FullName }}" data-name="{{ $file.Name }}"
+                            data-description="{{ $file.Description }}" data-private="{{ $file.Private}}"
+                            autocomplete="off">
                         <option value="none" selected disabled hidden>More</option>
                         {{ if not $file.IsDir }}
                             <option value="edit">Edit</option>
                         {{ end }}
                         <option value="delete">Delete</option>
-{{/*                        <option value="share">Share</option>*/}}
+                        {{/*                        <option value="share">Share</option>*/}}
                     </select>
                 </div>
             </div>

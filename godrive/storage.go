@@ -39,8 +39,8 @@ type localStorage struct {
 	path string
 }
 
-func (l *localStorage) GetObject(ctx context.Context, name string, start *int64, end *int64) (io.ReadCloser, error) {
-	file, err := os.Open(l.path + "/" + name)
+func (l *localStorage) GetObject(_ context.Context, id string, start *int64, end *int64) (io.ReadCloser, error) {
+	file, err := os.Open(l.path + "/" + id)
 	if err != nil {
 		return nil, err
 	}
@@ -52,6 +52,9 @@ func (l *localStorage) GetObject(ctx context.Context, name string, start *int64,
 
 		return &limitedReader{
 			Reader: io.LimitReader(file, *end-*start),
+			closeFunc: func() error {
+				return file.Close()
+			},
 		}, nil
 	}
 
@@ -60,17 +63,18 @@ func (l *localStorage) GetObject(ctx context.Context, name string, start *int64,
 
 type limitedReader struct {
 	io.Reader
+	closeFunc func() error
 }
 
 func (l *limitedReader) Close() error {
-	if c, ok := l.Reader.(io.Closer); ok {
-		return c.Close()
+	if l.closeFunc != nil {
+		return l.closeFunc()
 	}
 	return nil
 }
 
-func (l *localStorage) PutObject(ctx context.Context, name string, _ uint64, reader io.Reader, _ string) error {
-	file, err := os.Create(l.path + "/" + name)
+func (l *localStorage) PutObject(_ context.Context, id string, _ uint64, reader io.Reader, _ string) error {
+	file, err := os.Create(l.path + "/" + id)
 	if err != nil {
 		return err
 	}
@@ -80,8 +84,8 @@ func (l *localStorage) PutObject(ctx context.Context, name string, _ uint64, rea
 	return err
 }
 
-func (l *localStorage) DeleteObject(ctx context.Context, name string) error {
-	return os.Remove(l.path + "/" + name)
+func (l *localStorage) DeleteObject(ctx context.Context, id string) error {
+	return os.Remove(l.path + "/" + id)
 }
 
 func newS3Storage(ctx context.Context, config StorageConfig) (Storage, error) {

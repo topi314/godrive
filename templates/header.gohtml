@@ -1,8 +1,26 @@
 <header>
-    <a title="godrive" id="title" href="/">godrive</a>
+    <div>
+        <a title="godrive" id="title" href="/">godrive</a>
 
-    <a title="GitHub" id="github" class="icon-btn" href="https://github.com/TopiSenpai/godrive" target="_blank"></a>
+        <a title="GitHub" id="github" class="icon-btn" href="https://github.com/TopiSenpai/godrive" target="_blank"></a>
 
-    <input id="theme" type="checkbox">
-    <label title="Theme" class="icon-btn" for="theme"></label>
+        <input id="theme" type="checkbox">
+        <label title="Theme" class="icon-btn" for="theme"></label>
+    </div>
+    <div>
+        {{ if .Auth }}
+            {{ if .User }}
+                <input id="user-menu" type="checkbox" autocomplete="off">
+                <label title="{{ .User.Name }}" for="user-menu">
+                    <img src="{{ gravatarURL .User.Email}}" alt="{{ .User.Name }} image">
+                </label>
+                <nav>
+                    <a href="/settings">Settings</a>
+                    <a href="/logout">Logout</a>
+                </nav>
+            {{ else }}
+                <a class="btn" href="/login">Login</a>
+            {{ end }}
+        {{ end }}
+    </div>
 </header>
