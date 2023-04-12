@@ -131,18 +131,18 @@ type AuthConfig struct {
 	ClientID     string     `cfg:"client_id"`
 	ClientSecret string     `cfg:"client_secret"`
 	RedirectURL  string     `cfg:"redirect_url"`
-	RequireLogin bool       `cfg:"require_login"`
+	DefaultHome  string     `cfg:"default_home"`
 	Groups       AuthGroups `cfg:"groups"`
 }
 
 func (c AuthConfig) String() string {
-	return fmt.Sprintf("\n  Secure: %t\n  Issuer: %s\n  ClientID: %s\n  ClientSecret: %s\n  RedirectURL: %s\n  RequireLogin: %t\n  Groups: %s",
+	return fmt.Sprintf("\n  Secure: %t\n  Issuer: %s\n  ClientID: %s\n  ClientSecret: %s\n  RedirectURL: %s\n  DefaultHome: %s\n  Groups: %s",
 		c.Secure,
 		c.Issuer,
 		c.ClientID,
 		strings.Repeat("*", len(c.ClientSecret)),
 		c.RedirectURL,
-		c.RequireLogin,
+		c.DefaultHome,
 		c.Groups,
 	)
 }
@@ -151,12 +151,14 @@ type AuthGroups struct {
 	Admin  string `cfg:"admin"`
 	User   string `cfg:"user"`
 	Viewer string `cfg:"viewer"`
+	Guest  bool   `cfg:"guest"`
 }
 
 func (c AuthGroups) String() string {
-	return fmt.Sprintf("\n    Admin: %s\n    User: %s\n    Viewer: %s",
+	return fmt.Sprintf("\n    Admin: %s\n    User: %s\n    Viewer: %s\n    Guest: %t",
 		c.Admin,
 		c.User,
 		c.Viewer,
+		c.Guest,
 	)
 }

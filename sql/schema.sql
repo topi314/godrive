@@ -16,7 +16,9 @@ CREATE TABLE IF NOT EXISTS files
 
 CREATE TABLE IF NOT EXISTS users
 (
-    id   VARCHAR NOT NULL,
-    name VARCHAR NOT NULL,
+    id       VARCHAR NOT NULL,
+    username VARCHAR NOT NULL,
+    email    VARCHAR NOT NULL,
+    home     VARCHAR NOT NULL,
     PRIMARY KEY (id)
 );

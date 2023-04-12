@@ -1,10 +1,15 @@
 header {
     background: var(--bg-secondary);
     display: flex;
-    gap: 1rem;
-    align-items: center;
+    justify-content: space-between;
     height: 4rem;
     padding: 1rem;
+}
+
+header > div {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
 }
 
 main {
@@ -96,6 +101,7 @@ main {
     background-image: var(--arrow-down);
     font-size: 1rem;
     padding: 0 1rem 0 0;
+    border-radius: 0;
 }
 
 .file-more:hover {

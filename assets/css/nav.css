@@ -1,0 +1,44 @@
+#user-menu {
+    display: none;
+}
+
+#user-menu + label {
+    display: block;
+    cursor: pointer;
+    user-select: none;
+}
+
+#user-menu + label > img {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+}
+
+#user-menu ~ nav {
+    display: none;
+    flex-direction: column;
+    position: absolute;
+    top: 3rem;
+    right: 0.5rem;
+    padding: 0.5rem;
+    background-color: var(--bg-secondary-active);
+    border-radius: 0.5rem;
+}
+
+#user-menu ~ nav > a {
+    display: block;
+    padding: 0.5rem;
+    color: var(--text-primary);
+    text-decoration: none;
+    border-radius: 0.5rem;
+}
+
+#user-menu ~ nav > a:hover {
+    background-color: var(--bg-primary);
+}
+
+#user-menu:checked ~ nav {
+    display: flex;
+}
+
+

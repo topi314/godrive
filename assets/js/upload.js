@@ -12,19 +12,26 @@ document.querySelector("#upload-cancel-btn").addEventListener("click", () => {
 document.querySelector("#upload-confirm-btn").addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
-    uploadFiles(files);
+    for (let i = 0; i < files.length; i++) {
+        uploadFile("POST",
+            files[i],
+            document.querySelector(`#file-${i}-name`).value,
+            document.querySelector(`#file-${i}-description`).value,
+            document.querySelector(`#file-${i}-private`).checked,
+            `#upload-${i}-error`,
+            `#upload-${i}-progress-bar`
+        );
+    }
+
 });
 
 document.querySelector("#upload-dialog").addEventListener("close", () => {
-    if (rq) {
-        rq.abort();
+    for (const request of requests) {
+        request.abort();
     }
     files = [];
+    requests = [];
     document.querySelector("#upload-files").replaceChildren();
-    document.querySelector("#upload-error").textContent = "";
-    document.querySelector("#upload-progress-bar").style.width = "0";
-    document.querySelector("#upload-files").style.display = "flex";
-    document.querySelector("#upload-feedback").style.display = "none";
 });
 
 function openUploadDialog() {
@@ -52,6 +59,9 @@ function getDialogFileElement(i, file) {
 
         <label for="file-${i}-private">Private</label>
         <div><input type="checkbox" id="file-${i}-private"></div>
+        
+        <div id="upload-${i}-error" class="error"></div>
+        <div id="upload-${i}-progress-bar" class="progress-bar"></div>
     </div>
 
     <div>

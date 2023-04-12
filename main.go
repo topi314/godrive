@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
 	"embed"
 	"flag"
+	"fmt"
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/dustin/go-humanize"
 	"github.com/topisenpai/godrive/godrive"
@@ -107,7 +109,7 @@ func main() {
 				ClientSecret: cfg.Auth.ClientSecret,
 				Endpoint:     provider.Endpoint(),
 				RedirectURL:  cfg.Auth.RedirectURL,
-				Scopes:       []string{oidc.ScopeOpenID, "groups", "profile", oidc.ScopeOfflineAccess},
+				Scopes:       []string{oidc.ScopeOpenID, "groups", "email", "profile", oidc.ScopeOfflineAccess},
 			},
 		}
 	}
@@ -133,6 +135,9 @@ func main() {
 		},
 		"assemblePath": func(slice []string, index int) string {
 			return strings.Join(slice[:index+1], "/")
+		},
+		"gravatarURL": func(email string) string {
+			return fmt.Sprintf("https://www.gravatar.com/avatar/%x?s=%d&d=retro", md5.Sum([]byte(strings.ToLower(email))), 80)
 		},
 	}
 

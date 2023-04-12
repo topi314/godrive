@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"html/template"
 	"io"
 	"log"
 	"net/http"
@@ -29,7 +28,6 @@ type (
 	TemplateUser struct {
 		Name  string
 		Email string
-		Icon  template.URL
 	}
 
 	TemplateFile struct {
@@ -41,7 +39,6 @@ type (
 		Private     bool
 		Date        time.Time
 		Owner       string
-		OwnerName   string
 	}
 
 	FileRequest struct {
@@ -99,23 +96,27 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/version", s.GetVersion)
 
 	if s.cfg.Auth != nil {
-		r.Route("/auth", func(r chi.Router) {
+		r.Group(func(r chi.Router) {
 			r.Get("/login", s.Login)
-			r.Get("/callback", s.Callback)
+			r.Get("/auth/callback", s.Callback)
 			r.Get("/logout", s.Logout)
-
+			r.Route("/settings", func(r chi.Router) {
+				//r.Get("/", s.GetSettings)
+				//r.Head("/", s.GetSettings)
+				//r.Patch("/", s.PatchSettings)
+			})
 		})
 	}
 	r.Group(func(r chi.Router) {
 		if s.cfg.Auth != nil {
-			r.Use(s.CheckAuth(func(r *http.Request, info *UserInfo) bool {
-				if s.cfg.Auth.RequireLogin && info == nil {
-					return false
+			r.Use(s.CheckAuth(func(r *http.Request, info *UserInfo) AuthAction {
+				if s.hasAccess(info) {
+					return AuthActionAllow
 				}
-				if r.Method == http.MethodGet || r.Method == http.MethodHead {
-					return true
+				if r.Method == http.MethodGet {
+					return AuthActionLogin
 				}
-				return info != nil
+				return AuthActionDeny
 			}))
 		}
 		r.Get("/*", s.GetFiles)
@@ -169,6 +170,23 @@ func (s *Server) error(w http.ResponseWriter, r *http.Request, err error, status
 		Path:      r.URL.Path,
 		RequestID: middleware.GetReqID(r.Context()),
 	}, status)
+}
+
+func (s *Server) prettyError(w http.ResponseWriter, r *http.Request, err error, status int) {
+	if status == http.StatusInternalServerError {
+		s.log(r, "pretty request", err)
+	}
+	w.WriteHeader(status)
+
+	vars := map[string]any{
+		"Error":     err.Error(),
+		"Status":    status,
+		"RequestID": middleware.GetReqID(r.Context()),
+		"Path":      r.URL.Path,
+	}
+	if tmplErr := s.tmpl(w, "error.gohtml", vars); tmplErr != nil {
+		s.log(r, "template", tmplErr)
+	}
 }
 
 func (s *Server) ok(w http.ResponseWriter, r *http.Request, v any) {
