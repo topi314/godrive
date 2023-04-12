@@ -98,7 +98,7 @@ func (s *Server) Routes() http.Handler {
 	if s.cfg.Auth != nil {
 		r.Group(func(r chi.Router) {
 			r.Get("/login", s.Login)
-			r.Get("/auth/callback", s.Callback)
+			r.Get("/callback", s.Callback)
 			r.Get("/logout", s.Logout)
 			r.Route("/settings", func(r chi.Router) {
 				//r.Get("/", s.GetSettings)

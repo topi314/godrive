@@ -220,7 +220,7 @@ func (d *DB) UpsertUser(ctx context.Context, id string, username string, email s
 		Email:    email,
 		Home:     home,
 	}
-	_, err := d.dbx.NamedExecContext(ctx, "INSERT INTO users (id, username, email, home) VALUES (:id, :username, :email, :home) ON CONFLICT (users.id) DO UPDATE SET username = :username, email = :email WHERE id = :id", user)
+	_, err := d.dbx.NamedExecContext(ctx, "INSERT INTO users (id, username, email, home) VALUES (:id, :username, :email, :home) ON CONFLICT (id) DO UPDATE SET username = :username, email = :email", user)
 	if err != nil {
 		return fmt.Errorf("error upserting user: %w", err)
 	}

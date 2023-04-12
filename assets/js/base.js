@@ -31,7 +31,7 @@ function uploadFile(method, file, name, description, filePrivate, errorID, progr
     rq.responseType = "json";
     rq.addEventListener("load", () => {
         if (rq.status >= 200 && rq.status < 300) {
-            window.location.reload();
+
         } else {
             setUploadError(errorID, rq);
         }
