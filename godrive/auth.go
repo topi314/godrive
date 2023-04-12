@@ -3,7 +3,6 @@ package godrive
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 	"net/http"
@@ -21,7 +20,10 @@ type Auth struct {
 }
 
 type UserInfo struct {
-	Claims map[string]any
+	oidc.UserInfo `json:"-"`
+	Audience      []string `json:"aud"`
+	Groups        []string `json:"groups"`
+	Username      string   `json:"preferred_username"`
 }
 
 func (s *Server) setCookie(w http.ResponseWriter, name string, value string, maxAge time.Duration) {
@@ -47,26 +49,38 @@ func (s *Server) removeCookie(w http.ResponseWriter, name string) {
 
 func (s *Server) Auth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie("access_token")
-		if err != nil {
+		var (
+			accessToken  string
+			expiry       time.Time
+			refreshToken string
+		)
+		if cookie, err := r.Cookie("access_token"); err == nil {
+			accessToken = cookie.Value
+			expiry = cookie.Expires
+		} else {
 			next.ServeHTTP(w, r)
 			return
 		}
-		_, err = s.auth.Verifier.Verify(r.Context(), cookie.Value)
-		if err != nil {
+
+		if cookie, err := r.Cookie("refresh_token"); err == nil {
+			refreshToken = cookie.Value
+		}
+
+		userInfo, err := s.auth.Provider.UserInfo(r.Context(), oauth2.StaticTokenSource(&oauth2.Token{
+			AccessToken:  accessToken,
+			TokenType:    "bearer",
+			RefreshToken: refreshToken,
+			Expiry:       expiry,
+		}))
+
+		info := new(UserInfo)
+		info.UserInfo = *userInfo
+		if err = userInfo.Claims(info); err != nil {
 			s.error(w, r, err, http.StatusInternalServerError)
 			return
 		}
 
-		claims := make(map[string]any)
-		//if err = token.Claims(&claims); err != nil {
-		//	s.error(w, r, err, http.StatusInternalServerError)
-		//	return
-		//}
-
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), UserInfoKey, &UserInfo{
-			Claims: claims,
-		})))
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), UserInfoKey, info)))
 	})
 }
 
@@ -144,14 +158,19 @@ func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Println("token", token.AccessToken)
-	fmt.Println("rawIDToken", rawIDToken)
-	claims := make(map[string]any)
-	idToken.Claims(&claims)
-	fmt.Printf("claims: %+v\n", claims)
-
-	s.setCookie(w, "access_token", rawIDToken, token.Expiry.Sub(time.Now()))
+	s.setCookie(w, "access_token", token.AccessToken, token.Expiry.Sub(time.Now()))
 	s.setCookie(w, "refresh_token", token.RefreshToken, time.Hour*24*30)
+
+	var userInfo UserInfo
+	if err = idToken.Claims(&userInfo); err != nil {
+		s.error(w, r, err, http.StatusInternalServerError)
+		return
+	}
+
+	if err = s.db.UpsertUser(r.Context(), idToken.Subject, userInfo.Username); err != nil {
+		s.error(w, r, err, http.StatusInternalServerError)
+		return
+	}
 
 	http.Redirect(w, r, "/", http.StatusFound)
 }

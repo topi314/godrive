@@ -26,6 +26,36 @@ var (
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
+type File struct {
+	Dir         string    `db:"dir"`
+	Name        string    `db:"name"`
+	ID          string    `db:"id"`
+	Size        uint64    `db:"size"`
+	ContentType string    `db:"content_type"`
+	Description string    `db:"description"`
+	Private     bool      `db:"private"`
+	Owner       string    `db:"owner"`
+	CreatedAt   time.Time `db:"created_at"`
+	UpdatedAt   time.Time `db:"updated_at"`
+}
+
+type UpdateFile struct {
+	Dir         string    `db:"dir"`
+	Name        string    `db:"name"`
+	NewDir      string    `db:"new_dir"`
+	NewName     string    `db:"new_name"`
+	Size        uint64    `db:"size"`
+	ContentType string    `db:"content_type"`
+	Description string    `db:"description"`
+	Private     bool      `db:"private"`
+	UpdatedAt   time.Time `db:"updated_at"`
+}
+
+type User struct {
+	ID   string `db:"id"`
+	Name string `db:"name"`
+}
+
 func NewDB(ctx context.Context, cfg DatabaseConfig, schema string) (*DB, error) {
 	var (
 		driverName     string
@@ -71,30 +101,6 @@ func NewDB(ctx context.Context, cfg DatabaseConfig, schema string) (*DB, error) 
 	return db, nil
 }
 
-type File struct {
-	Dir         string    `db:"dir"`
-	Name        string    `db:"name"`
-	ID          string    `db:"id"`
-	Size        uint64    `db:"size"`
-	ContentType string    `db:"content_type"`
-	Description string    `db:"description"`
-	Private     bool      `db:"private"`
-	CreatedAt   time.Time `db:"created_at"`
-	UpdatedAt   time.Time `db:"updated_at"`
-}
-
-type UpdateFile struct {
-	Dir         string    `db:"dir"`
-	Name        string    `db:"name"`
-	NewDir      string    `db:"new_dir"`
-	NewName     string    `db:"new_name"`
-	Size        uint64    `db:"size"`
-	ContentType string    `db:"content_type"`
-	Description string    `db:"description"`
-	Private     bool      `db:"private"`
-	UpdatedAt   time.Time `db:"updated_at"`
-}
-
 type DB struct {
 	dbx *sqlx.DB
 }
@@ -137,7 +143,7 @@ func (d *DB) GetFile(ctx context.Context, path string, name string) (*File, erro
 	return file, nil
 }
 
-func (d *DB) CreateFile(ctx context.Context, dir string, name string, id string, size uint64, contentType string, description string, private bool) (*File, error) {
+func (d *DB) CreateFile(ctx context.Context, dir string, name string, id string, size uint64, contentType string, description string, private bool, owner string) (*File, error) {
 	file := &File{
 		Dir:         dir,
 		Name:        name,
@@ -146,9 +152,10 @@ func (d *DB) CreateFile(ctx context.Context, dir string, name string, id string,
 		ContentType: contentType,
 		Description: description,
 		Private:     private,
+		Owner:       owner,
 		CreatedAt:   time.Now(),
 	}
-	_, err := d.dbx.NamedExecContext(ctx, "INSERT INTO files (dir, name, id, size, content_type, description, private, created_at, updated_at) VALUES (:dir, :name, :id, :size, :content_type, :description, :private, :created_at, :updated_at)", file)
+	_, err := d.dbx.NamedExecContext(ctx, "INSERT INTO files (dir, name, id, size, content_type, description, private, owner, created_at, updated_at) VALUES (:dir, :name, :id, :size, :content_type, :description, :private, :owner, :created_at, :updated_at)", file)
 	if err != nil {
 		var (
 			sqliteErr *sqlite.Error
@@ -201,4 +208,33 @@ func (d *DB) DeleteFile(ctx context.Context, dir string, name string) (string, e
 	}
 
 	return id, nil
+}
+
+func (d *DB) UpsertUser(ctx context.Context, id string, name string) error {
+	user := &User{
+		ID:   id,
+		Name: name,
+	}
+	_, err := d.dbx.NamedExecContext(ctx, "INSERT INTO users (id, name) VALUES (:id, :name) ON CONFLICT (users.id ) DO UPDATE SET name = :name WHERE id = :id", user)
+	if err != nil {
+		return fmt.Errorf("error upserting user: %w", err)
+	}
+	return nil
+}
+
+func (d *DB) GetUsers(ctx context.Context, ids []string) ([]User, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var users []User
+	query, args, err := sqlx.In("SELECT * FROM users WHERE id IN (?)", ids)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = d.dbx.SelectContext(ctx, &users, d.dbx.Rebind(query), args...); err != nil {
+		return nil, fmt.Errorf("error getting users: %w", err)
+	}
+
+	return users, nil
 }

@@ -7,8 +7,16 @@ CREATE TABLE IF NOT EXISTS files
     content_type TEXT      NOT NULL,
     description  TEXT      NOT NULL,
     private      BOOLEAN   NOT NULL,
+    owner        VARCHAR   NOT NULL,
     created_at   TIMESTAMP NOT NULL,
     updated_at   TIMESTAMP NOT NULL,
     PRIMARY KEY (dir, name),
     UNIQUE (id)
+);
+
+CREATE TABLE IF NOT EXISTS users
+(
+    id   VARCHAR NOT NULL,
+    name VARCHAR NOT NULL,
+    PRIMARY KEY (id)
 );

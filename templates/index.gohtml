@@ -81,6 +81,7 @@
                 <div><span class="icon {{ if $file.IsDir }}folder{{ else }}file{{ end }}-icon"></span></div>
                 <div><a class="file-name" href="{{ $file.FullName }}">{{ $file.Name }}</a></div>
                 <div><span class="file-size">{{ humanizeBytes $file.Size }}</span></div>
+                <div><span class="file-owner">{{ $file.OwnerName }}</span></div>
                 <div><span class="file-date">{{ humanizeTime $file.Date }}</span></div>
                 <div><span class="file-description">{{ $file.Description }}</span></div>
                 <div><a class="file-download" href="{{ $file.FullName }}?dl=1">Download</a></div>

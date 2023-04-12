@@ -40,6 +40,8 @@ type (
 		Description string
 		Private     bool
 		Date        time.Time
+		Owner       string
+		OwnerName   string
 	}
 
 	FileRequest struct {
@@ -59,6 +61,7 @@ type (
 func (f TemplateFile) FullName() string {
 	return path.Join(f.Dir, f.Name)
 }
+
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.CleanPath)

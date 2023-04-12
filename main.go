@@ -107,7 +107,7 @@ func main() {
 				ClientSecret: cfg.Auth.ClientSecret,
 				Endpoint:     provider.Endpoint(),
 				RedirectURL:  cfg.Auth.RedirectURL,
-				Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
+				Scopes:       []string{oidc.ScopeOpenID, "groups", "profile", oidc.ScopeOfflineAccess},
 			},
 		}
 	}

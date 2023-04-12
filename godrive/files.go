@@ -100,7 +100,10 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var templateFiles []TemplateFile
+	var (
+		templateFiles []TemplateFile
+		userIDs       []string
+	)
 	for _, file := range files {
 		if file.Private {
 			continue
@@ -151,6 +154,29 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 			Private:     file.Private,
 			Date:        updatedAt,
 		})
+		userIDs = append(userIDs, file.Owner)
+	}
+
+	users, err := s.db.GetUsers(r.Context(), userIDs)
+	if err != nil {
+		s.error(w, r, err, http.StatusInternalServerError)
+		return
+	}
+
+	for i := range templateFiles {
+		if templateFiles[i].IsDir {
+			continue
+		}
+
+		index := slices.IndexFunc(users, func(u User) bool {
+			return u.ID == templateFiles[i].Owner
+		})
+		if index == -1 {
+			templateFiles[i].OwnerName = "Unknown"
+			continue
+		}
+
+		templateFiles[i].OwnerName = users[index].Name
 	}
 
 	var user *TemplateUser
@@ -186,13 +212,18 @@ func (s *Server) writeFile(ctx context.Context, w io.Writer, id string, start *i
 }
 
 func (s *Server) PostFiles(w http.ResponseWriter, r *http.Request) {
+	userInfo := GetUserInfo(r)
+	if userInfo == nil {
+		s.error(w, r, errors.New("unauthorized"), http.StatusUnauthorized)
+		return
+	}
 	if err := s.parseMultiparts(r, func(file ParsedFile, reader io.Reader) error {
 		id := s.newID()
 		if err := s.storage.PutObject(r.Context(), id, file.Size, reader, file.ContentType); err != nil {
 			return err
 		}
 
-		_, err := s.db.CreateFile(r.Context(), file.Dir, file.Name, id, file.Size, file.ContentType, file.Description, file.Private)
+		_, err := s.db.CreateFile(r.Context(), file.Dir, file.Name, id, file.Size, file.ContentType, file.Description, file.Private, userInfo.Subject)
 		return err
 	}); err != nil {
 		s.error(w, r, err, http.StatusInternalServerError)
