@@ -37,7 +37,7 @@ func (s *Server) hasFileAccess(info *UserInfo, file File) bool {
 }
 
 func (s *Server) hasAccess(info *UserInfo) bool {
-	if info == nil {
+	if info == nil && !s.isGuest() {
 		return false
 	}
 	return s.isAdmin(info) || s.isUser(info) || s.isViewer(info) || s.isGuest()
