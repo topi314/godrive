@@ -29,12 +29,12 @@ var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 type File struct {
 	Dir         string    `db:"dir"`
 	Name        string    `db:"name"`
-	ID          string    `db:"id"`
+	ObjectID    string    `db:"object_id"`
 	Size        uint64    `db:"size"`
 	ContentType string    `db:"content_type"`
 	Description string    `db:"description"`
 	Private     bool      `db:"private"`
-	Owner       string    `db:"owner"`
+	UserID      string    `db:"user_id"`
 	Username    *string   `db:"username"`
 	CreatedAt   time.Time `db:"created_at"`
 	UpdatedAt   time.Time `db:"updated_at"`
@@ -117,7 +117,7 @@ func (d *DB) FindFiles(ctx context.Context, fullName string) ([]File, error) {
 	dir = path.Clean(dir)
 
 	var file File
-	err := d.dbx.GetContext(ctx, &file, "SELECT files.*, users.username FROM files LEFT JOIN users ON files.owner = users.id WHERE files.dir = $1 AND files.name = $2", dir, name)
+	err := d.dbx.GetContext(ctx, &file, "SELECT files.*, users.username FROM files LEFT JOIN users ON files.user_id = users.id WHERE files.dir = $1 AND files.name = $2", dir, name)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("error finding file: %w", err)
 	} else if err == nil {
@@ -125,7 +125,7 @@ func (d *DB) FindFiles(ctx context.Context, fullName string) ([]File, error) {
 	}
 
 	var files []File
-	err = d.dbx.SelectContext(ctx, &files, "SELECT files.*, users.username FROM files LEFT JOIN users ON files.owner = users.id WHERE files.dir like $1", fullName+"%")
+	err = d.dbx.SelectContext(ctx, &files, "SELECT files.*, users.username FROM files LEFT JOIN users ON files.user_id = users.id WHERE files.dir like $1", fullName+"%")
 	if err != nil {
 		return nil, fmt.Errorf("error finding files: %w", err)
 	}
@@ -135,7 +135,7 @@ func (d *DB) FindFiles(ctx context.Context, fullName string) ([]File, error) {
 
 func (d *DB) GetFile(ctx context.Context, path string, name string) (*File, error) {
 	file := new(File)
-	err := d.dbx.GetContext(ctx, file, "SELECT files.*, users.username FROM files LEFT JOIN users ON files.owner = users.id WHERE files.dir = $1 AND files.name = $2", path, name)
+	err := d.dbx.GetContext(ctx, file, "SELECT files.*, users.username FROM files LEFT JOIN users ON files.user_id = users.id WHERE files.dir = $1 AND files.name = $2", path, name)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			err = ErrFileNotFound
@@ -146,19 +146,19 @@ func (d *DB) GetFile(ctx context.Context, path string, name string) (*File, erro
 	return file, nil
 }
 
-func (d *DB) CreateFile(ctx context.Context, dir string, name string, id string, size uint64, contentType string, description string, private bool, owner string) (*File, error) {
+func (d *DB) CreateFile(ctx context.Context, dir string, name string, objectID string, size uint64, contentType string, description string, private bool, userID string) (*File, error) {
 	file := &File{
 		Dir:         dir,
 		Name:        name,
-		ID:          id,
+		ObjectID:    objectID,
 		Size:        size,
 		ContentType: contentType,
 		Description: description,
 		Private:     private,
-		Owner:       owner,
+		UserID:      userID,
 		CreatedAt:   time.Now(),
 	}
-	_, err := d.dbx.NamedExecContext(ctx, "INSERT INTO files (dir, name, id, size, content_type, description, private, owner, created_at, updated_at) VALUES (:dir, :name, :id, :size, :content_type, :description, :private, :owner, :created_at, :updated_at)", file)
+	_, err := d.dbx.NamedExecContext(ctx, "INSERT INTO files (dir, name, object_id, size, content_type, description, private, user_id, created_at, updated_at) VALUES (:dir, :name, :object_id, :size, :content_type, :description, :private, :user_id, :created_at, :updated_at)", file)
 	if err != nil {
 		var (
 			sqliteErr *sqlite.Error
@@ -187,9 +187,9 @@ func (d *DB) UpdateFile(ctx context.Context, dir string, name string, newDir str
 		Private:     private,
 		UpdatedAt:   time.Now(),
 	}
-	query := "UPDATE files SET dir = :new_dir, name = :new_name, description = :description, private = :private, updated_at = :updated_at WHERE name = :name AND dir = :dir RETURNING id"
+	query := "UPDATE files SET dir = :new_dir, name = :new_name, description = :description, private = :private, updated_at = :updated_at WHERE name = :name AND dir = :dir RETURNING object_id"
 	if size > 0 {
-		query = "UPDATE files SET dir = :new_dir, name = :new_name, size = :size, content_type = :content_type, description = :description, private = :private, updated_at = :updated_at WHERE name = :name AND dir = :dir RETURNING id"
+		query = "UPDATE files SET dir = :new_dir, name = :new_name, size = :size, content_type = :content_type, description = :description, private = :private, updated_at = :updated_at WHERE name = :name AND dir = :dir RETURNING object_id"
 	}
 	var id string
 	if err := d.dbx.GetContext(ctx, &id, query, file); err != nil {
@@ -203,7 +203,7 @@ func (d *DB) UpdateFile(ctx context.Context, dir string, name string, newDir str
 
 func (d *DB) DeleteFile(ctx context.Context, dir string, name string) (string, error) {
 	var id string
-	if err := d.dbx.GetContext(ctx, &id, "DELETE FROM files WHERE dir = $1 AND name = $2 RETURNING id", dir, name); err != nil {
+	if err := d.dbx.GetContext(ctx, &id, "DELETE FROM files WHERE dir = $1 AND name = $2 RETURNING object_id", dir, name); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			err = ErrFileNotFound
 		}
@@ -239,6 +239,15 @@ func (d *DB) GetUsers(ctx context.Context, ids []string) ([]User, error) {
 
 	if err = d.dbx.SelectContext(ctx, &users, d.dbx.Rebind(query), args...); err != nil {
 		return nil, fmt.Errorf("error getting users: %w", err)
+	}
+
+	return users, nil
+}
+
+func (d *DB) GetAllUsers(ctx context.Context) ([]User, error) {
+	var users []User
+	if err := d.dbx.SelectContext(ctx, &users, "SELECT * FROM users"); err != nil {
+		return nil, fmt.Errorf("error getting all users: %w", err)
 	}
 
 	return users, nil

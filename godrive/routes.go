@@ -4,60 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"io"
 	"log"
 	"net/http"
-	"path"
 	"strings"
-	"time"
-
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 )
-
-type (
-	TemplateVariables struct {
-		Path      string
-		PathParts []string
-		Files     []TemplateFile
-		Theme     string
-		Auth      bool
-		User      *TemplateUser
-	}
-
-	TemplateUser struct {
-		Name  string
-		Email string
-	}
-
-	TemplateFile struct {
-		IsDir       bool
-		Dir         string
-		Name        string
-		Size        uint64
-		Description string
-		Private     bool
-		Date        time.Time
-		Owner       string
-	}
-
-	FileRequest struct {
-		Size        uint64 `json:"size"`
-		Description string `json:"description"`
-		Private     bool   `json:"private"`
-	}
-
-	ErrorResponse struct {
-		Message   string `json:"message"`
-		Status    int    `json:"status"`
-		Path      string `json:"path"`
-		RequestID string `json:"request_id"`
-	}
-)
-
-func (f TemplateFile) FullName() string {
-	return path.Join(f.Dir, f.Name)
-}
 
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
@@ -75,9 +28,6 @@ func (s *Server) Routes() http.Handler {
 	))
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Heartbeat("/ping"))
-	if s.cfg.Auth != nil {
-		r.Use(s.Auth)
-	}
 
 	if s.cfg.Debug {
 		r.Mount("/debug", middleware.Profiler())
@@ -95,40 +45,82 @@ func (s *Server) Routes() http.Handler {
 
 	r.Get("/version", s.GetVersion)
 
-	if s.cfg.Auth != nil {
-		r.Group(func(r chi.Router) {
-			r.Get("/login", s.Login)
-			r.Get("/callback", s.Callback)
-			r.Get("/logout", s.Logout)
-			r.Route("/settings", func(r chi.Router) {
-				//r.Get("/", s.GetSettings)
-				//r.Head("/", s.GetSettings)
-				//r.Patch("/", s.PatchSettings)
-			})
-		})
-	}
 	r.Group(func(r chi.Router) {
 		if s.cfg.Auth != nil {
-			r.Use(s.CheckAuth(func(r *http.Request, info *UserInfo) AuthAction {
-				if s.hasAccess(info) {
-					return AuthActionAllow
-				}
-				if r.Method == http.MethodGet {
-					return AuthActionLogin
-				}
-				return AuthActionDeny
-			}))
+			r.Use(s.Auth)
+			r.Group(func(r chi.Router) {
+				r.Get("/login", s.Login)
+				r.Get("/callback", s.Callback)
+				r.Get("/logout", s.Logout)
+				r.Route("/settings", func(r chi.Router) {
+					r.Get("/", s.GetSettings)
+					//r.Head("/", s.GetSettings)
+					//r.Patch("/", s.PatchSettings)
+				})
+			})
 		}
-		r.Get("/*", s.GetFiles)
-		r.Head("/*", s.GetFiles)
-		r.Post("/*", s.PostFiles)
-		r.Patch("/*", s.PatchFiles)
-		r.Delete("/*", s.DeleteFiles)
 
+		r.Group(func(r chi.Router) {
+			if s.cfg.Auth != nil {
+				r.Use(s.CheckAuth(func(r *http.Request, info *UserInfo) AuthAction {
+					if s.hasAccess(info) {
+						return AuthActionAllow
+					}
+					if r.Method == http.MethodGet {
+						return AuthActionLogin
+					}
+					return AuthActionDeny
+				}))
+			}
+			r.Get("/*", s.GetFiles)
+			r.Head("/*", s.GetFiles)
+			r.Post("/*", s.PostFiles)
+			r.Patch("/*", s.PatchFiles)
+			r.Delete("/*", s.DeleteFiles)
+		})
 	})
 	r.NotFound(s.notFound)
 
 	return r
+}
+
+func (s *Server) GetSettings(w http.ResponseWriter, r *http.Request) {
+	userInfo := GetUserInfo(r)
+	if !s.isAdmin(userInfo) {
+		http.Redirect(w, r, "/", http.StatusFound)
+		return
+	}
+
+	users, err := s.db.GetAllUsers(r.Context())
+	if err != nil {
+		s.prettyError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+
+	templateUsers := make([]TemplateUser, len(users))
+	for i, user := range users {
+		templateUsers[i] = TemplateUser{
+			ID:    user.ID,
+			Name:  user.Username,
+			Email: user.Email,
+		}
+	}
+
+	vars := SettingsVariables{
+		BaseVariables: BaseVariables{
+			Theme: "dark",
+			Auth:  s.cfg.Auth != nil,
+			User:  s.ToTemplateUser(userInfo),
+		},
+		Users: templateUsers,
+	}
+	if err = s.tmpl(w, "settings.gohtml", vars); err != nil {
+		s.log(r, "template", err)
+	}
+}
+
+func (s *Server) GetVersion(w http.ResponseWriter, _ *http.Request) {
+	_, _ = w.Write([]byte(s.version))
 }
 
 func (s *Server) handleWriter(wf WriterFunc, mediaType string) http.Handler {
@@ -138,10 +130,6 @@ func (s *Server) handleWriter(wf WriterFunc, mediaType string) http.Handler {
 			s.log(r, "writer", err)
 		}
 	})
-}
-
-func (s *Server) GetVersion(w http.ResponseWriter, _ *http.Request) {
-	_, _ = w.Write([]byte(s.version))
 }
 
 func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
@@ -183,6 +171,7 @@ func (s *Server) prettyError(w http.ResponseWriter, r *http.Request, err error, 
 		"Status":    status,
 		"RequestID": middleware.GetReqID(r.Context()),
 		"Path":      r.URL.Path,
+		"Theme":     "dark",
 	}
 	if tmplErr := s.tmpl(w, "error.gohtml", vars); tmplErr != nil {
 		s.log(r, "template", tmplErr)

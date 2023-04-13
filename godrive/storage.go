@@ -27,7 +27,7 @@ type Storage interface {
 }
 
 func newLocalStorage(config StorageConfig) (Storage, error) {
-	if err := os.MkdirAll(config.Path, 0755); err != nil {
+	if err := os.MkdirAll(config.Path, 0777); err != nil {
 		return nil, fmt.Errorf("failed to create storage directory: %w", err)
 	}
 	return &localStorage{

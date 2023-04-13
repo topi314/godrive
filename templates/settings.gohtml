@@ -1,0 +1,30 @@
+{{ template "head.gohtml" . }}
+<body>
+{{ template "header.gohtml" . }}
+<main>
+    <div id="settings">
+        <h1>Settings</h1>
+        <div id="users" class="table-list">
+            {{ range $index, $user := .Users }}
+                <div class="table-list-entry">
+                    <div>
+                        <span class="icon user-icon"></span>
+                        <span class="user-name">{{ $user.Name }}</span>
+                    </div>
+                    <div><span class="user-email">{{ $user.Email }}</span></div>
+                    <div>
+                        <select class="user-more" autocomplete="off">
+                            <option value="none" selected disabled hidden>More</option>
+                            <option value="edit">Edit</option>
+                            <option value="delete">Delete</option>
+                        </select>
+                    </div>
+                </div>
+            {{ end }}
+        </div>
+    </div>
+</main>
+<script src="/assets/theme.js" defer></script>
+<script src="/assets/script.js" defer></script>
+</body>
+</html>

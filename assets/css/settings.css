@@ -1,0 +1,28 @@
+#settings {
+    display: flex;
+    flex-direction: column;
+    overflow-x: auto;
+    align-items: stretch;
+    justify-content: stretch;
+    padding: 0.5rem;
+    max-width: 40rem;
+}
+
+#users {
+    grid-template-columns: repeat(2, 1fr) 8rem;
+}
+
+.user-more {
+    background-image: var(--arrow-down);
+    font-size: 1rem;
+    padding: 0 1rem 0 0;
+    border-radius: 0;
+}
+
+.user-more:hover {
+    background-color: var(--bg-secondary);
+}
+
+.user-icon {
+    background-image: var(--user);
+}

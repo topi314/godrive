@@ -155,8 +155,8 @@ func main() {
 			tmpl = template.Must(tmpl.ParseGlob("templates/*"))
 			return tmpl.ExecuteTemplate(wr, name, data)
 		}
-		jsFunc = writeDir(os.DirFS("assets"), "assets/js*")
-		cssFunc = writeDir(os.DirFS("assets"), "assets/css/*")
+		jsFunc = writeDir(os.DirFS("assets"), "js/*")
+		cssFunc = writeDir(os.DirFS("assets"), "css/*")
 		assets = http.Dir(".")
 	} else {
 		tmpl := template.New("").Funcs(funcs)

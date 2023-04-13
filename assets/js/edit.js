@@ -1,8 +1,8 @@
-document.querySelector("#edit-cancel-btn").addEventListener("click", () => {
+register("#edit-cancel-btn", "click", () => {
     document.querySelector("#edit-dialog").close();
 });
 
-document.querySelector("#edit-confirm-btn").addEventListener("click", (e) => {
+register("#edit-confirm-btn", "click", (e) => {
     e.preventDefault();
     e.stopPropagation();
     let file;
@@ -10,16 +10,24 @@ document.querySelector("#edit-confirm-btn").addEventListener("click", (e) => {
         file = files[0];
     }
     uploadFile("PATCH",
+        window.location.pathname,
         file,
         document.querySelector("#edit-file-new-name").value,
         document.querySelector("#edit-file-description").value,
         document.querySelector("#edit-file-private").checked,
-        "#edit-error",
-        "#edit-progress-bar"
+        (xhr) => {
+            window.location.reload();
+        },
+        (xhr) => {
+            setUploadError("#edit-error", xhr)
+        },
+        (e) => {
+            document.querySelector("#edit-progress-bar").style.width = `${e.loaded / e.total * 100}%`;
+        }
     );
 });
 
-document.querySelector("#edit-dialog").addEventListener("close", () => {
+register("#edit-dialog", "close", () => {
     for (const request of requests) {
         request.abort();
     }

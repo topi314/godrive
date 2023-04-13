@@ -29,43 +29,43 @@ type UserInfo struct {
 	Username      string   `json:"preferred_username"`
 }
 
-func (s *Server) hasFileAccess(info *UserInfo, file File) bool {
-	if info == nil {
-		return false
+func (s *Server) ToTemplateUser(info *UserInfo) TemplateUser {
+	return TemplateUser{
+		ID:      info.Subject,
+		Name:    info.Username,
+		Email:   info.Email,
+		IsAdmin: s.isAdmin(info),
+		IsUser:  s.isUser(info),
+		IsGuest: s.isGuest(info),
 	}
-	return info.Subject == file.Owner || s.isAdmin(info)
+}
+
+func (s *Server) hasFileAccess(info *UserInfo, file File) bool {
+	return (file.Private && info.Subject == file.UserID) || s.isAdmin(info)
 }
 
 func (s *Server) hasAccess(info *UserInfo) bool {
-	if info == nil && !s.isGuest() {
+	if !s.cfg.Auth.Groups.Guest && s.isGuest(info) {
 		return false
 	}
-	return s.isAdmin(info) || s.isUser(info) || s.isViewer(info) || s.isGuest()
+
+	return s.isAdmin(info) || s.isUser(info) || s.isViewer(info) || s.isGuest(info)
 }
 
 func (s *Server) isAdmin(info *UserInfo) bool {
-	if info == nil {
-		return false
-	}
 	return slices.Contains(info.Groups, s.cfg.Auth.Groups.Admin)
 }
 
 func (s *Server) isUser(info *UserInfo) bool {
-	if info == nil {
-		return false
-	}
 	return slices.Contains(info.Groups, s.cfg.Auth.Groups.User)
 }
 
 func (s *Server) isViewer(info *UserInfo) bool {
-	if info == nil {
-		return false
-	}
 	return slices.Contains(info.Groups, s.cfg.Auth.Groups.Viewer)
 }
 
-func (s *Server) isGuest() bool {
-	return s.cfg.Auth.Groups.Guest
+func (s *Server) isGuest(info *UserInfo) bool {
+	return slices.Contains(info.Groups, "guest")
 }
 
 func (s *Server) setCookie(w http.ResponseWriter, name string, value string, maxAge time.Duration) {
@@ -99,24 +99,37 @@ func (s *Server) Auth(next http.Handler) http.Handler {
 		if cookie, err := r.Cookie("access_token"); err == nil {
 			accessToken = cookie.Value
 			expiry = cookie.Expires
-		} else {
-			next.ServeHTTP(w, r)
-			return
 		}
-
 		if cookie, err := r.Cookie("refresh_token"); err == nil {
 			refreshToken = cookie.Value
 		}
 
-		userInfo, err := s.auth.Provider.UserInfo(r.Context(), s.auth.Config.TokenSource(r.Context(), &oauth2.Token{
+		if accessToken == "" && refreshToken == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		tk := s.auth.Config.TokenSource(r.Context(), &oauth2.Token{
 			AccessToken:  accessToken,
 			TokenType:    "bearer",
 			RefreshToken: refreshToken,
 			Expiry:       expiry,
-		}))
+		})
+
+		userInfo, err := s.auth.Provider.UserInfo(r.Context(), tk)
 		if err != nil {
 			s.error(w, r, err, http.StatusInternalServerError)
 			return
+		}
+
+		token, err := tk.Token()
+		if err != nil {
+			s.error(w, r, err, http.StatusInternalServerError)
+			return
+		}
+		if token.AccessToken != accessToken || token.RefreshToken != refreshToken {
+			s.setCookie(w, "access_token", token.AccessToken, token.Expiry.Sub(time.Now()))
+			s.setCookie(w, "refresh_token", token.RefreshToken, time.Hour*24*30)
 		}
 
 		info := new(UserInfo)
@@ -157,7 +170,15 @@ func (s *Server) CheckAuth(allowedFunc func(r *http.Request, info *UserInfo) Aut
 func GetUserInfo(r *http.Request) *UserInfo {
 	userInfo := r.Context().Value(UserInfoKey)
 	if userInfo == nil {
-		return nil
+		return &UserInfo{
+			UserInfo: oidc.UserInfo{
+				Subject: "guest",
+				Email:   "guest@localhost",
+			},
+			Audience: []string{"godrive"},
+			Groups:   []string{"guest"},
+			Username: "guest",
+		}
 	}
 	return userInfo.(*UserInfo)
 }

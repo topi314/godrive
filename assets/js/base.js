@@ -2,9 +2,21 @@ let files = [];
 let requests = [];
 
 function registerAll(query, event, callback) {
-    document.querySelectorAll(query).forEach(element => {
+    const elements = document.querySelectorAll(query);
+    if (!elements) {
+        return;
+    }
+    elements.forEach(element => {
         element.addEventListener(event, callback);
     });
+}
+
+function register(query, event, callback) {
+    const element = document.querySelector(query);
+    if (!element) {
+        return;
+    }
+    element.addEventListener(event, callback);
 }
 
 function toggleUploadActive(e, active) {
@@ -13,7 +25,7 @@ function toggleUploadActive(e, active) {
     e.target.classList.toggle("active", active);
 }
 
-function uploadFile(method, file, name, description, filePrivate, errorID, progressID) {
+function uploadFile(method, path, file, name, description, filePrivate, doneCallback, errorCallback, progressCallback) {
     const data = new FormData();
     const json = {
         size: file ? file.size : null,
@@ -31,28 +43,26 @@ function uploadFile(method, file, name, description, filePrivate, errorID, progr
     rq.responseType = "json";
     rq.addEventListener("load", () => {
         if (rq.status >= 200 && rq.status < 300) {
-
+            doneCallback(rq);
         } else {
-            setUploadError(errorID, rq);
+            errorCallback(rq);
         }
     });
     rq.upload.addEventListener("error", () => {
-        setUploadError(errorID, rq);
+        errorCallback(rq);
     });
     rq.upload.addEventListener("progress", (e) => {
         if (e.lengthComputable) {
-            const percent = Math.round((e.loaded / e.total) * 100);
-            document.querySelector(progressID).style.width = `${percent}%`;
+            progressCallback(e);
         }
     });
-    let url = window.location.pathname;
     if (method === "PATCH") {
-        if (!url.endsWith("/")) {
-            url += "/";
+        if (!path.endsWith("/")) {
+            path += "/";
         }
-        url += file.name;
+        path += file.name;
     }
-    rq.open(method, url);
+    rq.open(method, path);
     rq.send(data);
     requests.push(rq);
 }

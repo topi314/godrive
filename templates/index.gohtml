@@ -5,7 +5,7 @@
         <div class="dialog-header">
             <h2>Upload</h2>
         </div>
-        <div id="upload-files" class="dialog-main">
+        <div class="dialog-main">
             <label for="upload-file-dir">
                 Directory
                 <input id="upload-file-dir" type="text" value="{{ .Path }}" autocomplete="off">
@@ -13,12 +13,11 @@
             <div id="upload-files"></div>
         </div>
         <div class="dialog-footer">
-            <button id="upload-confirm-btn" class="btn primary">Upload</button>
             <button id="upload-cancel-btn" class="btn danger">Cancel</button>
+            <button id="upload-confirm-btn" class="btn primary">Upload</button>
         </div>
     </div>
 </dialog>
-
 <dialog id="edit-dialog">
     <div>
         <div class="dialog-header">
@@ -45,15 +44,15 @@
                 </div>
             </div>
             <div id="edit-feedback" class="dialog-main-feedback">
-                <div id="edit-error"></div>
+                <div id="edit-error" class="upload-error"></div>
                 <div class="progress">
                     <div id="edit-progress-bar"></div>
                 </div>
             </div>
         </div>
         <div class="dialog-footer">
-            <button id="edit-confirm-btn" class="btn primary">Edit</button>
             <button id="edit-cancel-btn" class="btn danger">Cancel</button>
+            <button id="edit-confirm-btn" class="btn primary">Edit</button>
         </div>
     </div>
 </dialog>
@@ -67,35 +66,38 @@
             {{ end }}
         </div>
     </div>
-    <div id="file-list">
+    <div id="file-list" class="table-list">
         {{ range $index, $file := .Files }}
-            <div class="file">
-                <div><span class="icon {{ if $file.IsDir }}folder{{ else }}file{{ end }}-icon"></span></div>
-                <div><a class="file-name" href="{{ $file.FullName }}">{{ $file.Name }}</a></div>
+            <div class="table-list-entry">
+                <div>
+                    <span class="icon {{ if $file.IsDir }}folder{{ else }}file{{ end }}-icon"></span>
+                    <a class="file-name" href="{{ $file.FullName }}">{{ $file.Name }}</a>
+                </div>
                 <div><span class="file-size">{{ humanizeBytes $file.Size }}</span></div>
                 <div><span class="file-date">{{ humanizeTime $file.Date }}</span></div>
                 <div><span class="file-description">{{ $file.Description }}</span></div>
                 <div><span class="file-owner">{{ $file.Owner }}</span></div>
                 <div><a class="file-download" href="{{ $file.FullName }}?dl=1">Download</a></div>
                 <div>
-                    <select class="file-more" data-file="{{ $file.FullName }}" data-name="{{ $file.Name }}"
-                            data-description="{{ $file.Description }}" data-private="{{ $file.Private}}"
-                            autocomplete="off">
+                    <select class="file-more" data-file="{{ $file.FullName }}" data-name="{{ $file.Name }}" data-description="{{ $file.Description }}" data-private="{{ $file.Private}}" autocomplete="off" {{ if not $file.IsOwner }}disabled{{ end }}>
                         <option value="none" selected disabled hidden>More</option>
+
                         {{ if not $file.IsDir }}
                             <option value="edit">Edit</option>
                         {{ end }}
                         <option value="delete">Delete</option>
-                        {{/*                        <option value="share">Share</option>*/}}
+                        <option value="share">Share</option>
                     </select>
                 </div>
             </div>
         {{ end }}
     </div>
-    <div class="file-upload">
-        <input type="file" id="files" multiple hidden>
-        <label for="files">Choose files or drop here.</label>
-    </div>
+    {{ if ne .User.Name "guest" }}
+        <div class="file-upload">
+            <input type="file" id="files" multiple hidden>
+            <label for="files">Choose files or drop here.</label>
+        </div>
+    {{ end }}
 </main>
 <script src="/assets/theme.js" defer></script>
 <script src="/assets/script.js" defer></script>

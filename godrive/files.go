@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"golang.org/x/exp/slices"
 	"io"
-	"log"
 	"net/http"
 	"path"
 	"strconv"
@@ -34,14 +33,18 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	start, end, err := parseRange(r.Header.Get("Range"))
-	if err != nil {
-		s.error(w, r, err, http.StatusRequestedRangeNotSatisfiable)
-		return
-	}
-
-	if len(files) == 1 && (rPath != "/" || path.Join(files[0].Dir, files[0].Name) == rPath) {
+	userInfo := GetUserInfo(r)
+	if len(files) == 1 && path.Join(files[0].Dir, files[0].Name) == rPath {
+		start, end, err := parseRange(r.Header.Get("Range"))
+		if err != nil {
+			s.error(w, r, err, http.StatusRequestedRangeNotSatisfiable)
+			return
+		}
 		file := files[0]
+		if !s.hasFileAccess(userInfo, file) {
+			s.prettyError(w, r, errors.New("file is private"), http.StatusForbidden)
+			return
+		}
 		if download {
 			w.Header().Set("Content-Disposition", "attachment; filename="+file.Name)
 		}
@@ -56,13 +59,12 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if err = s.writeFile(r.Context(), w, file.ID, start, end); err != nil {
+		if err = s.writeFile(r.Context(), w, file.ObjectID, start, end); err != nil {
 			s.log(r, "error writing file", err)
 		}
 		return
 	}
 
-	userInfo := GetUserInfo(r)
 	if download {
 		zipName := path.Dir(r.URL.Path)
 		if zipName == "/" || zipName == "." {
@@ -73,7 +75,7 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 		zw := zip.NewWriter(w)
 		defer zw.Close()
 		for _, file := range files {
-			if file.Private && !s.hasFileAccess(userInfo, file) {
+			if !s.hasFileAccess(userInfo, file) {
 				continue
 			}
 			fullName := path.Join(file.Dir, file.Name)
@@ -157,27 +159,22 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 			Private:     file.Private,
 			Date:        updatedAt,
 			Owner:       owner,
+			IsOwner:     userInfo.Subject == file.UserID,
 		})
 	}
 
-	var user *TemplateUser
-	if userInfo != nil {
-		user = &TemplateUser{
-			Name:  userInfo.Username,
-			Email: userInfo.Email,
-		}
-	}
-
-	vars := TemplateVariables{
+	vars := IndexVariables{
+		BaseVariables: BaseVariables{
+			Theme: "dark",
+			Auth:  s.cfg.Auth != nil,
+			User:  s.ToTemplateUser(userInfo),
+		},
 		Path:      rPath,
 		PathParts: strings.FieldsFunc(rPath, func(r rune) bool { return r == '/' }),
 		Files:     templateFiles,
-		Theme:     "dark",
-		Auth:      s.cfg.Auth != nil,
-		User:      user,
 	}
 	if err = s.tmpl(w, "index.gohtml", vars); err != nil {
-		log.Println("failed to execute template:", err)
+		s.log(r, "template", err)
 	}
 }
 
@@ -352,8 +349,13 @@ func (s *Server) parseMultipart(r *http.Request) (*ParsedFile, io.ReadCloser, er
 		contentType = "application/octet-stream"
 	}
 
+	dir := r.URL.Path
+	if r.Method == http.MethodPatch {
+		dir = path.Dir(dir)
+	}
+
 	parsedFile := ParsedFile{
-		Dir:         path.Dir(r.URL.Path),
+		Dir:         dir,
 		Name:        part.FileName(),
 		Size:        file.Size,
 		ContentType: contentType,

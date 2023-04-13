@@ -4,6 +4,9 @@ header {
     justify-content: space-between;
     height: 4rem;
     padding: 1rem;
+    position: fixed;
+    width: 100%;
+    top: 0;
 }
 
 header > div {
@@ -18,6 +21,7 @@ main {
     flex: 1;
     overflow: auto;
     padding: 0.5rem;
+    margin-top: 4rem;
 }
 
 #title {
@@ -57,45 +61,8 @@ main {
 }
 
 #file-list {
-    display: grid;
-    grid-template-columns: 3rem repeat(6, auto) 8rem;
-    overflow: auto;
-    align-items: stretch;
-    justify-content: stretch;
-    padding: 0.5rem;
+    grid-template-columns: repeat(6, auto) 6rem;
 }
-
-.file {
-    display: contents;
-    font-size: 1rem;
-}
-
-.file:hover > * {
-    background-color: var(--bg-secondary);
-}
-
-.file:hover > *:first-child {
-    border-top-left-radius: 1rem;
-    border-bottom-left-radius: 1rem;
-}
-
-.file:hover > *:last-child {
-    border-top-right-radius: 1rem;
-    border-bottom-right-radius: 1rem;
-}
-
-.file > * {
-    display: flex;
-    align-items: center;
-    padding: 0.5rem;
-    border-bottom: 1px solid var(--bg-secondary);
-}
-
-
-.file a {
-    color: var(--text-primary);
-}
-
 
 .file-more {
     background-image: var(--arrow-down);
@@ -128,35 +95,6 @@ main {
     padding: 0.5rem;
 }
 
-.file-upload {
-    display: flex;
-    padding: 0.2rem;
-    border-radius: 1rem;
-    background-color: var(--bg-secondary);
-    transition: background-color 0.2s ease;
-}
-
-.file-upload.active,
-.file-upload:hover {
-    background-color: var(--bg-secondary-active);
-}
-
-#files + label {
-    flex-grow: 1;
-    border: 2px dashed var(--bg-primary);
-    border-radius: 1rem;
-    text-align: center;
-    padding: 5rem 1rem 1rem 1rem;
-    cursor: pointer;
-    font-size: 1rem;
-    font-weight: bold;
-    background-image: var(--upload);
-    background-repeat: no-repeat;
-    background-position: top;
-    background-size: 4rem;
-    user-select: none;
-}
-
 .upload-file {
     display: flex;
     align-items: start;
@@ -164,6 +102,13 @@ main {
     padding: 0.5rem;
     background-color: var(--bg-secondary);
     border-radius: 1rem;
+}
+
+.upload-file-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex-grow: 1;
 }
 
 #upload-files input,
@@ -201,6 +146,11 @@ main {
     width: 0;
     height: 1rem;
     background-color: var(--primary);
+}
+
+.upload-error {
+    color: var(--text-error);
+    text-align: start;
 }
 
 .file-icon {

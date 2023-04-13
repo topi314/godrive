@@ -94,7 +94,8 @@ type StorageConfig struct {
 	Debug bool        `cfg:"debug"`
 
 	// Local
-	Path string `cfg:"path"`
+	Path  string `cfg:"path"`
+	Umask int    `cfg:"umask"`
 
 	// S3
 	Endpoint        string `cfg:"endpoint"`
@@ -109,7 +110,7 @@ func (c StorageConfig) String() string {
 	str := fmt.Sprintf("\n  Type: %s\n  Debug: %t\n  ", c.Type, c.Debug)
 	switch c.Type {
 	case "local":
-		str += fmt.Sprintf("Path: %s", c.Path)
+		str += fmt.Sprintf("Path: %s\n  Umask: %d", c.Path, c.Umask)
 	case "s3":
 		str += fmt.Sprintf("Endpoint: %s\n  AccessKeyID: %s\n  SecretAccessKey: %s\n  Bucket: %s\n  Region: %s\n  Secure: %t",
 			c.Endpoint,

@@ -9,17 +9,19 @@
     </div>
     <div>
         {{ if .Auth }}
-            {{ if .User }}
+            {{ if ne .User.Name "guest" }}
                 <input id="user-menu" type="checkbox" autocomplete="off">
                 <label title="{{ .User.Name }}" for="user-menu">
                     <img src="{{ gravatarURL .User.Email}}" alt="{{ .User.Name }} image">
                 </label>
                 <nav>
-                    <a href="/settings">Settings</a>
+                    {{ if .User.IsAdmin }}
+                        <a href="/settings">Settings</a>
+                    {{ end }}
                     <a href="/logout">Logout</a>
                 </nav>
             {{ else }}
-                <a class="btn" href="/login">Login</a>
+                <a id="login" class="btn primary" href="/login">Login</a>
             {{ end }}
         {{ end }}
     </div>

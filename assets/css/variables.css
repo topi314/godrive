@@ -1,7 +1,6 @@
 :root {
-    --bg-error: #a65757;
-    --text-error: #fff;
-    --primary: #7212c2;
+    --text-error: #f35757;
+    --primary: #cd16ff;
     --danger: #b75050;
 }
 
@@ -26,6 +25,7 @@
     --upload: url("/assets/icons/dark/upload.png");
     --file: url("/assets/icons/dark/file.png");
     --folder: url("/assets/icons/dark/folder.png");
+    --user: url("/assets/icons/dark/user.png");
 }
 
 .light {
@@ -49,4 +49,5 @@
     --upload: url("/assets/icons/light/upload.png");
     --file: url("/assets/icons/light/file.png");
     --folder: url("/assets/icons/light/folder.png");
+    --user: url("/assets/icons/light/user.png");
 }
