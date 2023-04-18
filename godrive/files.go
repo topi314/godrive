@@ -105,7 +105,7 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 
 	var templateFiles []TemplateFile
 	for _, file := range files {
-		if file.Private && !s.hasFileAccess(userInfo, file) {
+		if !s.hasFileAccess(userInfo, file) {
 			continue
 		}
 		updatedAt := file.UpdatedAt
