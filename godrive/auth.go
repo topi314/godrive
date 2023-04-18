@@ -41,7 +41,10 @@ func (s *Server) ToTemplateUser(info *UserInfo) TemplateUser {
 }
 
 func (s *Server) hasFileAccess(info *UserInfo, file File) bool {
-	return (file.Private && info.Subject == file.UserID) || s.isAdmin(info)
+	if file.Private {
+		return info.Subject == file.UserID || s.isAdmin(info)
+	}
+	return true
 }
 
 func (s *Server) hasAccess(info *UserInfo) bool {
