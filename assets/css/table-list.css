@@ -40,7 +40,7 @@
 
 @media (max-width: 40rem) {
     .table-list {
-        grid-template-columns: 1fr!important;
+        grid-template-columns: 1fr !important;
         padding: 0.5rem 0 0.5rem 0;
     }
 
@@ -50,25 +50,42 @@
 
     .table-list-entry > *:first-child {
         padding: 1rem 1rem 0.5rem 1rem;
+        border-radius: 1rem 1rem 0 0 !important;
     }
 
     .table-list-entry > *:last-child {
         padding: 0.5rem 1rem 1rem 1rem;
-    }
-
-    .table-list-entry:hover > *:first-child {
-        border-top-left-radius: 1rem;
-        border-top-right-radius: 1rem;
-        border-bottom-left-radius: 0;
-    }
-
-    .table-list-entry:hover > *:last-child {
-        border-bottom-left-radius: 1rem;
-        border-bottom-right-radius: 1rem;
-        border-top-right-radius: 0;
+        margin-bottom: 0.5rem;
+        border-radius: 0 0 1rem 1rem !important;
     }
 
     .table-list-entry > * {
         border-bottom: none;
+        background-color: var(--bg-secondary);
+    }
+
+    .table-list-entry > *::before {
+        font-weight: bold;
+        text-transform: capitalize;
+    }
+
+    .table-list-entry > *:nth-of-type(1)::before {
+        content: "Name:";
+    }
+
+    .table-list-entry > *:nth-of-type(2)::before {
+        content: "Size:";
+    }
+
+    .table-list-entry > *:nth-of-type(3)::before {
+        content: "Modified:";
+    }
+
+    .table-list-entry > *:nth-of-type(4)::before {
+        content: "Description:";
+    }
+
+    .table-list-entry > *:nth-of-type(5)::before {
+        content: "Owner:";
     }
 }

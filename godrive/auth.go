@@ -121,7 +121,9 @@ func (s *Server) Auth(next http.Handler) http.Handler {
 
 		userInfo, err := s.auth.Provider.UserInfo(r.Context(), tk)
 		if err != nil {
-			s.error(w, r, err, http.StatusInternalServerError)
+			s.removeCookie(w, "access_token")
+			s.removeCookie(w, "refresh_token")
+			next.ServeHTTP(w, r)
 			return
 		}
 
@@ -132,7 +134,7 @@ func (s *Server) Auth(next http.Handler) http.Handler {
 		}
 		if token.AccessToken != accessToken || token.RefreshToken != refreshToken {
 			s.setCookie(w, "access_token", token.AccessToken, token.Expiry.Sub(time.Now()))
-			s.setCookie(w, "refresh_token", token.RefreshToken, time.Hour*24*30)
+			s.setCookie(w, "refresh_token", token.RefreshToken, 90*time.Minute)
 		}
 
 		info := new(UserInfo)
@@ -189,8 +191,8 @@ func GetUserInfo(r *http.Request) *UserInfo {
 func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	state := s.newID()
 	nonce := s.newID()
-	s.setCookie(w, "state", state, time.Hour)
-	s.setCookie(w, "nonce", nonce, time.Hour)
+	s.setCookie(w, "state", state, time.Minute)
+	s.setCookie(w, "nonce", nonce, time.Minute)
 	http.Redirect(w, r, s.auth.Config.AuthCodeURL(state, oidc.Nonce(nonce)), http.StatusFound)
 }
 

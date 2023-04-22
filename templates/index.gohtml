@@ -71,24 +71,21 @@
             <div class="table-list-entry">
                 <div>
                     <span class="icon {{ if $file.IsDir }}folder{{ else }}file{{ end }}-icon"></span>
-                    <a class="file-name" href="{{ $file.FullName }}">{{ $file.Name }}</a>
+                    <a href="{{ $file.FullName }}">{{ $file.Name }}</a>
                 </div>
-                <div><span class="file-size">{{ humanizeBytes $file.Size }}</span></div>
-                <div><span class="file-date">{{ humanizeTime $file.Date }}</span></div>
-                <div><span class="file-description">{{ $file.Description }}</span></div>
-                <div><span class="file-owner">{{ $file.Owner }}</span></div>
-                <div><a class="file-download" href="{{ $file.FullName }}?dl=1">Download</a></div>
-                <div>
-                    <select class="file-more" data-file="{{ $file.FullName }}" data-name="{{ $file.Name }}" data-description="{{ $file.Description }}" data-private="{{ $file.Private}}" autocomplete="off" {{ if not $file.IsOwner }}disabled{{ end }}>
-                        <option value="none" selected disabled hidden>More</option>
-
-                        {{ if not $file.IsDir }}
-                            <option value="edit">Edit</option>
-                        {{ end }}
-                        <option value="delete">Delete</option>
-                        <option value="share">Share</option>
-                    </select>
-                </div>
+                <div>{{ humanizeBytes $file.Size }}</div>
+                <div>{{ humanizeTime $file.Date }}</div>
+                <div>{{ $file.Description }}</div>
+                <div>{{ $file.Owner }}</div>
+                <div><a href="{{ $file.FullName }}?dl=1">Download</a></div>
+                <select class="file-more" data-file="{{ $file.FullName }}" data-name="{{ $file.Name }}" data-description="{{ $file.Description }}" data-private="{{ $file.Private}}" autocomplete="off" {{ if not $file.IsOwner }}disabled{{ end }}>
+                    <option value="none" selected disabled hidden>More</option>
+                    {{ if not $file.IsDir }}
+                        <option value="edit">Edit</option>
+                    {{ end }}
+                    <option value="delete">Delete</option>
+                    <option value="share">Share</option>
+                </select>
             </div>
         {{ end }}
     </div>
