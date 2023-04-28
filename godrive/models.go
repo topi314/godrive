@@ -48,6 +48,7 @@ type (
 		Size        uint64 `json:"size"`
 		Description string `json:"description"`
 		Private     bool   `json:"private"`
+		Dir         string `json:"dir"`
 	}
 
 	ErrorResponse struct {

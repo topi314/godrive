@@ -25,13 +25,16 @@ function toggleUploadActive(e, active) {
     e.target.classList.toggle("active", active);
 }
 
-function uploadFile(method, path, file, name, description, filePrivate, doneCallback, errorCallback, progressCallback) {
+function uploadFile(method, path, file, dir, name, description, filePrivate, doneCallback, errorCallback, progressCallback) {
     const data = new FormData();
     const json = {
         size: file ? file.size : null,
         description: description,
         private: filePrivate,
     };
+    if (dir) {
+        json.dir = dir;
+    }
     data.append("json", JSON.stringify(json));
     if (file) {
         data.append("file", file, name || file.name);
@@ -60,7 +63,7 @@ function uploadFile(method, path, file, name, description, filePrivate, doneCall
         if (!path.endsWith("/")) {
             path += "/";
         }
-        path += file.name;
+        path += name || file.name;
     }
     rq.open(method, path);
     rq.send(data);

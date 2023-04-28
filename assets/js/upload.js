@@ -29,6 +29,7 @@ register("#upload-confirm-btn", "click", (e) => {
         uploadFile("POST",
             uploadDir.value,
             files[i],
+            undefined,
             fileName.value,
             fileDescription.value,
             filePrivate.checked,

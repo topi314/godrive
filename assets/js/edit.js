@@ -12,6 +12,7 @@ register("#edit-confirm-btn", "click", (e) => {
     uploadFile("PATCH",
         window.location.pathname,
         file,
+        document.querySelector("#edit-file-new-dir").value,
         document.querySelector("#edit-file-new-name").value,
         document.querySelector("#edit-file-description").value,
         document.querySelector("#edit-file-private").checked,
@@ -42,6 +43,7 @@ register("#edit-dialog", "close", () => {
 
 function openEditDialog(dataset) {
     document.querySelector("#edit-file-name").value = dataset.name;
+    document.querySelector("#edit-file-new-dir").value = window.location.pathname;
     document.querySelector("#edit-file-new-name").value = dataset.name;
     document.querySelector("#edit-file-description").value = dataset.description;
     document.querySelector("#edit-file-private").checked = dataset.private === "true";

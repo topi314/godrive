@@ -191,8 +191,14 @@ func (d *DB) UpdateFile(ctx context.Context, dir string, name string, newDir str
 	if size > 0 {
 		query = "UPDATE files SET dir = :new_dir, name = :new_name, size = :size, content_type = :content_type, description = :description, private = :private, updated_at = :updated_at WHERE name = :name AND dir = :dir RETURNING object_id"
 	}
+
+	query, args, err := sqlx.Named(query, file)
+	if err != nil {
+		return "", err
+	}
+
 	var id string
-	if err := d.dbx.GetContext(ctx, &id, query, file); err != nil {
+	if err = d.dbx.GetContext(ctx, &id, query, args...); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			err = ErrFileNotFound
 		}
