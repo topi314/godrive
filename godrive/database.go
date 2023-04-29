@@ -112,10 +112,18 @@ func (d *DB) Close() error {
 	return d.dbx.Close()
 }
 
-func (d *DB) FindFiles(ctx context.Context, fullName string) ([]File, error) {
-	dir, name := path.Split(fullName)
-	dir = path.Clean(dir)
+func (d *DB) FindFiles(ctx context.Context, fullPath string) ([]File, error) {
+	if fullPath == "/" {
+		var files []File
+		err := d.dbx.SelectContext(ctx, &files, "SELECT files.*, users.username FROM files LEFT JOIN users ON files.user_id = users.id")
+		if err != nil {
+			return nil, fmt.Errorf("error finding files: %w", err)
+		}
+		return files, nil
+	}
 
+	dir, name := path.Split(fullPath)
+	dir = path.Clean(dir)
 	var file File
 	err := d.dbx.GetContext(ctx, &file, "SELECT files.*, users.username FROM files LEFT JOIN users ON files.user_id = users.id WHERE files.dir = $1 AND files.name = $2", dir, name)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -125,7 +133,7 @@ func (d *DB) FindFiles(ctx context.Context, fullName string) ([]File, error) {
 	}
 
 	var files []File
-	err = d.dbx.SelectContext(ctx, &files, "SELECT files.*, users.username FROM files LEFT JOIN users ON files.user_id = users.id WHERE files.dir like $1", fullName+"%")
+	err = d.dbx.SelectContext(ctx, &files, "SELECT files.*, users.username FROM files LEFT JOIN users ON files.user_id = users.id WHERE files.dir = $1 or files.dir like $2", fullPath, fullPath+"/%")
 	if err != nil {
 		return nil, fmt.Errorf("error finding files: %w", err)
 	}

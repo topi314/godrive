@@ -110,50 +110,39 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 		if !s.hasFileAccess(userInfo, file) {
 			continue
 		}
-		updatedAt := file.UpdatedAt
-		if updatedAt.IsZero() {
-			updatedAt = file.CreatedAt
-		}
-
-		relativePath := strings.TrimPrefix(file.Dir, r.URL.Path)
-		if relativePath != "" {
-			if strings.Count(relativePath, "") > 0 {
-				parts := strings.Split(relativePath, "/")
-				if len(parts) > 1 {
-					relativePath = parts[1]
-				} else {
-					relativePath = parts[0]
-				}
-			}
-
-			index := slices.IndexFunc(templateFiles, func(f TemplateFile) bool {
-				return f.Name == relativePath
-			})
-			if index > -1 {
-				templateFiles[index].Size += file.Size
-				if templateFiles[index].Date.Before(updatedAt) {
-					templateFiles[index].Date = updatedAt
-				}
-				if templateFiles[index].IsOwner && file.UserID != userInfo.Subject {
-					templateFiles[index].IsOwner = false
-				}
-				continue
-			}
-
-			templateFiles = append(templateFiles, TemplateFile{
-				IsDir:   true,
-				Name:    relativePath,
-				Dir:     r.URL.Path,
-				Size:    file.Size,
-				Date:    updatedAt,
-				IsOwner: file.UserID == userInfo.Subject,
-			})
-			continue
-		}
 
 		owner := "Unknown"
 		if file.Username != nil {
 			owner = *file.Username
+		}
+
+		if dir := strings.TrimPrefix(file.Dir, r.URL.Path); dir != "" {
+			baseDir := strings.TrimPrefix(dir, "/")
+			if strings.Count(baseDir, "/") > 0 {
+				baseDir = strings.SplitN(baseDir, "/", 2)[0]
+			}
+			index := slices.IndexFunc(templateFiles, func(file TemplateFile) bool {
+				return file.Name == baseDir
+			})
+			if index == -1 {
+				templateFiles = append(templateFiles, TemplateFile{
+					IsDir: true,
+					Dir:   r.URL.Path,
+					Name:  baseDir,
+					Size:  file.Size,
+					Date:  file.UpdatedAt,
+					Owner: owner,
+				})
+				continue
+			}
+			templateFiles[index].Size += file.Size
+			if templateFiles[index].Date.Before(file.UpdatedAt) {
+				templateFiles[index].Date = file.UpdatedAt
+			}
+			if !strings.Contains(templateFiles[index].Owner, owner) {
+				templateFiles[index].Owner += ", " + owner
+			}
+			continue
 		}
 
 		templateFiles = append(templateFiles, TemplateFile{
@@ -163,7 +152,7 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 			Size:        file.Size,
 			Description: file.Description,
 			Private:     file.Private,
-			Date:        updatedAt,
+			Date:        file.UpdatedAt,
 			Owner:       owner,
 			IsOwner:     file.UserID == userInfo.Subject,
 		})

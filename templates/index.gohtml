@@ -82,14 +82,16 @@
                 <div>{{ $file.Description }}</div>
                 <div>{{ $file.Owner }}</div>
                 <div><a href="{{ $file.FullName }}?dl=1">Download</a></div>
-                <select class="file-more" data-file="{{ $file.FullName }}" data-name="{{ $file.Name }}" data-description="{{ $file.Description }}" data-private="{{ $file.Private}}" autocomplete="off" {{ if not $file.IsOwner }}disabled{{ end }}>
-                    <option value="none" selected disabled hidden>More</option>
-                    {{ if not $file.IsDir }}
-                        <option value="edit">Edit</option>
-                    {{ end }}
-                    <option value="delete">Delete</option>
-                    <option value="share">Share</option>
-                </select>
+                <div>
+                    <select class="file-more" data-file="{{ $file.FullName }}" data-name="{{ $file.Name }}" data-description="{{ $file.Description }}" data-private="{{ $file.Private}}" autocomplete="off" {{ if not $file.IsOwner }}disabled{{ end }}>
+                        <option value="none" selected disabled hidden>More</option>
+                        {{ if not $file.IsDir }}
+                            <option value="edit">Edit</option>
+                        {{ end }}
+                        <option value="delete">Delete</option>
+                        <option value="share">Share</option>
+                    </select>
+                </div>
             </div>
         {{ end }}
     </div>

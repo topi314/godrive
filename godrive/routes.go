@@ -15,6 +15,7 @@ import (
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.CleanPath)
+	r.Use(middleware.StripSlashes)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Maybe(
