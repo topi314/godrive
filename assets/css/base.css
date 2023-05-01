@@ -82,6 +82,7 @@ textarea:disabled {
     background-size: 1rem;
     cursor: pointer;
     color: var(--text-primary);
+    transition: filter 0.2s ease;
 }
 
 .icon-btn:hover {
@@ -103,6 +104,7 @@ textarea:disabled {
     cursor: pointer;
     color: var(--text-primary);
     text-decoration: none;
+    transition: filter 0.2s ease;
 }
 
 .btn:hover {
@@ -207,6 +209,8 @@ select {
     background-repeat: no-repeat;
     background-position: right 0.5rem center, left 0.5rem center;
     background-size: 1rem;
+
+    transition: filter 0.2s ease;
 }
 
 select:hover {

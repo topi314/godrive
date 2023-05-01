@@ -35,6 +35,7 @@
     color: var(--text-primary);
     text-decoration: none;
     border-radius: 0.5rem;
+    transition: background-color 0.2s ease;
 }
 
 #user-menu ~ nav > a:hover {

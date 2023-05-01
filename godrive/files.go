@@ -6,12 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"golang.org/x/exp/slices"
 	"io"
 	"net/http"
 	"path"
 	"strconv"
 	"strings"
+
+	"golang.org/x/exp/slices"
 )
 
 func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {

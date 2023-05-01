@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/coreos/go-oidc/v3/oidc"
-	"golang.org/x/exp/slices"
-	"golang.org/x/oauth2"
 	"net/http"
 	"path"
 	"time"
+
+	"github.com/coreos/go-oidc/v3/oidc"
+	"golang.org/x/exp/slices"
+	"golang.org/x/oauth2"
 )
 
 type authKey struct{}

@@ -7,10 +7,6 @@ import (
 	"embed"
 	"flag"
 	"fmt"
-	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/dustin/go-humanize"
-	"github.com/topisenpai/godrive/godrive"
-	"golang.org/x/oauth2"
 	"html/template"
 	"io"
 	"io/fs"
@@ -22,6 +18,11 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/dustin/go-humanize"
+	"github.com/topisenpai/godrive/godrive"
+	"golang.org/x/oauth2"
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"

@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net/http"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -73,6 +74,18 @@ func (s *Server) newID() string {
 		b[i] = letters[s.rand.Intn(len(letters))]
 	}
 	return string(b)
+}
+
+func cacheControl(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/assets/") {
+			w.Header().Set("Cache-Control", "public, max-age=86400")
+			next.ServeHTTP(w, r)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func FormatBuildVersion(version string, commit string, buildTime string) string {

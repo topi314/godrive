@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"io"
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 func (s *Server) Routes() http.Handler {
@@ -27,6 +28,7 @@ func (s *Server) Routes() http.Handler {
 			return !strings.HasPrefix(r.URL.Path, "/assets")
 		},
 	))
+	r.Use(cacheControl)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Heartbeat("/ping"))
 

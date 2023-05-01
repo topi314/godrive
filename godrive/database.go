@@ -6,17 +6,18 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"log"
+	"strings"
+	"time"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/jackc/pgx/v5/tracelog"
 	"github.com/jmoiron/sqlx"
-	"log"
 	"modernc.org/sqlite"
 	_ "modernc.org/sqlite"
-	"strings"
-	"time"
 )
 
 var (
