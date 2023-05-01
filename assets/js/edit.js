@@ -1,3 +1,10 @@
+register("#file", "change", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    files = e.target.files;
+    document.querySelector("#edit-file-new-name").value = files[0].name;
+});
+
 register("#edit-cancel-btn", "click", () => {
     document.querySelector("#edit-dialog").close();
 });
@@ -9,13 +16,32 @@ register("#edit-confirm-btn", "click", (e) => {
     if (files && files.length > 0) {
         file = files[0];
     }
+    let path = window.location.pathname;
+    if (!path.endsWith("/")) {
+        path += "/";
+    }
+    path += document.querySelector("#edit-file-name").value;
+
+    const fileNewDir = document.querySelector("#edit-file-new-dir");
+    const fileNewName = document.querySelector("#edit-file-new-name");
+    const fileDescription = document.querySelector("#edit-file-description");
+    const filePrivate = document.querySelector("#edit-file-private");
+
+    fileNewDir.disabled = true;
+    fileNewName.disabled = true;
+    fileDescription.disabled = true;
+    filePrivate.disabled = true;
+
+    document.querySelector("#edit-upload").style.display = "none";
+    document.querySelector("#edit-feedback").style.display = "flex";
+
     uploadFile("PATCH",
-        window.location.pathname,
+        path,
         file,
-        document.querySelector("#edit-file-new-dir").value,
-        document.querySelector("#edit-file-new-name").value,
-        document.querySelector("#edit-file-description").value,
-        document.querySelector("#edit-file-private").checked,
+        fileNewDir.value,
+        fileNewName.value,
+        fileDescription.value,
+        filePrivate.checked,
         (xhr) => {
             window.location.reload();
         },
@@ -38,6 +64,7 @@ register("#edit-dialog", "close", () => {
     document.querySelector("#edit-progress-bar").style.width = "0";
     document.querySelector("#edit-file").style.display = "flex";
     document.querySelector("#edit-feedback").style.display = "none";
+    document.querySelector("#edit-upload").style.display = "flex";
 });
 
 

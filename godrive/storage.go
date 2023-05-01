@@ -21,9 +21,10 @@ func NewStorage(ctx context.Context, config StorageConfig) (Storage, error) {
 }
 
 type Storage interface {
-	GetObject(ctx context.Context, id string, start *int64, end *int64) (io.ReadCloser, error)
-	PutObject(ctx context.Context, id string, size uint64, reader io.Reader, contentType string) error
-	DeleteObject(ctx context.Context, id string) error
+	GetObject(ctx context.Context, filePath string, start *int64, end *int64) (io.ReadCloser, error)
+	MoveObject(ctx context.Context, from string, to string) error
+	PutObject(ctx context.Context, filePath string, size uint64, reader io.Reader, contentType string) error
+	DeleteObject(ctx context.Context, filePath string) error
 }
 
 func newLocalStorage(config StorageConfig) (Storage, error) {
@@ -39,8 +40,8 @@ type localStorage struct {
 	path string
 }
 
-func (l *localStorage) GetObject(_ context.Context, id string, start *int64, end *int64) (io.ReadCloser, error) {
-	file, err := os.Open(l.path + "/" + id)
+func (l *localStorage) GetObject(_ context.Context, filePath string, start *int64, end *int64) (io.ReadCloser, error) {
+	file, err := os.Open(l.path + "/" + filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -73,8 +74,8 @@ func (l *limitedReader) Close() error {
 	return nil
 }
 
-func (l *localStorage) PutObject(_ context.Context, id string, _ uint64, reader io.Reader, _ string) error {
-	file, err := os.Create(l.path + "/" + id)
+func (l *localStorage) PutObject(_ context.Context, filePath string, _ uint64, reader io.Reader, _ string) error {
+	file, err := os.Create(l.path + "/" + filePath)
 	if err != nil {
 		return err
 	}
@@ -84,8 +85,12 @@ func (l *localStorage) PutObject(_ context.Context, id string, _ uint64, reader 
 	return err
 }
 
-func (l *localStorage) DeleteObject(ctx context.Context, id string) error {
-	return os.Remove(l.path + "/" + id)
+func (l *localStorage) MoveObject(_ context.Context, from string, to string) error {
+	return os.Rename(l.path+"/"+from, l.path+"/"+to)
+}
+
+func (l *localStorage) DeleteObject(_ context.Context, filePath string) error {
+	return os.Remove(l.path + "/" + filePath)
 }
 
 func newS3Storage(ctx context.Context, config StorageConfig) (Storage, error) {
@@ -121,23 +126,37 @@ type s3Storage struct {
 	bucket string
 }
 
-func (s *s3Storage) GetObject(ctx context.Context, name string, start *int64, end *int64) (io.ReadCloser, error) {
+func (s *s3Storage) GetObject(ctx context.Context, filePath string, start *int64, end *int64) (io.ReadCloser, error) {
 	opts := minio.GetObjectOptions{}
 	if start != nil && end != nil {
 		if err := opts.SetRange(*start, *end); err != nil {
 			return nil, fmt.Errorf("failed to set range: %w", err)
 		}
 	}
-	return s.client.GetObject(ctx, s.bucket, name, opts)
+	return s.client.GetObject(ctx, s.bucket, filePath, opts)
 }
 
-func (s *s3Storage) PutObject(ctx context.Context, name string, size uint64, reader io.Reader, contentType string) error {
-	_, err := s.client.PutObject(ctx, s.bucket, name, reader, int64(size), minio.PutObjectOptions{
+func (s *s3Storage) MoveObject(ctx context.Context, from string, to string) error {
+	_, err := s.client.CopyObject(ctx, minio.CopyDestOptions{
+		Bucket: s.bucket,
+		Object: to,
+	}, minio.CopySrcOptions{
+		Bucket: s.bucket,
+		Object: from,
+	})
+	if err != nil {
+		return err
+	}
+	return s.client.RemoveObject(ctx, s.bucket, from, minio.RemoveObjectOptions{})
+}
+
+func (s *s3Storage) PutObject(ctx context.Context, filePath string, size uint64, reader io.Reader, contentType string) error {
+	_, err := s.client.PutObject(ctx, s.bucket, filePath, reader, int64(size), minio.PutObjectOptions{
 		ContentType: contentType,
 	})
 	return err
 }
 
-func (s *s3Storage) DeleteObject(ctx context.Context, name string) error {
-	return s.client.RemoveObject(ctx, s.bucket, name, minio.RemoveObjectOptions{})
+func (s *s3Storage) DeleteObject(ctx context.Context, filePath string) error {
+	return s.client.RemoveObject(ctx, s.bucket, filePath, minio.RemoveObjectOptions{})
 }

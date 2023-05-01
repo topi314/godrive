@@ -29,7 +29,6 @@ var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 type File struct {
 	Dir         string    `db:"dir"`
 	Name        string    `db:"name"`
-	ObjectID    string    `db:"object_id"`
 	Size        uint64    `db:"size"`
 	ContentType string    `db:"content_type"`
 	Description string    `db:"description"`
@@ -154,11 +153,10 @@ func (d *DB) GetFile(ctx context.Context, path string, name string) (*File, erro
 	return file, nil
 }
 
-func (d *DB) CreateFile(ctx context.Context, dir string, name string, objectID string, size uint64, contentType string, description string, private bool, userID string) (*File, error) {
+func (d *DB) CreateFile(ctx context.Context, dir string, name string, size uint64, contentType string, description string, private bool, userID string) (*File, error) {
 	file := &File{
 		Dir:         dir,
 		Name:        name,
-		ObjectID:    objectID,
 		Size:        size,
 		ContentType: contentType,
 		Description: description,
@@ -166,7 +164,7 @@ func (d *DB) CreateFile(ctx context.Context, dir string, name string, objectID s
 		UserID:      userID,
 		CreatedAt:   time.Now(),
 	}
-	_, err := d.dbx.NamedExecContext(ctx, "INSERT INTO files (dir, name, object_id, size, content_type, description, private, user_id, created_at, updated_at) VALUES (:dir, :name, :object_id, :size, :content_type, :description, :private, :user_id, :created_at, :updated_at)", file)
+	_, err := d.dbx.NamedExecContext(ctx, "INSERT INTO files (dir, name, size, content_type, description, private, user_id, created_at, updated_at) VALUES (:dir, :name, :size, :content_type, :description, :private, :user_id, :created_at, :updated_at)", file)
 	if err != nil {
 		var (
 			sqliteErr *sqlite.Error
@@ -183,7 +181,7 @@ func (d *DB) CreateFile(ctx context.Context, dir string, name string, objectID s
 	return file, nil
 }
 
-func (d *DB) UpdateFile(ctx context.Context, dir string, name string, newDir string, newName string, size uint64, contentType string, description string, private bool) (string, error) {
+func (d *DB) UpdateFile(ctx context.Context, dir string, name string, newDir string, newName string, size uint64, contentType string, description string, private bool) error {
 	file := &UpdateFile{
 		Dir:         dir,
 		Name:        name,
@@ -195,36 +193,31 @@ func (d *DB) UpdateFile(ctx context.Context, dir string, name string, newDir str
 		Private:     private,
 		UpdatedAt:   time.Now(),
 	}
-	query := "UPDATE files SET dir = :new_dir, name = :new_name, description = :description, private = :private, updated_at = :updated_at WHERE name = :name AND dir = :dir RETURNING object_id"
+	query := "UPDATE files SET dir = :new_dir, name = :new_name, description = :description, private = :private, updated_at = :updated_at WHERE name = :name AND dir = :dir"
 	if size > 0 {
-		query = "UPDATE files SET dir = :new_dir, name = :new_name, size = :size, content_type = :content_type, description = :description, private = :private, updated_at = :updated_at WHERE name = :name AND dir = :dir RETURNING object_id"
+		query = "UPDATE files SET dir = :new_dir, name = :new_name, size = :size, content_type = :content_type, description = :description, private = :private, updated_at = :updated_at WHERE name = :name AND dir = :dir"
 	}
 
-	query, args, err := sqlx.Named(query, file)
+	res, err := d.dbx.NamedExecContext(ctx, query, file)
 	if err != nil {
-		return "", err
+		return fmt.Errorf("error updating file: %w", err)
 	}
-
-	var id string
-	if err = d.dbx.GetContext(ctx, &id, query, args...); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			err = ErrFileNotFound
-		}
-		return "", fmt.Errorf("error updating file: %w", err)
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		return ErrFileNotFound
 	}
-	return id, nil
+	return nil
 }
 
-func (d *DB) DeleteFile(ctx context.Context, dir string, name string) (string, error) {
-	var id string
-	if err := d.dbx.GetContext(ctx, &id, "DELETE FROM files WHERE dir = $1 AND name = $2 RETURNING object_id", dir, name); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			err = ErrFileNotFound
-		}
-		return "", fmt.Errorf("error deleting file: %w", err)
+func (d *DB) DeleteFile(ctx context.Context, dir string, name string) error {
+	res, err := d.dbx.ExecContext(ctx, "DELETE FROM files WHERE dir = $1 AND name = $2", dir, name)
+	if err != nil {
+		return fmt.Errorf("error deleting file: %w", err)
+	}
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		return ErrFileNotFound
 	}
 
-	return id, nil
+	return nil
 }
 
 func (d *DB) UpsertUser(ctx context.Context, id string, username string, email string, home string) error {

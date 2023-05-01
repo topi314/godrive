@@ -57,7 +57,7 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if err = s.writeFile(r.Context(), w, file.ObjectID, start, end); err != nil {
+		if err = s.writeFile(r.Context(), w, path.Join(file.Dir, file.Name), start, end); err != nil {
 			s.log(r, "error writing file", err)
 		}
 		return
@@ -89,7 +89,7 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 				s.error(w, r, err, http.StatusInternalServerError)
 				return
 			}
-			if err = s.writeFile(r.Context(), fw, file.ObjectID, nil, nil); err != nil {
+			if err = s.writeFile(r.Context(), fw, path.Join(file.Dir, file.Name), nil, nil); err != nil {
 				s.error(w, r, err, http.StatusInternalServerError)
 				return
 			}
@@ -115,6 +115,10 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 		if file.Username != nil {
 			owner = *file.Username
 		}
+		date := file.CreatedAt
+		if file.UpdatedAt.After(date) {
+			date = file.UpdatedAt
+		}
 
 		if dir := strings.TrimPrefix(file.Dir, r.URL.Path); dir != "" {
 			baseDir := strings.TrimPrefix(dir, "/")
@@ -130,14 +134,14 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 					Dir:   r.URL.Path,
 					Name:  baseDir,
 					Size:  file.Size,
-					Date:  file.UpdatedAt,
+					Date:  date,
 					Owner: owner,
 				})
 				continue
 			}
 			templateFiles[index].Size += file.Size
-			if templateFiles[index].Date.Before(file.UpdatedAt) {
-				templateFiles[index].Date = file.UpdatedAt
+			if templateFiles[index].Date.Before(date) {
+				templateFiles[index].Date = date
 			}
 			if !strings.Contains(templateFiles[index].Owner, owner) {
 				templateFiles[index].Owner += ", " + owner
@@ -152,7 +156,7 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 			Size:        file.Size,
 			Description: file.Description,
 			Private:     file.Private,
-			Date:        file.UpdatedAt,
+			Date:        date,
 			Owner:       owner,
 			IsOwner:     file.UserID == userInfo.Subject,
 		})
@@ -173,8 +177,8 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) writeFile(ctx context.Context, w io.Writer, id string, start *int64, end *int64) error {
-	obj, err := s.storage.GetObject(ctx, id, start, end)
+func (s *Server) writeFile(ctx context.Context, w io.Writer, fullPath string, start *int64, end *int64) error {
+	obj, err := s.storage.GetObject(ctx, fullPath, start, end)
 	if err != nil {
 		return err
 	}
@@ -199,13 +203,12 @@ func (s *Server) PostFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defer reader.Close()
-	id := s.newID()
-	if err = s.storage.PutObject(r.Context(), id, file.Size, reader, file.ContentType); err != nil {
+	if err = s.storage.PutObject(r.Context(), path.Join(file.Dir, file.Name), file.Size, reader, file.ContentType); err != nil {
 		s.error(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
-	if _, err = s.db.CreateFile(r.Context(), file.Dir, file.Name, id, file.Size, file.ContentType, file.Description, file.Private, userInfo.Subject); err != nil {
+	if _, err = s.db.CreateFile(r.Context(), file.Dir, file.Name, file.Size, file.ContentType, file.Description, file.Private, userInfo.Subject); err != nil {
 		s.error(w, r, err, http.StatusInternalServerError)
 		return
 	}
@@ -223,13 +226,23 @@ func (s *Server) PatchFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defer reader.Close()
-	id, err := s.db.UpdateFile(r.Context(), path.Dir(r.URL.Path), path.Base(r.URL.Path), file.Dir, file.Name, file.Size, file.ContentType, file.Description, file.Private)
-	if err != nil {
+	if err = s.db.UpdateFile(r.Context(), path.Dir(r.URL.Path), path.Base(r.URL.Path), file.Dir, file.Name, file.Size, file.ContentType, file.Description, file.Private); err != nil {
 		s.error(w, r, err, http.StatusInternalServerError)
 		return
 	}
 	if file.Size > 0 {
-		if err = s.storage.PutObject(r.Context(), id, file.Size, reader, file.ContentType); err != nil {
+		if err = s.storage.PutObject(r.Context(), path.Join(file.Dir, file.Name), file.Size, reader, file.ContentType); err != nil {
+			s.error(w, r, err, http.StatusInternalServerError)
+			return
+		}
+		if r.URL.Path != path.Join(file.Dir, file.Name) {
+			if err = s.storage.DeleteObject(r.Context(), r.URL.Path); err != nil {
+				s.error(w, r, err, http.StatusInternalServerError)
+				return
+			}
+		}
+	} else if r.URL.Path != path.Join(file.Dir, file.Name) {
+		if err = s.storage.MoveObject(r.Context(), r.URL.Path, path.Join(file.Dir, file.Name)); err != nil {
 			s.error(w, r, err, http.StatusInternalServerError)
 			return
 		}
@@ -257,12 +270,11 @@ func (s *Server) DeleteFiles(w http.ResponseWriter, r *http.Request) {
 		if len(fileNames) > 0 && !slices.Contains(fileNames, file.Name) {
 			continue
 		}
-		id, err := s.db.DeleteFile(r.Context(), file.Dir, file.Name)
-		if err != nil {
+		if err = s.db.DeleteFile(r.Context(), file.Dir, file.Name); err != nil {
 			errs = errors.Join(errs, err)
 			continue
 		}
-		if err = s.storage.DeleteObject(r.Context(), id); err != nil {
+		if err = s.storage.DeleteObject(r.Context(), path.Join(file.Dir, file.Name)); err != nil {
 			errs = errors.Join(errs, err)
 			continue
 		}

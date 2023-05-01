@@ -59,12 +59,6 @@ function uploadFile(method, path, file, dir, name, description, filePrivate, don
             progressCallback(e);
         }
     });
-    if (method === "PATCH") {
-        if (!path.endsWith("/")) {
-            path += "/";
-        }
-        path += name || file.name;
-    }
     rq.open(method, path);
     rq.send(data);
     requests.push(rq);
