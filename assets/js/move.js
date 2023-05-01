@@ -41,28 +41,3 @@ register("#move-dialog", "close", () => {
     document.querySelector("#move-confirm-btn").disabled = false;
     document.querySelector("#move-files-dir").disabled = false;
 });
-
-register("#files-select", "click", (e) => {
-    if (!e.target.checked) {
-        selectedFiles.splice(0, selectedFiles.length);
-    }
-    for (const child of document.querySelector("#file-list").children) {
-        const fileSelect = child.querySelector(".file-select");
-        if (!e.target.checked) {
-            fileSelect.checked = false;
-            continue;
-        }
-        fileSelect.checked = true;
-        selectedFiles.push(fileSelect.dataset.name);
-    }
-    document.querySelector("#files-more").disabled = selectedFiles.length === 0
-})
-
-registerAll(".file-select", "click", (e) => {
-    if (e.target.checked) {
-        selectedFiles.push(e.target.dataset.name);
-    } else {
-        selectedFiles.splice(selectedFiles.indexOf(e.target.dataset.name), 1);
-    }
-    document.querySelector("#files-more").disabled = selectedFiles.length === 0
-});
