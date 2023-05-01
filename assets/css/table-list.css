@@ -60,23 +60,23 @@
         text-transform: capitalize;
     }
 
-    .table-list-entry > *:nth-of-type(1)::before {
+    .table-list-entry > *:nth-of-type(2)::before {
         content: "Name:";
     }
 
-    .table-list-entry > *:nth-of-type(2)::before {
+    .table-list-entry > *:nth-of-type(3)::before {
         content: "Size:";
     }
 
-    .table-list-entry > *:nth-of-type(3)::before {
+    .table-list-entry > *:nth-of-type(4)::before {
         content: "Modified:";
     }
 
-    .table-list-entry > *:nth-of-type(4)::before {
+    .table-list-entry > *:nth-of-type(5)::before {
         content: "Description:";
     }
 
-    .table-list-entry > *:nth-of-type(5)::before {
+    .table-list-entry > *:nth-of-type(6)::before {
         content: "Owner:";
     }
 }
