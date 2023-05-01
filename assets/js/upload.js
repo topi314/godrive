@@ -85,7 +85,10 @@ function getDialogFileElement(i, file) {
             <div><textarea id="file-${i}-description"></textarea></div>
     
             <label for="file-${i}-private">Private</label>
-            <div><input type="checkbox" id="file-${i}-private"></div>
+            <div>
+                <input type="checkbox" id="file-${i}-private" class="checkbox">
+                <label for="file-${i}-private"></label>
+            </div>
         </div>
         <div id="upload-${i}-error" class="upload-error"></div>
         <div class="progress">

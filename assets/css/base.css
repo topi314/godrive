@@ -115,13 +115,33 @@ textarea:disabled {
 }
 
 .btn.primary {
-    background-color: var(--primary);
+    background-image: radial-gradient(circle at 100% 0%, var(--primary), var(--primary-dark));
 }
 
 .btn.danger {
     background-color: var(--danger);
 }
 
+.checkbox {
+    display: none;
+}
+
+.checkbox + label {
+    display: inline-block;
+    flex-shrink: 0;
+    border: none;
+    width: 1.5rem;
+    height: 1.5rem;
+    background-image: var(--unchecked);
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 1.5rem;
+    cursor: pointer;
+}
+
+.checkbox:checked + label {
+    background-image: var(--checkbox);
+}
 
 dialog {
     width: 70vw;

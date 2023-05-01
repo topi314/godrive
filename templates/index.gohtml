@@ -40,7 +40,8 @@
                 </label>
                 <label for="edit-file-private">
                     Private
-                    <input id="edit-file-private" type="checkbox">
+                    <input id="edit-file-private" type="checkbox" class="checkbox">
+                    <label for="edit-file-private"></label>
                 </label>
                 <div id="edit-upload" class="file-upload">
                     <input type="file" id="file" hidden>
@@ -86,7 +87,8 @@
 <main>
     <div id="navigation">
         <div>
-            <input type="checkbox" id="files-select" data-file="{{ .Path }}" autocomplete="off">
+            <input type="checkbox" id="files-select"  class="checkbox" data-file="{{ .Path }}" autocomplete="off">
+            <label for="files-select"></label>
         </div>
         <div class="navigation-path">
             <a href="/">/</a>
@@ -106,7 +108,8 @@
         {{ range $index, $file := .Files }}
             <div class="table-list-entry">
                 <div>
-                    <input type="checkbox" class="file-select" data-name="{{ $file.Name }}" autocomplete="off">
+                    <input type="checkbox" id="file-select-{{ $index }}" class="file-select checkbox" data-name="{{ $file.Name }}" autocomplete="off">
+                    <label for="file-select-{{ $index }}"></label>
                 </div>
                 <div>
                     <span class="icon {{ if $file.IsDir }}folder{{ else }}file{{ end }}-icon"></span>

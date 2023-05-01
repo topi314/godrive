@@ -1,7 +1,10 @@
 :root {
     --text-error: #f35757;
-    --primary: #cd16ff;
+    --primary: #e100ff;
+    --primary-dark: #842ce1;
     --danger: #b75050;
+
+    --checkbox: url("/assets/icons/checkbox.png");
 }
 
 .dark {
@@ -26,6 +29,7 @@
     --file: url("/assets/icons/dark/file.png");
     --folder: url("/assets/icons/dark/folder.png");
     --user: url("/assets/icons/dark/user.png");
+    --unchecked: url("/assets/icons/dark/unchecked.png");
 }
 
 .light {
@@ -50,4 +54,5 @@
     --file: url("/assets/icons/light/file.png");
     --folder: url("/assets/icons/light/folder.png");
     --user: url("/assets/icons/light/user.png");
+    --unchecked: url("/assets/icons/light/unchecked.png");
 }
