@@ -15,20 +15,20 @@ import (
 	"log"
 	"modernc.org/sqlite"
 	_ "modernc.org/sqlite"
-	"path"
+	"strings"
 	"time"
 )
 
 var (
 	ErrFileNotFound      = errors.New("file not found")
 	ErrFileAlreadyExists = errors.New("file already exists")
+	ErrUserNotFound      = errors.New("user not found")
 )
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 type File struct {
-	Dir         string    `db:"dir"`
-	Name        string    `db:"name"`
+	Path        string    `db:"path"`
 	Size        uint64    `db:"size"`
 	ContentType string    `db:"content_type"`
 	Description string    `db:"description"`
@@ -40,10 +40,8 @@ type File struct {
 }
 
 type UpdateFile struct {
-	Dir         string    `db:"dir"`
-	Name        string    `db:"name"`
-	NewDir      string    `db:"new_dir"`
-	NewName     string    `db:"new_name"`
+	Path        string    `db:"path"`
+	NewPath     string    `db:"new_path"`
 	Size        uint64    `db:"size"`
 	ContentType string    `db:"content_type"`
 	Description string    `db:"description"`
@@ -111,28 +109,20 @@ func (d *DB) Close() error {
 	return d.dbx.Close()
 }
 
-func (d *DB) FindFiles(ctx context.Context, fullPath string) ([]File, error) {
-	if fullPath == "/" {
-		var files []File
-		err := d.dbx.SelectContext(ctx, &files, "SELECT files.*, users.username FROM files LEFT JOIN users ON files.user_id = users.id")
-		if err != nil {
-			return nil, fmt.Errorf("error finding files: %w", err)
-		}
-		return files, nil
-	}
-
-	dir, name := path.Split(fullPath)
-	dir = path.Clean(dir)
+func (d *DB) FindFiles(ctx context.Context, path string) ([]File, error) {
 	var file File
-	err := d.dbx.GetContext(ctx, &file, "SELECT files.*, users.username FROM files LEFT JOIN users ON files.user_id = users.id WHERE files.dir = $1 AND files.name = $2", dir, name)
+	err := d.dbx.GetContext(ctx, &file, "SELECT files.*, users.username FROM files LEFT JOIN users ON files.user_id = users.id WHERE files.path = $1", path)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("error finding file: %w", err)
 	} else if err == nil {
 		return []File{file}, nil
 	}
 
+	if !strings.HasSuffix(path, "/") {
+		path += "/"
+	}
 	var files []File
-	err = d.dbx.SelectContext(ctx, &files, "SELECT files.*, users.username FROM files LEFT JOIN users ON files.user_id = users.id WHERE files.dir = $1 or files.dir like $2", fullPath, fullPath+"/%")
+	err = d.dbx.SelectContext(ctx, &files, "SELECT files.*, users.username FROM files LEFT JOIN users ON files.user_id = users.id WHERE files.path like $1", path+"%")
 	if err != nil {
 		return nil, fmt.Errorf("error finding files: %w", err)
 	}
@@ -140,9 +130,9 @@ func (d *DB) FindFiles(ctx context.Context, fullPath string) ([]File, error) {
 	return files, nil
 }
 
-func (d *DB) GetFile(ctx context.Context, path string, name string) (*File, error) {
+func (d *DB) GetFile(ctx context.Context, path string) (*File, error) {
 	file := new(File)
-	err := d.dbx.GetContext(ctx, file, "SELECT files.*, users.username FROM files LEFT JOIN users ON files.user_id = users.id WHERE files.dir = $1 AND files.name = $2", path, name)
+	err := d.dbx.GetContext(ctx, file, "SELECT files.*, users.username FROM files LEFT JOIN users ON files.user_id = users.id WHERE files.path = $1", path)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			err = ErrFileNotFound
@@ -153,10 +143,9 @@ func (d *DB) GetFile(ctx context.Context, path string, name string) (*File, erro
 	return file, nil
 }
 
-func (d *DB) CreateFile(ctx context.Context, dir string, name string, size uint64, contentType string, description string, private bool, userID string) (*File, error) {
+func (d *DB) CreateFile(ctx context.Context, path string, size uint64, contentType string, description string, private bool, userID string) (*File, error) {
 	file := &File{
-		Dir:         dir,
-		Name:        name,
+		Path:        path,
 		Size:        size,
 		ContentType: contentType,
 		Description: description,
@@ -164,7 +153,7 @@ func (d *DB) CreateFile(ctx context.Context, dir string, name string, size uint6
 		UserID:      userID,
 		CreatedAt:   time.Now(),
 	}
-	_, err := d.dbx.NamedExecContext(ctx, "INSERT INTO files (dir, name, size, content_type, description, private, user_id, created_at, updated_at) VALUES (:dir, :name, :size, :content_type, :description, :private, :user_id, :created_at, :updated_at)", file)
+	_, err := d.dbx.NamedExecContext(ctx, "INSERT INTO files (path, size, content_type, description, private, user_id, created_at, updated_at) VALUES (:path, :size, :content_type, :description, :private, :user_id, :created_at, :updated_at)", file)
 	if err != nil {
 		var (
 			sqliteErr *sqlite.Error
@@ -181,21 +170,19 @@ func (d *DB) CreateFile(ctx context.Context, dir string, name string, size uint6
 	return file, nil
 }
 
-func (d *DB) UpdateFile(ctx context.Context, dir string, name string, newDir string, newName string, size uint64, contentType string, description string, private bool) error {
+func (d *DB) UpdateFile(ctx context.Context, path string, newPath string, size uint64, contentType string, description string, private bool) error {
 	file := &UpdateFile{
-		Dir:         dir,
-		Name:        name,
-		NewDir:      newDir,
-		NewName:     newName,
+		Path:        path,
+		NewPath:     newPath,
 		Size:        size,
 		ContentType: contentType,
 		Description: description,
 		Private:     private,
 		UpdatedAt:   time.Now(),
 	}
-	query := "UPDATE files SET dir = :new_dir, name = :new_name, description = :description, private = :private, updated_at = :updated_at WHERE name = :name AND dir = :dir"
+	query := "UPDATE files SET path = :new_path, description = :description, private = :private, updated_at = :updated_at WHERE path = :path"
 	if size > 0 {
-		query = "UPDATE files SET dir = :new_dir, name = :new_name, size = :size, content_type = :content_type, description = :description, private = :private, updated_at = :updated_at WHERE name = :name AND dir = :dir"
+		query = "UPDATE files SET path = :new_path, size = :size, content_type = :content_type, description = :description, private = :private, updated_at = :updated_at WHERE path = :path"
 	}
 
 	res, err := d.dbx.NamedExecContext(ctx, query, file)
@@ -208,8 +195,8 @@ func (d *DB) UpdateFile(ctx context.Context, dir string, name string, newDir str
 	return nil
 }
 
-func (d *DB) DeleteFile(ctx context.Context, dir string, name string) error {
-	res, err := d.dbx.ExecContext(ctx, "DELETE FROM files WHERE dir = $1 AND name = $2", dir, name)
+func (d *DB) DeleteFile(ctx context.Context, path string) error {
+	res, err := d.dbx.ExecContext(ctx, "DELETE FROM files WHERE path = $1", path)
 	if err != nil {
 		return fmt.Errorf("error deleting file: %w", err)
 	}
@@ -249,6 +236,30 @@ func (d *DB) GetUsers(ctx context.Context, ids []string) ([]User, error) {
 	}
 
 	return users, nil
+}
+
+func (d *DB) GetUser(ctx context.Context, id string) (*User, error) {
+	var user User
+	if err := d.dbx.GetContext(ctx, &user, "SELECT * FROM users WHERE id = $1", id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			err = ErrUserNotFound
+		}
+		return nil, fmt.Errorf("error getting user: %w", err)
+	}
+
+	return &user, nil
+}
+
+func (d *DB) GetUserByName(ctx context.Context, username string) (*User, error) {
+	var user User
+	if err := d.dbx.GetContext(ctx, &user, "SELECT * FROM users WHERE username = $1", username); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			err = ErrUserNotFound
+		}
+		return nil, fmt.Errorf("error getting user: %w", err)
+	}
+
+	return &user, nil
 }
 
 func (d *DB) GetAllUsers(ctx context.Context) ([]User, error) {

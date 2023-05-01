@@ -1,7 +1,7 @@
 register("#files", "change", (e) => {
     e.preventDefault();
     e.stopPropagation();
-    files = e.target.files;
+    files.splice(0, files.length, ...e.target.files);
     openUploadDialog();
 });
 
@@ -33,7 +33,7 @@ register("#upload-confirm-btn", "click", (e) => {
             fileName.value,
             fileDescription.value,
             filePrivate.checked,
-            (xhr) => {
+            () => {
                 done++;
                 if (done === files.length) {
                     window.location.reload();
@@ -47,15 +47,14 @@ register("#upload-confirm-btn", "click", (e) => {
             }
         );
     }
-
 });
 
 register("#upload-dialog", "close", () => {
     for (const request of requests) {
         request.abort();
     }
-    files = [];
-    requests = [];
+    files.splice(0, files.length);
+    requests.splice(0, requests.length);
     document.querySelector("#upload-files").replaceChildren();
     document.querySelector("#upload-file-dir").disabled = false;
     document.querySelector("#upload-confirm-btn").disabled = false;

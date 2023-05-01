@@ -60,34 +60,67 @@
         </div>
     </div>
 </dialog>
+<dialog id="move-dialog">
+    <div>
+        <div class="dialog-header">
+            <h2>Move</h2>
+        </div>
+        <div class="dialog-main">
+            <div id="move-files" class="dialog-main-content">
+                <label for="move-files-dir">
+                    Dir
+                    <input id="move-files-dir" type="text" autocomplete="off">
+                </label>
+            </div>
+            <div id="move-feedback" class="dialog-main-feedback">
+                <div id="move-error" class="upload-error"></div>
+            </div>
+        </div>
+        <div class="dialog-footer">
+            <button id="move-cancel-btn" class="btn danger">Cancel</button>
+            <button id="move-confirm-btn" class="btn primary">Move</button>
+        </div>
+    </div>
+</dialog>
 {{ template "header.gohtml" . }}
 <main>
     <div id="navigation">
+        <div>
+            <input type="checkbox" id="files-select" data-file="{{ .Path }}" autocomplete="off">
+        </div>
         <div class="navigation-path">
             <a href="/">/</a>
             {{ range $index, $path := .PathParts }}
                 <a href="/{{ assemblePath $.PathParts $index }}">{{ $path }}{{ if not (isLast $.PathParts $index) }}/{{end}}</a>
             {{ end }}
         </div>
+        <div>
+            <select id="files-more" class="file-more" data-file="{{ .Path }}" autocomplete="off" disabled>
+                <option value="none" selected disabled hidden>More</option>
+                <option value="move">Move</option>
+                <option value="delete">Delete</option>
+            </select>
+        </div>
     </div>
     <div id="file-list" class="table-list">
         {{ range $index, $file := .Files }}
             <div class="table-list-entry">
                 <div>
+                    <input type="checkbox" class="file-select" data-name="{{ $file.Name }}" autocomplete="off">
+                </div>
+                <div>
                     <span class="icon {{ if $file.IsDir }}folder{{ else }}file{{ end }}-icon"></span>
-                    <a href="{{ $file.FullName }}">{{ $file.Name }}</a>
+                    <a href="{{ $file.Path }}">{{ $file.Name }}</a>
                 </div>
                 <div>{{ humanizeBytes $file.Size }}</div>
                 <div>{{ humanizeTime $file.Date }}</div>
                 <div>{{ $file.Description }}</div>
                 <div>{{ $file.Owner }}</div>
-                <div><a href="{{ $file.FullName }}?dl=1">Download</a></div>
+                <div><a href="{{ $file.Path }}?dl=1">Download</a></div>
                 <div>
-                    <select class="file-more" data-file="{{ $file.FullName }}" data-name="{{ $file.Name }}" data-description="{{ $file.Description }}" data-private="{{ $file.Private}}" autocomplete="off" {{ if not $file.IsOwner }}disabled{{ end }}>
+                    <select class="file-more" data-file="{{ $file.Path }}" data-name="{{ $file.Name }}" data-description="{{ $file.Description }}" data-private="{{ $file.Private}}" autocomplete="off" {{ if not $file.IsOwner }}disabled{{ end }}>
                         <option value="none" selected disabled hidden>More</option>
-                        {{ if not $file.IsDir }}
-                            <option value="edit">Edit</option>
-                        {{ end }}
+                        <option value="edit">Edit</option>
                         <option value="delete">Delete</option>
                         <option value="share">Share</option>
                     </select>

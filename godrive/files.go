@@ -30,9 +30,13 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
+	if r.URL.Path != "/" && len(files) == 0 {
+		http.Redirect(w, r, "/", http.StatusFound)
+		return
+	}
 
 	userInfo := GetUserInfo(r)
-	if len(files) == 1 && path.Join(files[0].Dir, files[0].Name) == r.URL.Path {
+	if len(files) == 1 && files[0].Path == r.URL.Path {
 		start, end, err := parseRange(r.Header.Get("Range"))
 		if err != nil {
 			s.error(w, r, err, http.StatusRequestedRangeNotSatisfiable)
@@ -44,7 +48,7 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if download {
-			w.Header().Set("Content-Disposition", "attachment; filename="+file.Name)
+			w.Header().Set("Content-Disposition", "attachment; filename="+path.Base(file.Path))
 		}
 		w.Header().Set("Content-Type", file.ContentType)
 		w.Header().Set("Content-Length", strconv.FormatUint(file.Size, 10))
@@ -57,7 +61,7 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if err = s.writeFile(r.Context(), w, path.Join(file.Dir, file.Name), start, end); err != nil {
+		if err = s.writeFile(r.Context(), w, file.Path, start, end); err != nil {
 			s.log(r, "error writing file", err)
 		}
 		return
@@ -78,7 +82,7 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			fw, err := zw.CreateHeader(&zip.FileHeader{
-				Name:               strings.TrimPrefix(path.Join(file.Dir, file.Name), "/"),
+				Name:               strings.TrimPrefix(file.Path, "/"),
 				UncompressedSize64: file.Size,
 				Modified:           file.UpdatedAt,
 				Comment:            file.Description,
@@ -89,7 +93,7 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 				s.error(w, r, err, http.StatusInternalServerError)
 				return
 			}
-			if err = s.writeFile(r.Context(), fw, path.Join(file.Dir, file.Name), nil, nil); err != nil {
+			if err = s.writeFile(r.Context(), fw, file.Path, nil, nil); err != nil {
 				s.error(w, r, err, http.StatusInternalServerError)
 				return
 			}
@@ -115,12 +119,13 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 		if file.Username != nil {
 			owner = *file.Username
 		}
+		isOwner := file.UserID == userInfo.Subject || s.isAdmin(userInfo)
 		date := file.CreatedAt
 		if file.UpdatedAt.After(date) {
 			date = file.UpdatedAt
 		}
 
-		if dir := strings.TrimPrefix(file.Dir, r.URL.Path); dir != "" {
+		if dir := strings.TrimPrefix(path.Dir(file.Path), r.URL.Path); dir != "" {
 			baseDir := strings.TrimPrefix(dir, "/")
 			if strings.Count(baseDir, "/") > 0 {
 				baseDir = strings.SplitN(baseDir, "/", 2)[0]
@@ -130,12 +135,14 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 			})
 			if index == -1 {
 				templateFiles = append(templateFiles, TemplateFile{
-					IsDir: true,
-					Dir:   r.URL.Path,
-					Name:  baseDir,
-					Size:  file.Size,
-					Date:  date,
-					Owner: owner,
+					IsDir:   true,
+					Path:    path.Join(r.URL.Path, baseDir),
+					Dir:     r.URL.Path,
+					Name:    baseDir,
+					Size:    file.Size,
+					Date:    date,
+					Owner:   owner,
+					IsOwner: isOwner,
 				})
 				continue
 			}
@@ -146,19 +153,23 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 			if !strings.Contains(templateFiles[index].Owner, owner) {
 				templateFiles[index].Owner += ", " + owner
 			}
+			if !templateFiles[index].IsOwner && isOwner {
+				templateFiles[index].IsOwner = true
+			}
 			continue
 		}
 
 		templateFiles = append(templateFiles, TemplateFile{
 			IsDir:       false,
-			Name:        file.Name,
-			Dir:         file.Dir,
+			Path:        file.Path,
+			Name:        path.Base(file.Path),
+			Dir:         path.Dir(file.Path),
 			Size:        file.Size,
 			Description: file.Description,
 			Private:     file.Private,
 			Date:        date,
 			Owner:       owner,
-			IsOwner:     file.UserID == userInfo.Subject,
+			IsOwner:     file.UserID == userInfo.Subject || s.isAdmin(userInfo),
 		})
 	}
 
@@ -203,12 +214,12 @@ func (s *Server) PostFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defer reader.Close()
-	if err = s.storage.PutObject(r.Context(), path.Join(file.Dir, file.Name), file.Size, reader, file.ContentType); err != nil {
+	if err = s.storage.PutObject(r.Context(), file.Path, file.Size, reader, file.ContentType); err != nil {
 		s.error(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
-	if _, err = s.db.CreateFile(r.Context(), file.Dir, file.Name, file.Size, file.ContentType, file.Description, file.Private, userInfo.Subject); err != nil {
+	if _, err = s.db.CreateFile(r.Context(), file.Path, file.Size, file.ContentType, file.Description, file.Private, userInfo.Subject); err != nil {
 		s.error(w, r, err, http.StatusInternalServerError)
 		return
 	}
@@ -216,7 +227,7 @@ func (s *Server) PostFiles(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) PatchFiles(w http.ResponseWriter, r *http.Request) {
+func (s *Server) PatchFile(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	file, reader, err := s.parseMultipart(r)
@@ -226,26 +237,80 @@ func (s *Server) PatchFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defer reader.Close()
-	if err = s.db.UpdateFile(r.Context(), path.Dir(r.URL.Path), path.Base(r.URL.Path), file.Dir, file.Name, file.Size, file.ContentType, file.Description, file.Private); err != nil {
+	if err = s.db.UpdateFile(r.Context(), r.URL.Path, file.Path, file.Size, file.ContentType, file.Description, file.Private); err != nil {
 		s.error(w, r, err, http.StatusInternalServerError)
 		return
 	}
 	if file.Size > 0 {
-		if err = s.storage.PutObject(r.Context(), path.Join(file.Dir, file.Name), file.Size, reader, file.ContentType); err != nil {
+		if err = s.storage.PutObject(r.Context(), file.Path, file.Size, reader, file.ContentType); err != nil {
 			s.error(w, r, err, http.StatusInternalServerError)
 			return
 		}
-		if r.URL.Path != path.Join(file.Dir, file.Name) {
+		if r.URL.Path != file.Path {
 			if err = s.storage.DeleteObject(r.Context(), r.URL.Path); err != nil {
 				s.error(w, r, err, http.StatusInternalServerError)
 				return
 			}
 		}
-	} else if r.URL.Path != path.Join(file.Dir, file.Name) {
-		if err = s.storage.MoveObject(r.Context(), r.URL.Path, path.Join(file.Dir, file.Name)); err != nil {
+	} else if r.URL.Path != file.Path {
+		if err = s.storage.MoveObject(r.Context(), r.URL.Path, file.Path); err != nil {
 			s.error(w, r, err, http.StatusInternalServerError)
 			return
 		}
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) MoveFiles(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	destination := r.Header.Get("Destination")
+	if destination == "" {
+		s.error(w, r, errors.New("missing destination header"), http.StatusBadRequest)
+		return
+	}
+	if destination == r.URL.Path {
+		s.error(w, r, errors.New("destination cannot be the same as source"), http.StatusBadRequest)
+		return
+	}
+
+	var fileNames []string
+	if err := json.NewDecoder(r.Body).Decode(&fileNames); err != nil && err != io.EOF {
+		s.error(w, r, err, http.StatusBadRequest)
+		return
+	}
+
+	rPath := r.URL.Path
+	if !strings.HasSuffix(rPath, "/") {
+		rPath += "/"
+	}
+
+	files, err := s.db.FindFiles(r.Context(), r.URL.Path)
+	if err != nil {
+		return
+	}
+
+	var errs error
+	for _, file := range files {
+		rFilePath := strings.TrimPrefix(file.Path, rPath)
+		if len(fileNames) > 0 && !slices.Contains(fileNames, strings.SplitN(rFilePath, "/", 2)[0]) {
+			continue
+		}
+		newPath := path.Join(destination, rFilePath)
+		if err = s.db.UpdateFile(r.Context(), file.Path, newPath, 0, "", file.Description, file.Private); err != nil {
+			errs = errors.Join(errs, err)
+			continue
+		}
+		if err = s.storage.MoveObject(r.Context(), file.Path, newPath); err != nil {
+			errs = errors.Join(errs, err)
+			continue
+		}
+	}
+
+	if errs != nil {
+		s.error(w, r, errs, http.StatusInternalServerError)
+		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
@@ -265,16 +330,21 @@ func (s *Server) DeleteFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	rPath := r.URL.Path
+	if !strings.HasSuffix(rPath, "/") {
+		rPath += "/"
+	}
+
 	var errs error
 	for _, file := range files {
-		if len(fileNames) > 0 && !slices.Contains(fileNames, file.Name) {
+		if len(fileNames) > 0 && !slices.Contains(fileNames, strings.SplitN(strings.TrimPrefix(file.Path, rPath), "/", 2)[0]) {
 			continue
 		}
-		if err = s.db.DeleteFile(r.Context(), file.Dir, file.Name); err != nil {
+		if err = s.db.DeleteFile(r.Context(), file.Path); err != nil {
 			errs = errors.Join(errs, err)
 			continue
 		}
-		if err = s.storage.DeleteObject(r.Context(), path.Join(file.Dir, file.Name)); err != nil {
+		if err = s.storage.DeleteObject(r.Context(), file.Path); err != nil {
 			errs = errors.Join(errs, err)
 			continue
 		}
@@ -289,8 +359,7 @@ func (s *Server) DeleteFiles(w http.ResponseWriter, r *http.Request) {
 }
 
 type ParsedFile struct {
-	Name        string
-	Dir         string
+	Path        string
 	Size        uint64
 	ContentType string
 	Description string
@@ -360,10 +429,8 @@ func (s *Server) parseMultipart(r *http.Request) (*ParsedFile, io.ReadCloser, er
 	if r.Method == http.MethodPatch {
 		dir = file.Dir
 	}
-
 	parsedFile := ParsedFile{
-		Dir:         dir,
-		Name:        part.FileName(),
+		Path:        path.Join(dir, part.FileName()),
 		Size:        file.Size,
 		ContentType: contentType,
 		Description: file.Description,

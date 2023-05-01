@@ -1,7 +1,6 @@
 package godrive
 
 import (
-	"path"
 	"time"
 )
 
@@ -27,6 +26,7 @@ type (
 		ID      string
 		Name    string
 		Email   string
+		Home    string
 		IsAdmin bool
 		IsUser  bool
 		IsGuest bool
@@ -34,6 +34,7 @@ type (
 
 	TemplateFile struct {
 		IsDir       bool
+		Path        string
 		Dir         string
 		Name        string
 		Size        uint64
@@ -58,7 +59,3 @@ type (
 		RequestID string `json:"request_id"`
 	}
 )
-
-func (f TemplateFile) FullName() string {
-	return path.Join(f.Dir, f.Name)
-}

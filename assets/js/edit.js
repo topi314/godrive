@@ -1,7 +1,9 @@
+const selectedFiles = [];
+
 register("#file", "change", (e) => {
     e.preventDefault();
     e.stopPropagation();
-    files = e.target.files;
+    files.splice(0, files.length, ...e.target.files);
     document.querySelector("#edit-file-new-name").value = files[0].name;
 });
 
@@ -58,8 +60,8 @@ register("#edit-dialog", "close", () => {
     for (const request of requests) {
         request.abort();
     }
-    files = [];
-    requests = [];
+    files.splice(0, files.length)
+    requests.splice(0, requests.length);
     document.querySelector("#edit-error").textContent = "";
     document.querySelector("#edit-progress-bar").style.width = "0";
     document.querySelector("#edit-file").style.display = "flex";

@@ -1,7 +1,6 @@
 CREATE TABLE IF NOT EXISTS files
 (
-    dir          VARCHAR   NOT NULL,
-    name         VARCHAR   NOT NULL,
+    path         VARCHAR   NOT NULL,
     size         BIGINT    NOT NULL,
     content_type TEXT      NOT NULL,
     description  TEXT      NOT NULL,
@@ -9,7 +8,7 @@ CREATE TABLE IF NOT EXISTS files
     user_id      VARCHAR   NOT NULL,
     created_at   TIMESTAMP NOT NULL,
     updated_at   TIMESTAMP NOT NULL,
-    PRIMARY KEY (dir, name)
+    PRIMARY KEY (path)
 );
 
 CREATE TABLE IF NOT EXISTS users

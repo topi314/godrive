@@ -7,6 +7,7 @@ header {
     position: fixed;
     width: 100%;
     top: 0;
+    z-index: 1;
 }
 
 header > div {
@@ -36,7 +37,7 @@ main {
 #navigation {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     gap: 1rem;
     padding: 0.5rem 1rem 0.5rem 1rem;
     border-bottom: 1px solid var(--bg-secondary);
@@ -48,6 +49,7 @@ main {
     font-size: 1.5rem;
     font-weight: bold;
     color: var(--text-primary);
+    flex-grow: 1;
 }
 
 .navigation-path a {
@@ -60,8 +62,13 @@ main {
     text-decoration-thickness: 2px;
 }
 
+#files-more {
+    padding: 0.5rem 1rem 0.5rem 0.5rem;
+    border-radius: 0.5rem;
+}
+
 #file-list {
-    grid-template-columns: repeat(6, auto) 6rem;
+    grid-template-columns: 2.5rem repeat(6, auto) 6rem;
 }
 
 .file-more {

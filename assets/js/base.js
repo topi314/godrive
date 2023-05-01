@@ -1,5 +1,5 @@
-let files = [];
-let requests = [];
+const files = [];
+const requests = [];
 
 function registerAll(query, event, callback) {
     const elements = document.querySelectorAll(query);

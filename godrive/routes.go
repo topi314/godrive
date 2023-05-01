@@ -76,7 +76,8 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/*", s.GetFiles)
 			r.Head("/*", s.GetFiles)
 			r.Post("/*", s.PostFiles)
-			r.Patch("/*", s.PatchFiles)
+			r.Patch("/*", s.PatchFile)
+			r.Put("/*", s.MoveFiles)
 			r.Delete("/*", s.DeleteFiles)
 		})
 	})
@@ -104,6 +105,7 @@ func (s *Server) GetSettings(w http.ResponseWriter, r *http.Request) {
 			ID:    user.ID,
 			Name:  user.Username,
 			Email: user.Email,
+			Home:  user.Home,
 		}
 	}
 

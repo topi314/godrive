@@ -24,6 +24,7 @@ type Auth struct {
 
 type UserInfo struct {
 	oidc.UserInfo `json:"-"`
+	Home          string   `json:"home"`
 	Audience      []string `json:"aud"`
 	Groups        []string `json:"groups"`
 	Username      string   `json:"preferred_username"`
@@ -34,6 +35,7 @@ func (s *Server) ToTemplateUser(info *UserInfo) TemplateUser {
 		ID:      info.Subject,
 		Name:    info.Username,
 		Email:   info.Email,
+		Home:    info.Home,
 		IsAdmin: s.isAdmin(info),
 		IsUser:  s.isUser(info),
 		IsGuest: s.isGuest(info),
@@ -79,6 +81,7 @@ func (s *Server) setCookie(w http.ResponseWriter, name string, value string, max
 		MaxAge:   int(maxAge.Seconds()),
 		Secure:   s.cfg.Auth.Secure,
 		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
 	})
 }
 
@@ -89,6 +92,7 @@ func (s *Server) removeCookie(w http.ResponseWriter, name string) {
 		MaxAge:   -1,
 		Secure:   s.cfg.Auth.Secure,
 		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
 	})
 }
 
@@ -143,6 +147,13 @@ func (s *Server) Auth(next http.Handler) http.Handler {
 			s.error(w, r, err, http.StatusInternalServerError)
 			return
 		}
+
+		user, err := s.db.GetUserByName(r.Context(), info.Username)
+		if err != nil {
+			s.error(w, r, err, http.StatusInternalServerError)
+			return
+		}
+		info.Home = user.Home
 
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), UserInfoKey, info)))
 	})
