@@ -16,9 +16,15 @@ import (
 )
 
 func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
-	var download bool
-	if dl := r.URL.Query().Get("dl"); dl != "" && dl != "0" {
+	var (
+		download    bool
+		filesFilter []string
+	)
+	if dl := r.URL.Query().Get("dl"); dl != "" && dl != "0" && strings.ToLower(dl) != "false" {
 		download = true
+		if dl != "1" && strings.ToLower(dl) != "true" {
+			filesFilter = strings.Split(dl, ",")
+		}
 	}
 
 	files, err := s.db.FindFiles(r.Context(), r.URL.Path)
@@ -44,10 +50,6 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		file := files[0]
-		if !s.hasFileAccess(userInfo, file) {
-			s.prettyError(w, r, errors.New("file is private"), http.StatusForbidden)
-			return
-		}
 		if download {
 			w.Header().Set("Content-Disposition", "attachment; filename="+path.Base(file.Path))
 		}
@@ -77,9 +79,15 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 
 		zw := zip.NewWriter(w)
 		defer zw.Close()
+
+		rPath := r.URL.Path
+		if !strings.HasSuffix(rPath, "/") {
+			rPath += "/"
+		}
+
 		var addedFiles int
 		for _, file := range files {
-			if !s.hasFileAccess(userInfo, file) {
+			if len(filesFilter) > 0 && !slices.Contains(filesFilter, strings.SplitN(strings.TrimPrefix(file.Path, rPath), "/", 2)[0]) {
 				continue
 			}
 			fw, err := zw.CreateHeader(&zip.FileHeader{
@@ -112,10 +120,6 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 
 	var templateFiles []TemplateFile
 	for _, file := range files {
-		if !s.hasFileAccess(userInfo, file) {
-			continue
-		}
-
 		owner := "Unknown"
 		if file.Username != nil {
 			owner = *file.Username
@@ -167,7 +171,6 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 			Dir:         path.Dir(file.Path),
 			Size:        file.Size,
 			Description: file.Description,
-			Private:     file.Private,
 			Date:        date,
 			Owner:       owner,
 			IsOwner:     file.UserID == userInfo.Subject || s.isAdmin(userInfo),
@@ -220,7 +223,7 @@ func (s *Server) PostFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err = s.db.CreateFile(r.Context(), file.Path, file.Size, file.ContentType, file.Description, file.Private, userInfo.Subject); err != nil {
+	if _, err = s.db.CreateFile(r.Context(), file.Path, file.Size, file.ContentType, file.Description, userInfo.Subject); err != nil {
 		s.error(w, r, err, http.StatusInternalServerError)
 		return
 	}
@@ -237,8 +240,20 @@ func (s *Server) PatchFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	dbFile, err := s.db.GetFile(r.Context(), r.URL.Path)
+	if err != nil {
+		s.error(w, r, err, http.StatusInternalServerError)
+		return
+	}
+
+	userInfo := GetUserInfo(r)
+	if !s.hasFileAccess(userInfo, *dbFile) {
+		s.error(w, r, errors.New("unauthorized"), http.StatusUnauthorized)
+		return
+	}
+
 	defer reader.Close()
-	if err = s.db.UpdateFile(r.Context(), r.URL.Path, file.Path, file.Size, file.ContentType, file.Description, file.Private); err != nil {
+	if err = s.db.UpdateFile(r.Context(), r.URL.Path, file.Path, file.Size, file.ContentType, file.Description); err != nil {
 		s.error(w, r, err, http.StatusInternalServerError)
 		return
 	}
@@ -292,14 +307,24 @@ func (s *Server) MoveFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var errs error
+	userInfo := GetUserInfo(r)
+
+	var (
+		errs  error
+		warns []string
+	)
 	for _, file := range files {
 		rFilePath := strings.TrimPrefix(file.Path, rPath)
 		if len(fileNames) > 0 && !slices.Contains(fileNames, strings.SplitN(rFilePath, "/", 2)[0]) {
+			warns = append(warns, fmt.Sprintf("file %s not found", rFilePath))
+			continue
+		}
+		if !s.hasFileAccess(userInfo, file) {
+			warns = append(warns, fmt.Sprintf("unauthorized to move file %s", rFilePath))
 			continue
 		}
 		newPath := path.Join(destination, rFilePath)
-		if err = s.db.UpdateFile(r.Context(), file.Path, newPath, 0, "", file.Description, file.Private); err != nil {
+		if err = s.db.UpdateFile(r.Context(), file.Path, newPath, 0, "", file.Description); err != nil {
 			errs = errors.Join(errs, err)
 			continue
 		}
@@ -311,6 +336,10 @@ func (s *Server) MoveFiles(w http.ResponseWriter, r *http.Request) {
 
 	if errs != nil {
 		s.error(w, r, errs, http.StatusInternalServerError)
+		return
+	}
+	if warns != nil {
+		s.warn(w, r, strings.Join(warns, ", "), http.StatusPartialContent)
 		return
 	}
 
@@ -336,9 +365,19 @@ func (s *Server) DeleteFiles(w http.ResponseWriter, r *http.Request) {
 		rPath += "/"
 	}
 
-	var errs error
+	userInfo := GetUserInfo(r)
+
+	var (
+		errs  error
+		warns []string
+	)
 	for _, file := range files {
 		if len(fileNames) > 0 && !slices.Contains(fileNames, strings.SplitN(strings.TrimPrefix(file.Path, rPath), "/", 2)[0]) {
+			warns = append(warns, fmt.Sprintf("file %s not found", file.Path))
+			continue
+		}
+		if !s.hasFileAccess(userInfo, file) {
+			warns = append(warns, fmt.Sprintf("unauthorized to delete file %s", file.Path))
 			continue
 		}
 		if err = s.db.DeleteFile(r.Context(), file.Path); err != nil {
@@ -355,6 +394,10 @@ func (s *Server) DeleteFiles(w http.ResponseWriter, r *http.Request) {
 		s.error(w, r, errs, http.StatusInternalServerError)
 		return
 	}
+	if warns != nil {
+		s.warn(w, r, strings.Join(warns, ", "), http.StatusPartialContent)
+		return
+	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -364,7 +407,6 @@ type ParsedFile struct {
 	Size        uint64
 	ContentType string
 	Description string
-	Private     bool
 }
 
 func parseRange(rangeHeader string) (*int64, *int64, error) {
@@ -435,7 +477,6 @@ func (s *Server) parseMultipart(r *http.Request) (*ParsedFile, io.ReadCloser, er
 		Size:        file.Size,
 		ContentType: contentType,
 		Description: file.Description,
-		Private:     file.Private,
 	}
 
 	return &parsedFile, part, nil

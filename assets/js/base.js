@@ -25,12 +25,11 @@ function toggleUploadActive(e, active) {
     e.target.classList.toggle("active", active);
 }
 
-function uploadFile(method, path, file, dir, name, description, filePrivate, doneCallback, errorCallback, progressCallback) {
+function uploadFile(method, path, file, dir, name, description, doneCallback, errorCallback, progressCallback) {
     const data = new FormData();
     const json = {
         size: file ? file.size : null,
         description: description,
-        private: filePrivate,
     };
     if (dir) {
         json.dir = dir;

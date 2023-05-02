@@ -20,11 +20,9 @@ register("#upload-confirm-btn", "click", (e) => {
     for (let i = 0; i < files.length; i++) {
         const fileName = document.querySelector(`#file-${i}-name`);
         const fileDescription = document.querySelector(`#file-${i}-description`);
-        const filePrivate = document.querySelector(`#file-${i}-private`);
 
         fileName.disabled = true;
         fileDescription.disabled = true;
-        filePrivate.disabled = true;
 
         uploadFile("POST",
             uploadDir.value,
@@ -32,7 +30,6 @@ register("#upload-confirm-btn", "click", (e) => {
             undefined,
             fileName.value,
             fileDescription.value,
-            filePrivate.checked,
             () => {
                 done++;
                 if (done === files.length) {
@@ -83,12 +80,6 @@ function getDialogFileElement(i, file) {
     
             <label for="file-${i}-description">Description</label>
             <div><textarea id="file-${i}-description"></textarea></div>
-    
-            <label for="file-${i}-private">Private</label>
-            <div>
-                <input type="checkbox" id="file-${i}-private" class="checkbox">
-                <label for="file-${i}-private"></label>
-            </div>
         </div>
         <div id="upload-${i}-error" class="upload-error"></div>
         <div class="progress">

@@ -1,3 +1,14 @@
+@font-face {
+    font-family: "JetBrainsMono";
+    src: url("/assets/fonts/JetBrainsMono-VariableFont_wght.ttf");
+}
+
+@font-face {
+    font-family: "JetBrainsMono";
+    src: url("/assets/fonts/JetBrainsMono-Italic-VariableFont_wght.ttf");
+    font-style: italic;
+}
+
 html {
     background-color: var(--bg-primary);
 }
@@ -29,7 +40,7 @@ body {
     min-height: 100vh;
     padding: 0;
     margin: 0;
-    font-family: monospace;
+    font-family: "JetBrainsMono", sans-serif;
     overflow-x: hidden;
     overflow-y: auto;
     color: var(--text-primary);
@@ -42,7 +53,7 @@ textarea {
     border-radius: 0.5rem;
     padding: 0.5rem;
     color: var(--text-primary);
-    font-family: monospace;
+    font-family: inherit;
     outline: none;
 }
 

@@ -165,6 +165,15 @@ func (s *Server) error(w http.ResponseWriter, r *http.Request, err error, status
 	}, status)
 }
 
+func (s *Server) warn(w http.ResponseWriter, r *http.Request, message string, status int) {
+	s.json(w, r, WarningResponse{
+		Message:   message,
+		Status:    status,
+		Path:      r.URL.Path,
+		RequestID: middleware.GetReqID(r.Context()),
+	}, status)
+}
+
 func (s *Server) prettyError(w http.ResponseWriter, r *http.Request, err error, status int) {
 	if status == http.StatusInternalServerError {
 		s.log(r, "pretty request", err)

@@ -27,12 +27,10 @@ register("#edit-confirm-btn", "click", (e) => {
     const fileNewDir = document.querySelector("#edit-file-new-dir");
     const fileNewName = document.querySelector("#edit-file-new-name");
     const fileDescription = document.querySelector("#edit-file-description");
-    const filePrivate = document.querySelector("#edit-file-private");
 
     fileNewDir.disabled = true;
     fileNewName.disabled = true;
     fileDescription.disabled = true;
-    filePrivate.disabled = true;
 
     document.querySelector("#edit-upload").style.display = "none";
     document.querySelector("#edit-feedback").style.display = "flex";
@@ -43,7 +41,6 @@ register("#edit-confirm-btn", "click", (e) => {
         fileNewDir.value,
         fileNewName.value,
         fileDescription.value,
-        filePrivate.checked,
         (xhr) => {
             window.location.reload();
         },
@@ -75,6 +72,5 @@ function openEditDialog(dataset) {
     document.querySelector("#edit-file-new-dir").value = window.location.pathname;
     document.querySelector("#edit-file-new-name").value = dataset.name;
     document.querySelector("#edit-file-description").value = dataset.description;
-    document.querySelector("#edit-file-private").checked = dataset.private === "true";
     document.querySelector("#edit-dialog").showModal();
 }

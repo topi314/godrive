@@ -39,7 +39,6 @@ type (
 		Name        string
 		Size        uint64
 		Description string
-		Private     bool
 		Date        time.Time
 		Owner       string
 		IsOwner     bool
@@ -48,11 +47,17 @@ type (
 	FileRequest struct {
 		Size        uint64 `json:"size"`
 		Description string `json:"description"`
-		Private     bool   `json:"private"`
 		Dir         string `json:"dir"`
 	}
 
 	ErrorResponse struct {
+		Message   string `json:"message"`
+		Status    int    `json:"status"`
+		Path      string `json:"path"`
+		RequestID string `json:"request_id"`
+	}
+
+	WarningResponse struct {
 		Message   string `json:"message"`
 		Status    int    `json:"status"`
 		Path      string `json:"path"`

@@ -3,5 +3,7 @@ storage/
 godrive.json
 .godrive
 godrive.db
+godrive.db-shm
+godrive.db-wal
 go.work
 go.work.sum

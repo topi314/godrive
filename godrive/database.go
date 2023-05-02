@@ -33,7 +33,6 @@ type File struct {
 	Size        uint64    `db:"size"`
 	ContentType string    `db:"content_type"`
 	Description string    `db:"description"`
-	Private     bool      `db:"private"`
 	UserID      string    `db:"user_id"`
 	Username    *string   `db:"username"`
 	CreatedAt   time.Time `db:"created_at"`
@@ -46,7 +45,6 @@ type UpdateFile struct {
 	Size        uint64    `db:"size"`
 	ContentType string    `db:"content_type"`
 	Description string    `db:"description"`
-	Private     bool      `db:"private"`
 	UpdatedAt   time.Time `db:"updated_at"`
 }
 
@@ -144,17 +142,16 @@ func (d *DB) GetFile(ctx context.Context, path string) (*File, error) {
 	return file, nil
 }
 
-func (d *DB) CreateFile(ctx context.Context, path string, size uint64, contentType string, description string, private bool, userID string) (*File, error) {
+func (d *DB) CreateFile(ctx context.Context, path string, size uint64, contentType string, description string, userID string) (*File, error) {
 	file := &File{
 		Path:        path,
 		Size:        size,
 		ContentType: contentType,
 		Description: description,
-		Private:     private,
 		UserID:      userID,
 		CreatedAt:   time.Now(),
 	}
-	_, err := d.dbx.NamedExecContext(ctx, "INSERT INTO files (path, size, content_type, description, private, user_id, created_at, updated_at) VALUES (:path, :size, :content_type, :description, :private, :user_id, :created_at, :updated_at)", file)
+	_, err := d.dbx.NamedExecContext(ctx, "INSERT INTO files (path, size, content_type, description, user_id, created_at, updated_at) VALUES (:path, :size, :content_type, :description, :user_id, :created_at, :updated_at)", file)
 	if err != nil {
 		var (
 			sqliteErr *sqlite.Error
@@ -171,19 +168,18 @@ func (d *DB) CreateFile(ctx context.Context, path string, size uint64, contentTy
 	return file, nil
 }
 
-func (d *DB) UpdateFile(ctx context.Context, path string, newPath string, size uint64, contentType string, description string, private bool) error {
+func (d *DB) UpdateFile(ctx context.Context, path string, newPath string, size uint64, contentType string, description string) error {
 	file := &UpdateFile{
 		Path:        path,
 		NewPath:     newPath,
 		Size:        size,
 		ContentType: contentType,
 		Description: description,
-		Private:     private,
 		UpdatedAt:   time.Now(),
 	}
-	query := "UPDATE files SET path = :new_path, description = :description, private = :private, updated_at = :updated_at WHERE path = :path"
+	query := "UPDATE files SET path = :new_path, description = :description, updated_at = :updated_at WHERE path = :path"
 	if size > 0 {
-		query = "UPDATE files SET path = :new_path, size = :size, content_type = :content_type, description = :description, private = :private, updated_at = :updated_at WHERE path = :path"
+		query = "UPDATE files SET path = :new_path, size = :size, content_type = :content_type, description = :description, updated_at = :updated_at WHERE path = :path"
 	}
 
 	res, err := d.dbx.NamedExecContext(ctx, query, file)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -42,7 +43,7 @@ type localStorage struct {
 }
 
 func (l *localStorage) GetObject(_ context.Context, filePath string, start *int64, end *int64) (io.ReadCloser, error) {
-	file, err := os.Open(l.path + "/" + filePath)
+	file, err := os.Open(l.path + filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +77,10 @@ func (l *limitedReader) Close() error {
 }
 
 func (l *localStorage) PutObject(_ context.Context, filePath string, _ uint64, reader io.Reader, _ string) error {
-	file, err := os.Create(l.path + "/" + filePath)
+	if err := os.MkdirAll(path.Dir(l.path+filePath), 0777); err != nil {
+		return err
+	}
+	file, err := os.Create(l.path + filePath)
 	if err != nil {
 		return err
 	}
@@ -87,11 +91,14 @@ func (l *localStorage) PutObject(_ context.Context, filePath string, _ uint64, r
 }
 
 func (l *localStorage) MoveObject(_ context.Context, from string, to string) error {
-	return os.Rename(l.path+"/"+from, l.path+"/"+to)
+	if err := os.MkdirAll(path.Dir(l.path+to), 0777); err != nil {
+		return err
+	}
+	return os.Rename(l.path+from, l.path+to)
 }
 
 func (l *localStorage) DeleteObject(_ context.Context, filePath string) error {
-	return os.Remove(l.path + "/" + filePath)
+	return os.Remove(l.path + filePath)
 }
 
 func newS3Storage(ctx context.Context, config StorageConfig) (Storage, error) {

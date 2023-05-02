@@ -4,7 +4,6 @@ CREATE TABLE IF NOT EXISTS files
     size         BIGINT    NOT NULL,
     content_type TEXT      NOT NULL,
     description  TEXT      NOT NULL,
-    private      BOOLEAN   NOT NULL,
     user_id      VARCHAR   NOT NULL,
     created_at   TIMESTAMP NOT NULL,
     updated_at   TIMESTAMP NOT NULL,

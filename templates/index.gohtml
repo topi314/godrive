@@ -38,11 +38,6 @@
                     Description
                     <input id="edit-file-description" type="text" autocomplete="off">
                 </label>
-                <label for="edit-file-private">
-                    Private
-                    <input id="edit-file-private" type="checkbox" class="checkbox">
-                    <label for="edit-file-private"></label>
-                </label>
                 <div id="edit-upload" class="file-upload">
                     <input type="file" id="file" hidden>
                     <label for="file">Choose file or drop here.</label>
@@ -99,8 +94,9 @@
         <div>
             <select id="files-more" class="file-more" data-file="{{ .Path }}" autocomplete="off" disabled>
                 <option value="none" selected disabled hidden>More</option>
-                <option value="move">Move</option>
-                <option value="delete">Delete</option>
+                <option value="download">Download</option>
+                <option value="move" {{ if eq .User.Name "guest" }}disabled{{ end }}>Move</option>
+                <option value="delete" {{ if eq .User.Name "guest" }}disabled{{ end }}>Delete</option>
             </select>
         </div>
     </div>
@@ -121,7 +117,7 @@
                 <div>{{ $file.Owner }}</div>
                 <div><a href="{{ $file.Path }}?dl=1">Download</a></div>
                 <div>
-                    <select class="file-more" data-file="{{ $file.Path }}" data-name="{{ $file.Name }}" data-description="{{ $file.Description }}" data-private="{{ $file.Private}}" autocomplete="off" {{ if not $file.IsOwner }}disabled{{ end }}>
+                    <select class="file-more" data-file="{{ $file.Path }}" data-name="{{ $file.Name }}" data-description="{{ $file.Description }}" autocomplete="off" {{ if not $file.IsOwner }}disabled{{ end }}>
                         <option value="none" selected disabled hidden>More</option>
                         <option value="edit">Edit</option>
                         <option value="delete">Delete</option>

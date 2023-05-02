@@ -20,8 +20,10 @@ register("#move-confirm-btn", "click", (e) => {
     const rq = new XMLHttpRequest();
     rq.responseType = "json";
     rq.addEventListener("load", () => {
-        if (rq.status >= 200 && rq.status < 300) {
+        if (rq.status === 204) {
             window.location.reload();
+        } else if (rq.status === 200) {
+            setUploadError(`#move-error`, rq)
         } else {
             setUploadError(`#move-error`, rq)
         }
