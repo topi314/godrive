@@ -82,7 +82,7 @@
 <main>
     <div id="navigation">
         <div>
-            <input type="checkbox" id="files-select"  class="checkbox" data-file="{{ .Path }}" autocomplete="off">
+            <input type="checkbox" id="files-select" class="checkbox" data-file="{{ .Path }}" autocomplete="off">
             <label for="files-select"></label>
         </div>
         <div class="navigation-path">
@@ -101,6 +101,17 @@
         </div>
     </div>
     <div id="file-list" class="table-list">
+        <div class="table-list-header">
+            <div></div>
+            <div>Type</div>
+            <div>Name</div>
+            <div>Size</div>
+            <div>Date</div>
+            <div>Description</div>
+            <div>Owner</div>
+            <div></div>
+            <div></div>
+        </div>
         {{ range $index, $file := .Files }}
             <div class="table-list-entry">
                 <div>
@@ -109,6 +120,8 @@
                 </div>
                 <div>
                     <span class="icon {{ if $file.IsDir }}folder{{ else }}file{{ end }}-icon"></span>
+                </div>
+                <div>
                     <a href="{{ $file.Path }}">{{ $file.Name }}</a>
                 </div>
                 <div>{{ humanizeBytes $file.Size }}</div>

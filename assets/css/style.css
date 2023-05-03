@@ -69,7 +69,7 @@ main {
 }
 
 #file-list {
-    grid-template-columns: 2.5rem repeat(6, auto) 6rem;
+    grid-template-columns: 2.5rem 3.5rem repeat(6, auto) 6rem;
 }
 
 .file-more {

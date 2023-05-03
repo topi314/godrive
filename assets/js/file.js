@@ -45,6 +45,9 @@ register("#files-select", "click", (e) => {
     }
     for (const child of document.querySelector("#file-list").children) {
         const fileSelect = child.querySelector(".file-select");
+        if (!fileSelect) {
+            continue;
+        }
         if (!e.target.checked) {
             fileSelect.checked = false;
             continue;
@@ -58,7 +61,7 @@ register("#files-select", "click", (e) => {
 registerAll(".file-select", "click", (e) => {
     if (e.target.checked) {
         selectedFiles.push(e.target.dataset.name);
-        if (selectedFiles.length === document.querySelector("#file-list").children.length) {
+        if (selectedFiles.length === document.querySelector("#file-list").children.length - 1) {
             document.querySelector("#files-select").checked = true;
         }
     } else {

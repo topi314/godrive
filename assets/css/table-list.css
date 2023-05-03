@@ -1,10 +1,34 @@
 .table-list {
     display: grid;
-    grid-template-columns: auto;
     overflow: auto;
     align-items: stretch;
     justify-content: stretch;
     padding: 0.5rem;
+}
+
+.table-list-header {
+    display: contents;
+    font-size: 1rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.table-list-header > * {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid var(--bg-secondary);
+    background-color: var(--bg-secondary);
+}
+
+.table-list-header > *:first-child {
+    border-radius: 1rem 0 0 1rem;
+}
+
+.table-list-header > *:last-child {
+    border-radius: 0 1rem 1rem 0;
 }
 
 .table-list-entry {
@@ -35,6 +59,10 @@
         padding: 0.5rem 0 0.5rem 0;
     }
 
+    .table-list-header {
+        display: none;
+    }
+
     .table-list-entry > * {
         padding: 0.5rem 1rem 0.5rem 1rem;
     }
@@ -61,22 +89,26 @@
     }
 
     .table-list-entry > *:nth-of-type(2)::before {
-        content: "Name:";
+        content: "Type:";
     }
 
     .table-list-entry > *:nth-of-type(3)::before {
-        content: "Size:";
+        content: "Name:";
     }
 
     .table-list-entry > *:nth-of-type(4)::before {
-        content: "Modified:";
+        content: "Size:";
     }
 
     .table-list-entry > *:nth-of-type(5)::before {
-        content: "Description:";
+        content: "Modified:";
     }
 
     .table-list-entry > *:nth-of-type(6)::before {
+        content: "Description:";
+    }
+
+    .table-list-entry > *:nth-of-type(7)::before {
         content: "Owner:";
     }
 }

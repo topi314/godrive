@@ -142,18 +142,21 @@ textarea:disabled {
 .checkbox + label {
     display: inline-block;
     flex-shrink: 0;
-    border: none;
     width: 1.5rem;
     height: 1.5rem;
-    background-image: var(--unchecked);
-    background-repeat: no-repeat;
-    background-position: center;
-    background-size: 1.5rem;
+    border-radius: 0.3rem;
+    border: 0.2rem solid var(--checkbox-border);
     cursor: pointer;
 }
 
 .checkbox:checked + label {
     background-image: var(--checkbox);
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 1.5rem;
+    width: 1.5rem;
+    height: 1.5rem;
+    border: none;
 }
 
 dialog {
