@@ -130,10 +130,10 @@
                 <div>
                     <select class="file-more" data-file="{{ $file.Path }}" data-name="{{ $file.Name }}" data-description="{{ $file.Description }}" autocomplete="off">
                         <option value="none" selected disabled hidden>More</option>
-                        {{ if $file.IsOwner }}
                         <option value="download">Download</option>
-                        <option value="edit">Edit</option>
-                        <option value="delete">Delete</option>
+                        {{ if $file.IsOwner }}
+                            <option value="edit">Edit</option>
+                            <option value="delete">Delete</option>
                         {{ end }}
                     </select>
                 </div>
