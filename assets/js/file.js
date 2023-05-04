@@ -18,7 +18,12 @@ registerAll(".file-more", "change", (e) => {
 
     switch (e.target.value) {
         case "download":
-            downloadFiles();
+            const path = e.target.dataset.file;
+            if (path) {
+                window.open(`${path}?dl=1`, '_blank');
+            } else {
+                downloadFiles();
+            }
             break;
         case "edit":
             openEditDialog(e.target.dataset);

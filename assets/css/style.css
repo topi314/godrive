@@ -69,13 +69,14 @@ main {
 }
 
 #file-list {
-    grid-template-columns: 2.5rem 3.5rem repeat(6, auto) 6rem;
+    grid-template-columns: 2.5rem 3.5rem repeat(5, auto) 6rem;
 }
 
 .file-more {
     background-image: var(--arrow-down);
     font-size: 1rem;
     padding: 0 1rem 0 0;
+    width: 5rem;
     border-radius: 0;
     transition: background-color 0.2s ease, color 0.2s ease, filter 0.2s ease;
 }

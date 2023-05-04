@@ -45,6 +45,10 @@
     transition: background-color 0.2s ease;
 }
 
+.table-list-entry > *:nth-child(9) {
+    display: none;
+}
+
 .table-list-entry:hover > * {
     background-color: var(--bg-secondary);
 }
@@ -54,8 +58,13 @@
 }
 
 @media (max-width: 40rem) {
+    #navigation {
+        padding: 0.5rem;
+    }
+
     .table-list {
-        grid-template-columns: 1fr !important;
+        display: flex;
+        flex-direction: column;
         padding: 0.5rem 0 0.5rem 0;
     }
 
@@ -63,52 +72,85 @@
         display: none;
     }
 
-    .table-list-entry > * {
-        padding: 0.5rem 1rem 0.5rem 1rem;
-    }
-
-    .table-list-entry > *:first-child {
-        padding: 1rem 1rem 0.5rem 1rem;
-        border-radius: 1rem 1rem 0 0;
-    }
-
-    .table-list-entry > *:last-child {
-        padding: 0.5rem 1rem 1rem 1rem;
-        margin-bottom: 0.5rem;
-        border-radius: 0 0 1rem 1rem;
+    .table-list-entry {
+        display: grid;
+        grid-template-columns: 2.5rem auto auto 1fr min-content;
+        grid-template-areas: "select name name name more"
+        "select size owner date more";
+        border-bottom: 1px solid var(--bg-secondary);
     }
 
     .table-list-entry > * {
-        border-bottom: none;
-        background-color: var(--bg-secondary);
+        border: none;
     }
 
-    .table-list-entry > *::before {
-        font-weight: bold;
-        text-transform: capitalize;
+    .table-list-entry > *:nth-child(1) {
+        grid-area: select;
     }
 
-    .table-list-entry > *:nth-of-type(2)::before {
-        content: "Type:";
+    .table-list-entry > *:nth-child(1) > input.file:not(:checked) + label {
+        background-image: var(--file);
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: 1.5rem;
+        border: none;
     }
 
-    .table-list-entry > *:nth-of-type(3)::before {
-        content: "Name:";
+    .table-list-entry > *:nth-child(1) > input.folder:not(:checked) + label {
+        background-image: var(--folder);
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: 1.5rem;
+        border: none;
     }
 
-    .table-list-entry > *:nth-of-type(4)::before {
-        content: "Size:";
+    .table-list-entry > *:nth-child(2),
+    .table-list-entry > *:nth-child(6),
+    .table-list-entry > *:nth-child(8) {
+        display: none;
     }
 
-    .table-list-entry > *:nth-of-type(5)::before {
-        content: "Modified:";
+    .table-list-entry > *:nth-child(3) {
+        grid-area: name;
     }
 
-    .table-list-entry > *:nth-of-type(6)::before {
-        content: "Description:";
+    .table-list-entry > *:nth-child(4) {
+        grid-area: size;
+        font-size: 0.7rem;
+        padding-top: 0;
+        color: var(--text-secondary);
     }
 
-    .table-list-entry > *:nth-of-type(7)::before {
-        content: "Owner:";
+    .table-list-entry > *:nth-child(5) {
+        grid-area: date;
+        font-size: 0.7rem;
+        padding-top: 0;
+        color: var(--text-secondary);
+    }
+
+    .table-list-entry > *:nth-child(7) {
+        grid-area: owner;
+        font-size: 0.7rem;
+        padding-top: 0;
+        color: var(--text-secondary);
+    }
+
+    .table-list-entry > *:nth-child(9) {
+        display: flex;
+        grid-area: more;
+    }
+
+    .table-list-entry > *:nth-child(9) > select {
+        width: 1rem;
+        height: 2rem;
+        padding: 0;
+        background-image: var(--more);
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: 1.5rem;
+    }
+
+    dialog {
+        width: 100%;
     }
 }

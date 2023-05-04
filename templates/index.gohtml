@@ -92,7 +92,7 @@
             {{ end }}
         </div>
         <div>
-            <select id="files-more" class="file-more" data-file="{{ .Path }}" autocomplete="off" disabled>
+            <select id="files-more" class="file-more" autocomplete="off" disabled>
                 <option value="none" selected disabled hidden>More</option>
                 <option value="download">Download</option>
                 <option value="move" {{ if eq .User.Name "guest" }}disabled{{ end }}>Move</option>
@@ -110,12 +110,11 @@
             <div>Description</div>
             <div>Owner</div>
             <div></div>
-            <div></div>
         </div>
         {{ range $index, $file := .Files }}
             <div class="table-list-entry">
                 <div>
-                    <input type="checkbox" id="file-select-{{ $index }}" class="file-select checkbox" data-name="{{ $file.Name }}" autocomplete="off">
+                    <input type="checkbox" id="file-select-{{ $index }}" class="file-select checkbox {{ if $file.IsDir }}folder{{ else }}file{{ end }}" data-name="{{ $file.Name }}" autocomplete="off">
                     <label for="file-select-{{ $index }}"></label>
                 </div>
                 <div>
@@ -128,13 +127,24 @@
                 <div>{{ humanizeTime $file.Date }}</div>
                 <div>{{ $file.Description }}</div>
                 <div>{{ $file.Owner }}</div>
-                <div><a href="{{ $file.Path }}?dl=1">Download</a></div>
                 <div>
-                    <select class="file-more" data-file="{{ $file.Path }}" data-name="{{ $file.Name }}" data-description="{{ $file.Description }}" autocomplete="off" {{ if not $file.IsOwner }}disabled{{ end }}>
+                    <select class="file-more" data-file="{{ $file.Path }}" data-name="{{ $file.Name }}" data-description="{{ $file.Description }}" autocomplete="off">
                         <option value="none" selected disabled hidden>More</option>
+                        {{ if $file.IsOwner }}
+                        <option value="download">Download</option>
                         <option value="edit">Edit</option>
                         <option value="delete">Delete</option>
-                        <option value="share">Share</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div>
+                    <select class="file-more" data-file="{{ $file.Path }}" data-name="{{ $file.Name }}" data-description="{{ $file.Description }}" autocomplete="off">
+                        <option value="none" selected disabled hidden></option>
+                        <option value="download">Download</option>
+                        {{ if $file.IsOwner }}
+                            <option value="edit">Edit</option>
+                            <option value="delete">Delete</option>
+                        {{ end }}
                     </select>
                 </div>
             </div>

@@ -30,6 +30,7 @@
     --file: url("/assets/icons/dark/file.png");
     --folder: url("/assets/icons/dark/folder.png");
     --user: url("/assets/icons/dark/user.png");
+    --more: url("/assets/icons/dark/more.png");
 }
 
 .light {
@@ -54,4 +55,5 @@
     --file: url("/assets/icons/light/file.png");
     --folder: url("/assets/icons/light/folder.png");
     --user: url("/assets/icons/light/user.png");
+    --more: url("/assets/icons/light/more.png");
 }
