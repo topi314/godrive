@@ -33,9 +33,15 @@ func newLocalStorage(config StorageConfig) (Storage, error) {
 	if err := os.MkdirAll(config.Path, 0777); err != nil {
 		return nil, fmt.Errorf("failed to create storage directory: %w", err)
 	}
-	return &localStorage{
+
+	l := &localStorage{
 		path: config.Path,
-	}, nil
+	}
+	if err := l.cleanup(); err != nil {
+		return nil, fmt.Errorf("failed to cleanup storage directory: %w", err)
+	}
+
+	return l, nil
 }
 
 type localStorage struct {
@@ -94,11 +100,21 @@ func (l *localStorage) MoveObject(_ context.Context, from string, to string) err
 	if err := os.MkdirAll(path.Dir(l.path+to), 0777); err != nil {
 		return err
 	}
-	return os.Rename(l.path+from, l.path+to)
+	if err := os.Rename(l.path+from, l.path+to); err != nil {
+		return err
+	}
+	return l.cleanup()
 }
 
 func (l *localStorage) DeleteObject(_ context.Context, filePath string) error {
-	return os.Remove(l.path + filePath)
+	if err := os.Remove(l.path + filePath); err != nil {
+		return err
+	}
+	return l.cleanup()
+}
+
+func (l *localStorage) cleanup() error {
+	return nil
 }
 
 func newS3Storage(ctx context.Context, config StorageConfig) (Storage, error) {
