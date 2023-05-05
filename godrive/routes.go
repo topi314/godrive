@@ -28,7 +28,9 @@ func (s *Server) Routes() http.Handler {
 			return !strings.HasPrefix(r.URL.Path, "/assets")
 		},
 	))
-	r.Use(cacheControl)
+	if s.cfg.CacheAssets {
+		r.Use(cacheControl)
+	}
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Heartbeat("/ping"))
 
@@ -56,11 +58,17 @@ func (s *Server) Routes() http.Handler {
 				r.Get("/callback", s.Callback)
 				r.Get("/logout", s.Logout)
 				r.Route("/settings", func(r chi.Router) {
+					r.Use(s.CheckAuth(func(r *http.Request, info *UserInfo) AuthAction {
+						if s.isAdmin(info) {
+							return AuthActionAllow
+						}
+						return AuthActionDeny
+					}))
 					r.Get("/", s.GetSettings)
-					//r.Head("/", s.GetSettings)
-					//r.Patch("/", s.PatchSettings)
+					// r.Head("/", s.GetSettings)
+					// r.Patch("/", s.PatchSettings)
 					r.Route("/permissions", func(r chi.Router) {
-						//r.Get("/", s.GetPermissions)
+						// r.Get("/", s.GetPermissions)
 						r.Put("/", s.PutPermissions)
 					})
 				})

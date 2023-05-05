@@ -6,19 +6,21 @@ import (
 )
 
 type Config struct {
-	DevMode    bool           `cfg:"dev_mode"`
-	Debug      bool           `cfg:"debug"`
-	ListenAddr string         `cfg:"listen_addr"`
-	Database   DatabaseConfig `cfg:"database"`
-	Storage    StorageConfig  `cfg:"storage"`
-	Auth       *AuthConfig    `cfg:"auth"`
+	DevMode     bool           `cfg:"dev_mode"`
+	Debug       bool           `cfg:"debug"`
+	ListenAddr  string         `cfg:"listen_addr"`
+	CacheAssets bool           `cfg:"cache_assets"`
+	Database    DatabaseConfig `cfg:"database"`
+	Storage     StorageConfig  `cfg:"storage"`
+	Auth        *AuthConfig    `cfg:"auth"`
 }
 
 func (c Config) String() string {
-	return fmt.Sprintf("\n DevMode: %t\n Debug: %t\n ListenAddr: %s\n Database: %s\n Storage: %s\n Auth: %s\n",
+	return fmt.Sprintf("\n DevMode: %t\n Debug: %t\n ListenAddr: %s\n CacheAssets: %t\n Database: %s\n Storage: %s\n Auth: %s\n",
 		c.DevMode,
 		c.Debug,
 		c.ListenAddr,
+		c.CacheAssets,
 		c.Database,
 		c.Storage,
 		c.Auth,

@@ -42,14 +42,9 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 		s.error(w, r, err, http.StatusInternalServerError)
 		return
 	}
-	fmt.Println("perms", perms)
 
 	if download && len(files) == 0 {
 		s.notFound(w, r)
-		return
-	}
-	if r.URL.Path != "/" && len(files) == 0 {
-		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
 

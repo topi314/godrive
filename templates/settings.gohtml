@@ -27,6 +27,7 @@
                 <div>Permissions</div>
                 <div>Object Type</div>
                 <div>Object</div>
+				<div>Action</div>
             </div>
             {{ range $index, $perms := .Permissions }}
                 <div class="table-list-entry">
@@ -49,6 +50,9 @@
                     <div>
                         <input class="permission-object" type="text" placeholder="User/Group" value="{{ $perms.Object }}">
                     </div>
+					<div>
+						<button class="delete-permission">Delete</button>
+					</div>
                 </div>
             {{ end }}
         </div>

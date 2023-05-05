@@ -2,9 +2,10 @@ package godrive
 
 import (
 	"encoding/json"
-	"golang.org/x/exp/slices"
 	"net/http"
 	"strings"
+
+	"golang.org/x/exp/slices"
 )
 
 type ObjectType int
@@ -25,6 +26,10 @@ func (o *ObjectType) UnmarshalJSON(data []byte) error {
 		}
 	}
 	return nil
+}
+
+func (o ObjectType) String() string {
+	return AllObjectTypes[o]
 }
 
 var AllObjectTypes = map[ObjectType]string{
@@ -120,60 +125,57 @@ func (p Permissions) String() string {
 }
 
 func (s *Server) Permissions(f []FilePermissions, filePath string, userInfo *UserInfo) Permissions {
-	if s.cfg.Auth != nil && slices.Contains(userInfo.Groups, s.cfg.Auth.Groups.Admin) {
+	if s.cfg.Auth == nil || (s.cfg.Auth != nil && slices.Contains(userInfo.Groups, s.cfg.Auth.Groups.Admin)) {
 		return PermissionsAll
 	}
-	var parts []string
-	if filePath == "/" {
-		parts = []string{"/"}
-	} else {
-		parts = strings.FieldsFunc(filePath, func(r rune) bool {
-			return r == '/'
-		})
+
+	parts := []string{"/"}
+	var currentPart string
+	for _, part := range strings.Split(filePath, "/") {
+		if part == "" {
+			continue
+		}
+		currentPart += "/" + part
+		parts = append(parts, currentPart)
 	}
 
+	var rolePermissions Permissions
+	loopPermissions(f, parts, func(perm FilePermissions) {
+		if perm.ObjectType == ObjectTypeGroup && slices.Contains(userInfo.Groups, perm.Object) {
+			rolePermissions = rolePermissions.Add(perm.Permissions)
+		}
+	})
+	var userPermissions Permissions
+	loopPermissions(f, parts, func(perm FilePermissions) {
+		if perm.ObjectType == ObjectTypeUser && perm.Object == userInfo.Subject {
+			userPermissions = userPermissions.Add(perm.Permissions)
+		}
+	})
+	return rolePermissions.Add(userPermissions)
+}
+
+func loopPermissions(filePerms []FilePermissions, paths []string, f func(permissions FilePermissions)) Permissions {
 	var permissions Permissions
-	filePart := "/"
-	for _, part := range parts {
-		var (
-			perms    Permissions
-			hasPerms bool
-		)
-		for _, perm := range f {
-			if perm.Path != filePart {
+	for _, path := range paths {
+		for _, perm := range filePerms {
+			if perm.Path != path {
 				continue
 			}
-			if perm.ObjectType == ObjectTypeUser && perm.Object == userInfo.Subject {
-				hasPerms = true
-				perms = perms.Add(perm.Permissions)
-			}
-			if perm.ObjectType == ObjectTypeGroup && slices.Contains(userInfo.Groups, perm.Object) {
-				hasPerms = true
-				perms = perms.Add(perm.Permissions)
-			}
-		}
-		if hasPerms {
-			permissions = perms
-		}
-		if strings.HasSuffix(filePart, "/") {
-			filePart += part
-		} else {
-			filePart += "/" + part
+			f(perm)
 		}
 	}
 	return permissions
 }
 
 func (s *Server) PutPermissions(w http.ResponseWriter, r *http.Request) {
-	userInfo := s.GetUserInfo(r)
-	if !s.isAdmin(userInfo) {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-
 	var perms []PermissionsRequest
 	if err := json.NewDecoder(r.Body).Decode(&perms); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := s.db.DeleteAllFilePermissions(r.Context()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 

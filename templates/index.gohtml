@@ -91,9 +91,9 @@
                 <a href="/{{ assemblePath $.PathParts $index }}">{{ $path }}{{ if not (isLast $.PathParts $index) }}/{{end}}</a>
             {{ end }}
         </div>
-        <div>
-            {{ .Permissions.String }}
-        </div>
+		<div>
+			<a class="btn primary" href="{{ .User.Home }}">Home</a>
+		</div>
         <div>
             <select id="files-more" class="file-more" autocomplete="off" disabled>
                 <option value="none" selected disabled hidden>More</option>

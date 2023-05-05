@@ -6,11 +6,12 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"golang.org/x/exp/slices"
 	"log"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"golang.org/x/exp/slices"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -266,6 +267,13 @@ func (d *DB) DeleteFilePermissions(ctx context.Context, path string, objectType 
 	return nil
 }
 
+func (d *DB) DeleteAllFilePermissions(ctx context.Context) error {
+	if _, err := d.dbx.ExecContext(ctx, "DELETE FROM file_permissions"); err != nil {
+		return fmt.Errorf("error deleting all file permissions: %w", err)
+	}
+	return nil
+}
+
 func (d *DB) UpsertUser(ctx context.Context, id string, username string, email string, home string) error {
 	user := &User{
 		ID:       id,
@@ -273,11 +281,14 @@ func (d *DB) UpsertUser(ctx context.Context, id string, username string, email s
 		Email:    email,
 		Home:     home,
 	}
-	_, err := d.dbx.NamedExecContext(ctx, "INSERT INTO users (id, username, email, home) VALUES (:id, :username, :email, :home) ON CONFLICT (id) DO UPDATE SET username = :username, email = :email", user)
+	query, args, err := sqlx.Named("INSERT INTO users (id, username, email, home) VALUES (:id, :username, :email, :home) ON CONFLICT (id) DO UPDATE SET username = :username, email = :email RETURNING home", user)
 	if err != nil {
 		return fmt.Errorf("error upserting user: %w", err)
 	}
-	return nil
+	if err = d.dbx.GetContext(ctx, &home, query, args...); err != nil {
+		return fmt.Errorf("error upserting user: %w", err)
+	}
+	return d.UpsertFilePermission(ctx, home, PermissionsAll, ObjectTypeUser, user.ID)
 }
 
 func (d *DB) GetUsers(ctx context.Context, ids []string) ([]User, error) {

@@ -54,3 +54,7 @@ register("#new-permission", "click", () => {
 
     document.querySelector("#permission-list").appendChild(div);
 });
+
+registerAll(".delete-permission", "click", (e) => {
+	e.target.parentElement.parentElement.remove();
+});
