@@ -43,16 +43,12 @@ func (s *Server) ToTemplateUser(info *UserInfo) TemplateUser {
 	}
 }
 
-func (s *Server) hasFileAccess(info *UserInfo, file File) bool {
-	return info.Subject == file.UserID || s.isAdmin(info)
-}
-
 func (s *Server) hasAccess(info *UserInfo) bool {
-	if !s.cfg.Auth.Groups.Guest && s.isGuest(info) {
+	if s.cfg.Auth.Groups.Guest == "" && s.isGuest(info) {
 		return false
 	}
 
-	return s.isAdmin(info) || s.isUser(info) || s.isViewer(info) || s.isGuest(info)
+	return s.isAdmin(info) || s.isUser(info) || s.isGuest(info)
 }
 
 func (s *Server) isAdmin(info *UserInfo) bool {
@@ -63,12 +59,8 @@ func (s *Server) isUser(info *UserInfo) bool {
 	return slices.Contains(info.Groups, s.cfg.Auth.Groups.User)
 }
 
-func (s *Server) isViewer(info *UserInfo) bool {
-	return slices.Contains(info.Groups, s.cfg.Auth.Groups.Viewer)
-}
-
 func (s *Server) isGuest(info *UserInfo) bool {
-	return slices.Contains(info.Groups, "guest")
+	return slices.Contains(info.Groups, s.cfg.Auth.Groups.Guest)
 }
 
 func (s *Server) setCookie(w http.ResponseWriter, name string, value string, maxAge time.Duration) {
@@ -168,7 +160,7 @@ const (
 func (s *Server) CheckAuth(allowedFunc func(r *http.Request, info *UserInfo) AuthAction) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			switch allowedFunc(r, GetUserInfo(r)) {
+			switch allowedFunc(r, s.GetUserInfo(r)) {
 			case AuthActionDeny:
 				s.error(w, r, errors.New("not authorized"), http.StatusForbidden)
 				return
@@ -181,7 +173,7 @@ func (s *Server) CheckAuth(allowedFunc func(r *http.Request, info *UserInfo) Aut
 	}
 }
 
-func GetUserInfo(r *http.Request) *UserInfo {
+func (s *Server) GetUserInfo(r *http.Request) *UserInfo {
 	userInfo := r.Context().Value(UserInfoKey)
 	if userInfo == nil {
 		return &UserInfo{
@@ -190,7 +182,7 @@ func GetUserInfo(r *http.Request) *UserInfo {
 				Email:   "guest@localhost",
 			},
 			Audience: []string{"godrive"},
-			Groups:   []string{"guest"},
+			Groups:   []string{s.cfg.Auth.Groups.Guest},
 			Username: "guest",
 		}
 	}

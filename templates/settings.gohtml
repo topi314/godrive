@@ -4,7 +4,12 @@
 <main>
     <div id="settings">
         <h1>Settings</h1>
-        <div id="users" class="table-list">
+        <div id="user-list" class="table-list">
+            <div class="table-list-header">
+                <div>Name</div>
+                <div>Email</div>
+                <div>Home</div>
+            </div>
             {{ range $index, $user := .Users }}
                 <div class="table-list-entry">
                     <div>
@@ -13,16 +18,42 @@
                     </div>
                     <div><span class="user-email">{{ $user.Email }}</span></div>
                     <div><span class="user-home">{{ $user.Home }}</span></div>
+                </div>
+            {{ end }}
+        </div>
+        <div id="permission-list" class="table-list">
+            <div class="table-list-header">
+                <div>Path</div>
+                <div>Permissions</div>
+                <div>Object Type</div>
+                <div>Object</div>
+            </div>
+            {{ range $index, $perms := .Permissions }}
+                <div class="table-list-entry">
+                    <div><input class="permission-path" type="text" placeholder="path" value="{{ $perms.Path }}"></div>
                     <div>
-                        <select class="user-more" autocomplete="off">
-                            <option value="none" selected disabled hidden>More</option>
-                            <option value="edit">Edit</option>
-                            <option value="delete">Delete</option>
+                        <select class="permission-perms" multiple>
+                            <option value="read" {{ if $perms.Permissions.Has 1 }}selected{{ end }}>Read</option>
+                            <option value="write" {{ if $perms.Permissions.Has 2 }}selected{{ end }}>Write</option>
+                            <option value="create" {{ if $perms.Permissions.Has 4 }}selected{{ end }}>Create</option>
+                            <option value="delete" {{ if $perms.Permissions.Has 8 }}selected{{ end }}>Delete</option>
+                            <option value="share" {{ if $perms.Permissions.Has 16 }}selected{{ end }}>Share</option>
                         </select>
+                    </div>
+                    <div>
+                        <select class="permission-object-type">
+                            <option value="user" {{ if eq $perms.ObjectType 1 }}selected{{ end }}>User</option>
+                            <option value="group" {{ if eq $perms.ObjectType 2 }}selected{{ end }}>Group</option>
+                        </select>
+                    </div>
+                    <div>
+                        <input class="permission-object" type="text" placeholder="User/Group" value="{{ $perms.Object }}">
                     </div>
                 </div>
             {{ end }}
         </div>
+        <button id="new-permission">New</button>
+        <button id="save-permissions">Save</button>
     </div>
 </main>
 <script src="/assets/theme.js" defer></script>

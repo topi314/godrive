@@ -15,11 +15,20 @@ type (
 		Path      string
 		PathParts []string
 		Files     []TemplateFile
+
+		Permissions      Permissions
+		PermissionRead   Permissions
+		PermissionWrite  Permissions
+		PermissionCreate Permissions
+		PermissionDelete Permissions
+		PermissionShare  Permissions
 	}
 
 	SettingsVariables struct {
 		BaseVariables
-		Users []TemplateUser
+		Users       []TemplateUser
+		Groups      []string
+		Permissions []FilePermissions
 	}
 
 	TemplateUser struct {
@@ -41,7 +50,7 @@ type (
 		Description string
 		Date        time.Time
 		Owner       string
-		IsOwner     bool
+		Permissions Permissions
 	}
 
 	FileRequest struct {
@@ -62,5 +71,12 @@ type (
 		Status    int    `json:"status"`
 		Path      string `json:"path"`
 		RequestID string `json:"request_id"`
+	}
+
+	PermissionsRequest struct {
+		Path        string      `json:"path"`
+		Permissions Permissions `json:"permissions"`
+		ObjectType  ObjectType  `json:"object_type"`
+		Object      string      `json:"object"`
 	}
 )

@@ -10,6 +10,15 @@ CREATE TABLE IF NOT EXISTS files
     PRIMARY KEY (path)
 );
 
+CREATE TABLE IF NOT EXISTS file_permissions
+(
+    path   VARCHAR NOT NULL,
+    permissions INT     NOT NULL,
+    object_type INT     NOT NULL,
+    object      VARCHAR NOT NULL,
+    PRIMARY KEY (path, object_type, object)
+);
+
 CREATE TABLE IF NOT EXISTS users
 (
     id       VARCHAR NOT NULL,

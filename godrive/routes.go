@@ -59,6 +59,10 @@ func (s *Server) Routes() http.Handler {
 					r.Get("/", s.GetSettings)
 					//r.Head("/", s.GetSettings)
 					//r.Patch("/", s.PatchSettings)
+					r.Route("/permissions", func(r chi.Router) {
+						//r.Get("/", s.GetPermissions)
+						r.Put("/", s.PutPermissions)
+					})
 				})
 			})
 		}
@@ -77,7 +81,7 @@ func (s *Server) Routes() http.Handler {
 			}
 			r.Get("/*", s.GetFiles)
 			r.Head("/*", s.GetFiles)
-			r.Post("/*", s.PostFiles)
+			r.Post("/*", s.PostFile)
 			r.Patch("/*", s.PatchFile)
 			r.Put("/*", s.MoveFiles)
 			r.Delete("/*", s.DeleteFiles)
@@ -89,7 +93,7 @@ func (s *Server) Routes() http.Handler {
 }
 
 func (s *Server) GetSettings(w http.ResponseWriter, r *http.Request) {
-	userInfo := GetUserInfo(r)
+	userInfo := s.GetUserInfo(r)
 	if !s.isAdmin(userInfo) {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
@@ -111,13 +115,20 @@ func (s *Server) GetSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	perms, err := s.db.GetAllFilePermissions(r.Context())
+	if err != nil {
+		s.prettyError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+
 	vars := SettingsVariables{
 		BaseVariables: BaseVariables{
 			Theme: "dark",
 			Auth:  s.cfg.Auth != nil,
 			User:  s.ToTemplateUser(userInfo),
 		},
-		Users: templateUsers,
+		Users:       templateUsers,
+		Permissions: perms,
 	}
 	if err = s.tmpl(w, "settings.gohtml", vars); err != nil {
 		s.log(r, "template", err)

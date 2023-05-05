@@ -5,25 +5,13 @@
     align-items: stretch;
     justify-content: stretch;
     padding: 0.5rem;
-    max-width: 40rem;
+    max-width: 50rem;
 }
 
-#users {
-    grid-template-columns: repeat(3, 1fr) 8rem;
+#user-list {
+    grid-template-columns: repeat(3, 1fr);
 }
 
-.user-more {
-    background-image: var(--arrow-down);
-    font-size: 1rem;
-    padding: 0 1rem 0 0;
-    border-radius: 0;
-    transition: background-color 0.2s ease;
-}
-
-.user-more:hover {
-    background-color: var(--bg-secondary);
-}
-
-.user-icon {
-    background-image: var(--user);
+#permission-list {
+    grid-template-columns: repeat(4, 1fr);
 }

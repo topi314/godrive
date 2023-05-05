@@ -149,17 +149,15 @@ func (c AuthConfig) String() string {
 }
 
 type AuthGroups struct {
-	Admin  string `cfg:"admin"`
-	User   string `cfg:"user"`
-	Viewer string `cfg:"viewer"`
-	Guest  bool   `cfg:"guest"`
+	Admin string `cfg:"admin"`
+	User  string `cfg:"user"`
+	Guest string `cfg:"guest"`
 }
 
 func (c AuthGroups) String() string {
-	return fmt.Sprintf("\n    Admin: %s\n    User: %s\n    Viewer: %s\n    Guest: %t",
+	return fmt.Sprintf("\n    Admin: %s\n    User: %s\n    Guest: %s",
 		c.Admin,
 		c.User,
-		c.Viewer,
 		c.Guest,
 	)
 }

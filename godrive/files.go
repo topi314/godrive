@@ -33,6 +33,17 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	paths := make([]string, len(files))
+	for i, file := range files {
+		paths[i] = file.Path
+	}
+	perms, err := s.db.GetFilePermissions(r.Context(), append(paths, r.URL.Path))
+	if err != nil {
+		s.error(w, r, err, http.StatusInternalServerError)
+		return
+	}
+	fmt.Println("perms", perms)
+
 	if download && len(files) == 0 {
 		s.notFound(w, r)
 		return
@@ -42,29 +53,36 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userInfo := GetUserInfo(r)
+	userInfo := s.GetUserInfo(r)
 	if len(files) == 1 && files[0].Path == r.URL.Path {
+		if !s.Permissions(perms, files[0].Path, userInfo).Has(PermissionRead) {
+			if download {
+				s.notFound(w, r)
+				return
+			}
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
 		start, end, err := parseRange(r.Header.Get("Range"))
 		if err != nil {
 			s.error(w, r, err, http.StatusRequestedRangeNotSatisfiable)
 			return
 		}
-		file := files[0]
 		if download {
-			w.Header().Set("Content-Disposition", "attachment; filename="+path.Base(file.Path))
+			w.Header().Set("Content-Disposition", "attachment; filename="+path.Base(files[0].Path))
 		}
-		w.Header().Set("Content-Type", file.ContentType)
-		w.Header().Set("Content-Length", strconv.FormatUint(file.Size, 10))
+		w.Header().Set("Content-Type", files[0].ContentType)
+		w.Header().Set("Content-Length", strconv.FormatUint(files[0].Size, 10))
 		w.Header().Set("Accept-Ranges", "bytes")
 		if start != nil || end != nil {
-			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, file.Size))
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, files[0].Size))
 			w.WriteHeader(http.StatusPartialContent)
 		}
 		if r.Method == http.MethodHead {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if err = s.writeFile(r.Context(), w, file.Path, start, end); err != nil {
+		if err = s.writeFile(r.Context(), w, files[0].Path, start, end); err != nil {
 			s.log(r, "error writing file", err)
 		}
 		return
@@ -90,6 +108,9 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 			if len(filesFilter) > 0 && !slices.Contains(filesFilter, strings.SplitN(strings.TrimPrefix(file.Path, rPath), "/", 2)[0]) {
 				continue
 			}
+			if !s.Permissions(perms, files[0].Path, userInfo).Has(PermissionRead) {
+				continue
+			}
 			fw, err := zw.CreateHeader(&zip.FileHeader{
 				Name:               strings.TrimPrefix(file.Path, "/"),
 				UncompressedSize64: file.Size,
@@ -97,11 +118,11 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 				Comment:            file.Description,
 				Method:             zip.Deflate,
 			})
-			addedFiles++
 			if err != nil {
 				s.error(w, r, err, http.StatusInternalServerError)
 				return
 			}
+			addedFiles++
 			if err = s.writeFile(r.Context(), fw, file.Path, nil, nil); err != nil {
 				s.error(w, r, err, http.StatusInternalServerError)
 				return
@@ -120,11 +141,13 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 
 	var templateFiles []TemplateFile
 	for _, file := range files {
+		if !s.Permissions(perms, files[0].Path, userInfo).Has(PermissionRead) {
+			continue
+		}
 		owner := "Unknown"
 		if file.Username != nil {
 			owner = *file.Username
 		}
-		isOwner := file.UserID == userInfo.Subject || s.isAdmin(userInfo)
 		date := file.CreatedAt
 		if file.UpdatedAt.After(date) {
 			date = file.UpdatedAt
@@ -140,14 +163,14 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 			})
 			if index == -1 {
 				templateFiles = append(templateFiles, TemplateFile{
-					IsDir:   true,
-					Path:    path.Join(r.URL.Path, baseDir),
-					Dir:     r.URL.Path,
-					Name:    baseDir,
-					Size:    file.Size,
-					Date:    date,
-					Owner:   owner,
-					IsOwner: isOwner,
+					IsDir:       true,
+					Path:        path.Join(r.URL.Path, baseDir),
+					Dir:         r.URL.Path,
+					Name:        baseDir,
+					Size:        file.Size,
+					Date:        date,
+					Owner:       owner,
+					Permissions: s.Permissions(perms, path.Join(r.URL.Path, baseDir), userInfo),
 				})
 				continue
 			}
@@ -157,9 +180,6 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 			}
 			if !strings.Contains(templateFiles[index].Owner, owner) {
 				templateFiles[index].Owner += ", " + owner
-			}
-			if !templateFiles[index].IsOwner && isOwner {
-				templateFiles[index].IsOwner = true
 			}
 			continue
 		}
@@ -173,7 +193,7 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 			Description: file.Description,
 			Date:        date,
 			Owner:       owner,
-			IsOwner:     file.UserID == userInfo.Subject || s.isAdmin(userInfo),
+			Permissions: s.Permissions(perms, file.Path, userInfo),
 		})
 	}
 
@@ -183,9 +203,15 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 			Auth:  s.cfg.Auth != nil,
 			User:  s.ToTemplateUser(userInfo),
 		},
-		Path:      r.URL.Path,
-		PathParts: strings.FieldsFunc(r.URL.Path, func(r rune) bool { return r == '/' }),
-		Files:     templateFiles,
+		Permissions:      s.Permissions(perms, r.URL.Path, userInfo),
+		PermissionRead:   PermissionRead,
+		PermissionWrite:  PermissionWrite,
+		PermissionCreate: PermissionCreate,
+		PermissionDelete: PermissionDelete,
+		PermissionShare:  PermissionShare,
+		Path:             r.URL.Path,
+		PathParts:        strings.FieldsFunc(r.URL.Path, func(r rune) bool { return r == '/' }),
+		Files:            templateFiles,
 	}
 	if err = s.tmpl(w, "index.gohtml", vars); err != nil {
 		s.log(r, "template", err)
@@ -203,14 +229,21 @@ func (s *Server) writeFile(ctx context.Context, w io.Writer, fullPath string, st
 	return nil
 }
 
-func (s *Server) PostFiles(w http.ResponseWriter, r *http.Request) {
+func (s *Server) PostFile(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
-	userInfo := GetUserInfo(r)
-	if userInfo == nil {
-		s.error(w, r, errors.New("unauthorized"), http.StatusUnauthorized)
+	userInfo := s.GetUserInfo(r)
+	perms, err := s.db.GetFilePermissions(r.Context(), []string{r.URL.Path})
+	if err != nil {
+		s.error(w, r, err, http.StatusInternalServerError)
 		return
 	}
+
+	if !s.Permissions(perms, r.URL.Path, userInfo).Has(PermissionCreate) {
+		s.error(w, r, fmt.Errorf("unauhorized to create files at %s", r.URL.Path), http.StatusForbidden)
+		return
+	}
+
 	file, reader, err := s.parseMultipart(r)
 	if err != nil {
 		s.error(w, r, err, http.StatusInternalServerError)
@@ -240,14 +273,14 @@ func (s *Server) PatchFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dbFile, err := s.db.GetFile(r.Context(), r.URL.Path)
+	perms, err := s.db.GetFilePermissions(r.Context(), []string{r.URL.Path})
 	if err != nil {
 		s.error(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
-	userInfo := GetUserInfo(r)
-	if !s.hasFileAccess(userInfo, *dbFile) {
+	userInfo := s.GetUserInfo(r)
+	if !s.Permissions(perms, r.URL.Path, userInfo).Has(PermissionWrite) {
 		s.error(w, r, errors.New("unauthorized"), http.StatusUnauthorized)
 		return
 	}
@@ -297,17 +330,31 @@ func (s *Server) MoveFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rPath := r.URL.Path
-	if !strings.HasSuffix(rPath, "/") {
-		rPath += "/"
-	}
-
 	files, err := s.db.FindFiles(r.Context(), r.URL.Path)
 	if err != nil {
 		return
 	}
 
-	userInfo := GetUserInfo(r)
+	paths := make([]string, len(files))
+	for i, file := range files {
+		paths[i] = file.Path
+	}
+	perms, err := s.db.GetFilePermissions(r.Context(), append(paths, destination))
+	if err != nil {
+		s.error(w, r, err, http.StatusInternalServerError)
+		return
+	}
+	userInfo := s.GetUserInfo(r)
+
+	if !s.Permissions(perms, destination, userInfo).Has(PermissionCreate) {
+		s.error(w, r, fmt.Errorf("unauhorized to create files at %s", destination), http.StatusUnauthorized)
+		return
+	}
+
+	rPath := r.URL.Path
+	if !strings.HasSuffix(rPath, "/") {
+		rPath += "/"
+	}
 
 	var (
 		errs  error
@@ -319,7 +366,7 @@ func (s *Server) MoveFiles(w http.ResponseWriter, r *http.Request) {
 			warns = append(warns, fmt.Sprintf("file %s not found", rFilePath))
 			continue
 		}
-		if !s.hasFileAccess(userInfo, file) {
+		if !s.Permissions(perms, file.Path, userInfo).Has(PermissionDelete) {
 			warns = append(warns, fmt.Sprintf("unauthorized to move file %s", rFilePath))
 			continue
 		}
@@ -360,12 +407,21 @@ func (s *Server) DeleteFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	paths := make([]string, len(files))
+	for i, file := range files {
+		paths[i] = file.Path
+	}
+	perms, err := s.db.GetFilePermissions(r.Context(), append(paths, r.URL.Path))
+	if err != nil {
+		s.error(w, r, err, http.StatusInternalServerError)
+		return
+	}
+	userInfo := s.GetUserInfo(r)
+
 	rPath := r.URL.Path
 	if !strings.HasSuffix(rPath, "/") {
 		rPath += "/"
 	}
-
-	userInfo := GetUserInfo(r)
 
 	var (
 		errs  error
@@ -376,7 +432,7 @@ func (s *Server) DeleteFiles(w http.ResponseWriter, r *http.Request) {
 			warns = append(warns, fmt.Sprintf("file %s not found", file.Path))
 			continue
 		}
-		if !s.hasFileAccess(userInfo, file) {
+		if !s.Permissions(perms, file.Path, userInfo).Has(PermissionDelete) {
 			warns = append(warns, fmt.Sprintf("unauthorized to delete file %s", file.Path))
 			continue
 		}

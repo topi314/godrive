@@ -6,7 +6,9 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"golang.org/x/exp/slices"
 	"log"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -46,6 +48,13 @@ type UpdateFile struct {
 	ContentType string    `db:"content_type"`
 	Description string    `db:"description"`
 	UpdatedAt   time.Time `db:"updated_at"`
+}
+
+type FilePermissions struct {
+	Path        string      `db:"path"`
+	Permissions Permissions `db:"permissions"`
+	ObjectType  ObjectType  `db:"object_type"`
+	Object      string      `db:"object"`
 }
 
 type User struct {
@@ -201,6 +210,59 @@ func (d *DB) DeleteFile(ctx context.Context, path string) error {
 		return ErrFileNotFound
 	}
 
+	return nil
+}
+
+func (d *DB) GetFilePermissions(ctx context.Context, filePaths []string) ([]FilePermissions, error) {
+	var paths []string
+	for _, path := range filePaths {
+		for {
+			if !slices.Contains(paths, path) {
+				paths = append(paths, path)
+			}
+			if path == "/" {
+				break
+			}
+			path = filepath.Dir(path)
+		}
+	}
+
+	query, args, err := sqlx.In("SELECT * FROM file_permissions WHERE path IN (?)", paths)
+	if err != nil {
+		return nil, err
+	}
+	var permissions []FilePermissions
+	if err = d.dbx.SelectContext(ctx, &permissions, query, args...); err != nil {
+		return nil, fmt.Errorf("error getting path permissions: %w", err)
+	}
+	return permissions, nil
+}
+
+func (d *DB) GetAllFilePermissions(ctx context.Context) ([]FilePermissions, error) {
+	var perms []FilePermissions
+	if err := d.dbx.SelectContext(ctx, &perms, "SELECT * FROM file_permissions"); err != nil {
+		return nil, fmt.Errorf("error getting all file permissions: %w", err)
+	}
+	return perms, nil
+}
+
+func (d *DB) UpsertFilePermission(ctx context.Context, path string, permissions Permissions, objectType ObjectType, object string) error {
+	permission := FilePermissions{
+		Path:        path,
+		Permissions: permissions,
+		ObjectType:  objectType,
+		Object:      object,
+	}
+	if _, err := d.dbx.NamedExecContext(ctx, "INSERT INTO file_permissions (path, permissions, object_type, object) VALUES (:path, :permissions, :object_type, :object) ON CONFLICT (path, object_type, object) DO UPDATE SET permissions = :permissions", permission); err != nil {
+		return fmt.Errorf("error upserting file permissions: %w", err)
+	}
+	return nil
+}
+
+func (d *DB) DeleteFilePermissions(ctx context.Context, path string, objectType ObjectType, object string) error {
+	if _, err := d.dbx.ExecContext(ctx, "DELETE FROM file_permissions WHERE path = $1 AND object_type = $2 AND object = $3", path, objectType, object); err != nil {
+		return fmt.Errorf("error deleting file permissions: %w", err)
+	}
 	return nil
 }
 
