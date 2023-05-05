@@ -57,8 +57,8 @@ func (s *Server) Routes() http.Handler {
 				r.Get("/logout", s.Logout)
 				r.Route("/settings", func(r chi.Router) {
 					r.Get("/", s.GetSettings)
-					//r.Head("/", s.GetSettings)
-					//r.Patch("/", s.PatchSettings)
+					// r.Head("/", s.GetSettings)
+					// r.Patch("/", s.PatchSettings)
 				})
 			})
 		}
@@ -77,7 +77,7 @@ func (s *Server) Routes() http.Handler {
 			}
 			r.Get("/*", s.GetFiles)
 			r.Head("/*", s.GetFiles)
-			r.Post("/*", s.PostFiles)
+			r.Post("/*", s.PostFile)
 			r.Patch("/*", s.PatchFile)
 			r.Put("/*", s.MoveFiles)
 			r.Delete("/*", s.DeleteFiles)

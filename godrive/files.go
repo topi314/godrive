@@ -192,33 +192,17 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) writeFile(ctx context.Context, w io.Writer, fullPath string, start *int64, end *int64) error {
-	obj, err := s.storage.GetObject(ctx, fullPath, start, end)
-	if err != nil {
-		return err
-	}
-	if _, err = io.Copy(w, obj); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (s *Server) PostFiles(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
-
-	userInfo := GetUserInfo(r)
-	if userInfo == nil {
-		s.error(w, r, errors.New("unauthorized"), http.StatusUnauthorized)
-		return
-	}
-	file, reader, err := s.parseMultipart(r)
+func (s *Server) PostFile(w http.ResponseWriter, r *http.Request) {
+	file, err := s.parseMultipartBody(r)
 	if err != nil {
 		s.error(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
-	defer reader.Close()
-	if err = s.storage.PutObject(r.Context(), file.Path, file.Size, reader, file.ContentType); err != nil {
+	userInfo := GetUserInfo(r)
+
+	defer file.Content.Close()
+	if err = s.storage.PutObject(r.Context(), file.Path, file.Size, file.Content, file.ContentType); err != nil {
 		s.error(w, r, err, http.StatusInternalServerError)
 		return
 	}
@@ -232,9 +216,7 @@ func (s *Server) PostFiles(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) PatchFile(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
-
-	file, reader, err := s.parseMultipart(r)
+	file, err := s.parseMultipartBody(r)
 	if err != nil {
 		s.error(w, r, err, http.StatusInternalServerError)
 		return
@@ -252,13 +234,13 @@ func (s *Server) PatchFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	defer reader.Close()
+	defer file.Content.Close()
 	if err = s.db.UpdateFile(r.Context(), r.URL.Path, file.Path, file.Size, file.ContentType, file.Description); err != nil {
 		s.error(w, r, err, http.StatusInternalServerError)
 		return
 	}
 	if file.Size > 0 {
-		if err = s.storage.PutObject(r.Context(), file.Path, file.Size, reader, file.ContentType); err != nil {
+		if err = s.storage.PutObject(r.Context(), file.Path, file.Size, file.Content, file.ContentType); err != nil {
 			s.error(w, r, err, http.StatusInternalServerError)
 			return
 		}
@@ -279,27 +261,21 @@ func (s *Server) PatchFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) MoveFiles(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
-
 	destination := r.Header.Get("Destination")
 	if destination == "" {
 		s.error(w, r, errors.New("missing destination header"), http.StatusBadRequest)
 		return
 	}
 	if destination == r.URL.Path {
-		s.error(w, r, errors.New("destination cannot be the same as source"), http.StatusBadRequest)
+		s.error(w, r, errors.New("source and destination path can not be the same"), http.StatusBadRequest)
 		return
 	}
 
+	// which files/folders in r.URL.Path should be moved
 	var fileNames []string
 	if err := json.NewDecoder(r.Body).Decode(&fileNames); err != nil && err != io.EOF {
 		s.error(w, r, err, http.StatusBadRequest)
 		return
-	}
-
-	rPath := r.URL.Path
-	if !strings.HasSuffix(rPath, "/") {
-		rPath += "/"
 	}
 
 	files, err := s.db.FindFiles(r.Context(), r.URL.Path)
@@ -307,7 +283,35 @@ func (s *Server) MoveFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(files) == 0 {
+		s.error(w, r, errors.New("file not found"), http.StatusNotFound)
+		return
+	}
+
 	userInfo := GetUserInfo(r)
+	// move specific file
+	if len(files) == 1 && files[0].Path == r.URL.Path {
+		if !s.hasFileAccess(userInfo, files[0]) {
+			s.error(w, r, fmt.Errorf("unauthorized to move file: %s", files[0].Path), http.StatusUnauthorized)
+			return
+		}
+		if err = s.db.UpdateFile(r.Context(), files[0].Path, destination, 0, "", files[0].Description); err != nil {
+			s.error(w, r, err, http.StatusInternalServerError)
+			return
+		}
+		if err = s.storage.MoveObject(r.Context(), files[0].Path, destination); err != nil {
+			s.error(w, r, err, http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	// move multiple files or folders
+	rPath := r.URL.Path
+	if !strings.HasSuffix(rPath, "/") {
+		rPath += "/"
+	}
 
 	var (
 		errs  error
@@ -316,11 +320,10 @@ func (s *Server) MoveFiles(w http.ResponseWriter, r *http.Request) {
 	for _, file := range files {
 		rFilePath := strings.TrimPrefix(file.Path, rPath)
 		if len(fileNames) > 0 && !slices.Contains(fileNames, strings.SplitN(rFilePath, "/", 2)[0]) {
-			warns = append(warns, fmt.Sprintf("file %s not found", rFilePath))
 			continue
 		}
 		if !s.hasFileAccess(userInfo, file) {
-			warns = append(warns, fmt.Sprintf("unauthorized to move file %s", rFilePath))
+			warns = append(warns, fmt.Sprintf("unauthorized to move file: %s", file.Path))
 			continue
 		}
 		newPath := path.Join(destination, rFilePath)
@@ -333,13 +336,12 @@ func (s *Server) MoveFiles(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 	}
-
 	if errs != nil {
 		s.error(w, r, errs, http.StatusInternalServerError)
 		return
 	}
-	if warns != nil {
-		s.warn(w, r, strings.Join(warns, ", "), http.StatusPartialContent)
+	if len(warns) > 0 {
+		s.warn(w, r, strings.Join(warns, ", "), http.StatusMultiStatus)
 		return
 	}
 
@@ -347,8 +349,6 @@ func (s *Server) MoveFiles(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) DeleteFiles(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
-
 	var fileNames []string
 	if err := json.NewDecoder(r.Body).Decode(&fileNames); err != nil && err != io.EOF {
 		s.error(w, r, err, http.StatusBadRequest)
@@ -360,24 +360,44 @@ func (s *Server) DeleteFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(files) == 0 {
+		s.error(w, r, errors.New("file not found"), http.StatusNotFound)
+		return
+	}
+
+	userInfo := GetUserInfo(r)
+	// delete specific file
+	if len(files) == 1 && files[0].Path == r.URL.Path {
+		if !s.hasFileAccess(userInfo, files[0]) {
+			s.error(w, r, fmt.Errorf("unauthorized to delete file: %s", files[0].Path), http.StatusUnauthorized)
+			return
+		}
+		if err = s.db.DeleteFile(r.Context(), files[0].Path); err != nil {
+			s.error(w, r, err, http.StatusInternalServerError)
+			return
+		}
+		if err = s.storage.DeleteObject(r.Context(), files[0].Path); err != nil {
+			s.error(w, r, err, http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
 	rPath := r.URL.Path
 	if !strings.HasSuffix(rPath, "/") {
 		rPath += "/"
 	}
-
-	userInfo := GetUserInfo(r)
-
 	var (
 		errs  error
 		warns []string
 	)
 	for _, file := range files {
 		if len(fileNames) > 0 && !slices.Contains(fileNames, strings.SplitN(strings.TrimPrefix(file.Path, rPath), "/", 2)[0]) {
-			warns = append(warns, fmt.Sprintf("file %s not found", file.Path))
 			continue
 		}
 		if !s.hasFileAccess(userInfo, file) {
-			warns = append(warns, fmt.Sprintf("unauthorized to delete file %s", file.Path))
+			warns = append(warns, fmt.Sprintf("unauthorized to delete file: %s", file.Path))
 			continue
 		}
 		if err = s.db.DeleteFile(r.Context(), file.Path); err != nil {
@@ -389,24 +409,83 @@ func (s *Server) DeleteFiles(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 	}
-
 	if errs != nil {
 		s.error(w, r, errs, http.StatusInternalServerError)
 		return
 	}
-	if warns != nil {
-		s.warn(w, r, strings.Join(warns, ", "), http.StatusPartialContent)
+	if len(warns) > 0 {
+		s.warn(w, r, strings.Join(warns, ", "), http.StatusMultiStatus)
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-type ParsedFile struct {
+func (s *Server) writeFile(ctx context.Context, w io.Writer, fullPath string, start *int64, end *int64) error {
+	obj, err := s.storage.GetObject(ctx, fullPath, start, end)
+	if err != nil {
+		return err
+	}
+	if _, err = io.Copy(w, obj); err != nil {
+		return err
+	}
+	return nil
+}
+
+type parsedFile struct {
 	Path        string
+	Description string
 	Size        uint64
 	ContentType string
-	Description string
+	Content     io.ReadCloser
+}
+
+func (s *Server) parseMultipartBody(r *http.Request) (*parsedFile, error) {
+	mr, err := r.MultipartReader()
+	if err != nil {
+		return nil, err
+	}
+
+	part, err := mr.NextPart()
+	if err != nil {
+		return nil, err
+	}
+
+	if part.FormName() != "json" {
+		return nil, errors.New("json field not found")
+	}
+
+	var file FileRequest
+	if err = json.NewDecoder(part).Decode(&file); err != nil {
+		return nil, err
+	}
+
+	part, err = mr.NextPart()
+	if err != nil {
+		return nil, err
+	}
+
+	if part.FormName() != "file" {
+		return nil, errors.New("file field not found")
+	}
+
+	contentType := part.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	dir := r.URL.Path
+	if r.Method == http.MethodPatch {
+		dir = file.Dir
+	}
+
+	return &parsedFile{
+		Path:        path.Join(dir, part.FileName()),
+		Description: file.Description,
+		Size:        file.Size,
+		ContentType: contentType,
+		Content:     part,
+	}, nil
 }
 
 func parseRange(rangeHeader string) (*int64, *int64, error) {
@@ -433,51 +512,4 @@ func parseRange(rangeHeader string) (*int64, *int64, error) {
 	}
 
 	return nil, nil, fmt.Errorf("invalid range header: %s", rangeHeader)
-}
-
-func (s *Server) parseMultipart(r *http.Request) (*ParsedFile, io.ReadCloser, error) {
-	mr, err := r.MultipartReader()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	part, err := mr.NextPart()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if part.FormName() != "json" {
-		return nil, nil, errors.New("json field not found")
-	}
-
-	var file FileRequest
-	if err = json.NewDecoder(part).Decode(&file); err != nil {
-		return nil, nil, err
-	}
-
-	part, err = mr.NextPart()
-	if err == io.EOF {
-		return nil, nil, errors.New("not enough files")
-	}
-	if err != nil {
-		return nil, nil, err
-	}
-
-	contentType := part.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "application/octet-stream"
-	}
-
-	dir := r.URL.Path
-	if r.Method == http.MethodPatch {
-		dir = file.Dir
-	}
-	parsedFile := ParsedFile{
-		Path:        path.Join(dir, part.FileName()),
-		Size:        file.Size,
-		ContentType: contentType,
-		Description: file.Description,
-	}
-
-	return &parsedFile, part, nil
 }
