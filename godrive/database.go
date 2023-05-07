@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"path/filepath"
+	"path"
 	"strings"
 	"time"
 
@@ -216,15 +216,15 @@ func (d *DB) DeleteFile(ctx context.Context, path string) error {
 
 func (d *DB) GetFilePermissions(ctx context.Context, filePaths []string) ([]FilePermissions, error) {
 	var paths []string
-	for _, path := range filePaths {
+	for _, filePath := range filePaths {
 		for {
-			if !slices.Contains(paths, path) {
-				paths = append(paths, path)
+			if !slices.Contains(paths, filePath) {
+				paths = append(paths, filePath)
 			}
-			if path == "/" {
+			if filePath == "/" {
 				break
 			}
-			path = filepath.Dir(path)
+			filePath = path.Dir(filePath)
 		}
 	}
 
@@ -233,7 +233,7 @@ func (d *DB) GetFilePermissions(ctx context.Context, filePaths []string) ([]File
 		return nil, err
 	}
 	var permissions []FilePermissions
-	if err = d.dbx.SelectContext(ctx, &permissions, query, args...); err != nil {
+	if err = d.dbx.SelectContext(ctx, &permissions, d.dbx.Rebind(query), args...); err != nil {
 		return nil, fmt.Errorf("error getting path permissions: %w", err)
 	}
 	return permissions, nil
@@ -285,7 +285,7 @@ func (d *DB) UpsertUser(ctx context.Context, id string, username string, email s
 	if err != nil {
 		return fmt.Errorf("error upserting user: %w", err)
 	}
-	if err = d.dbx.GetContext(ctx, &home, query, args...); err != nil {
+	if err = d.dbx.GetContext(ctx, &home, d.dbx.Rebind(query), args...); err != nil {
 		return fmt.Errorf("error upserting user: %w", err)
 	}
 	return d.UpsertFilePermission(ctx, home, PermissionsAll, ObjectTypeUser, user.ID)
