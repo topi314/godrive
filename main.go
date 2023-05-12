@@ -130,8 +130,8 @@ func main() {
 	}
 
 	funcs := template.FuncMap{
-		"humanizeTime":  humanize.Time,
-		"humanizeBytes": humanize.Bytes,
+		"humanizeTime":   humanize.Time,
+		"humanizeIBytes": humanize.IBytes,
 		"isLast": func(slice any, index int) bool {
 			return reflect.ValueOf(slice).Len()-1 == index
 		},
