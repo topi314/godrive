@@ -3,6 +3,7 @@ package godrive
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -129,22 +130,24 @@ func (c StorageConfig) String() string {
 }
 
 type AuthConfig struct {
-	Secure       bool       `cfg:"secure"`
-	Issuer       string     `cfg:"issuer"`
-	ClientID     string     `cfg:"client_id"`
-	ClientSecret string     `cfg:"client_secret"`
-	RedirectURL  string     `cfg:"redirect_url"`
-	DefaultHome  string     `cfg:"default_home"`
-	Groups       AuthGroups `cfg:"groups"`
+	Secure               bool          `cfg:"secure"`
+	Issuer               string        `cfg:"issuer"`
+	ClientID             string        `cfg:"client_id"`
+	ClientSecret         string        `cfg:"client_secret"`
+	RedirectURL          string        `cfg:"redirect_url"`
+	RefreshTokenLifespan time.Duration `cfg:"refresh_token_lifespan"`
+	DefaultHome          string        `cfg:"default_home"`
+	Groups               AuthGroups    `cfg:"groups"`
 }
 
 func (c AuthConfig) String() string {
-	return fmt.Sprintf("\n  Secure: %t\n  Issuer: %s\n  ClientID: %s\n  ClientSecret: %s\n  RedirectURL: %s\n  DefaultHome: %s\n  Groups: %s",
+	return fmt.Sprintf("\n  Secure: %t\n  Issuer: %s\n  ClientID: %s\n  ClientSecret: %s\n  RedirectURL: %s\n  RefreshTokenLifespan: %s\n  DefaultHome: %s\n  Groups: %s",
 		c.Secure,
 		c.Issuer,
 		c.ClientID,
 		strings.Repeat("*", len(c.ClientSecret)),
 		c.RedirectURL,
+		c.RefreshTokenLifespan,
 		c.DefaultHome,
 		c.Groups,
 	)
