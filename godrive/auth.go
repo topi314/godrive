@@ -262,13 +262,13 @@ func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.setCookie(w, "access_token", token.AccessToken, token.Expiry.Sub(time.Now()))
-	s.setCookie(w, "refresh_token", token.RefreshToken, time.Hour*24*30)
-
 	if err = s.db.UpsertUser(r.Context(), idToken.Subject, userInfo.Username, userInfo.Email, path.Join(s.cfg.Auth.DefaultHome, userInfo.Username)); err != nil {
 		s.error(w, r, err, http.StatusInternalServerError)
 		return
 	}
+
+	s.setCookie(w, "access_token", token.AccessToken, token.Expiry.Sub(time.Now())-time.Minute)
+	s.setCookie(w, "refresh_token", token.RefreshToken, s.cfg.Auth.RefreshTokenLifespan-time.Minute)
 
 	http.Redirect(w, r, "/", http.StatusFound)
 }
