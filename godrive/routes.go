@@ -11,10 +11,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/riandyrn/otelchi"
 )
 
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
+	r.Use(otelchi.Middleware("gobin", otelchi.WithChiRoutes(r)))
 	r.Use(middleware.CleanPath)
 	r.Use(middleware.StripSlashes)
 	r.Use(middleware.RealIP)

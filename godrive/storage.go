@@ -10,6 +10,7 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 func NewStorage(ctx context.Context, config StorageConfig) (Storage, error) {
@@ -119,9 +120,10 @@ func (l *localStorage) cleanup() error {
 
 func newS3Storage(ctx context.Context, config StorageConfig) (Storage, error) {
 	client, err := minio.New(config.Endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(config.AccessKeyID, config.SecretAccessKey, ""),
-		Secure: config.Secure,
-		Region: config.Region,
+		Creds:     credentials.NewStaticV4(config.AccessKeyID, config.SecretAccessKey, ""),
+		Secure:    config.Secure,
+		Transport: otelhttp.NewTransport(nil),
+		Region:    config.Region,
 	})
 	if err != nil {
 		return nil, err

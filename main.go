@@ -22,6 +22,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/dustin/go-humanize"
 	"github.com/topisenpai/godrive/godrive"
+	"golang.org/x/exp/slog"
 	"golang.org/x/oauth2"
 
 	"github.com/mitchellh/mapstructure"
@@ -30,9 +31,12 @@ import (
 
 // These variables are set via the -ldflags option in go build
 var (
-	version   = "unknown"
-	commit    = "unknown"
-	buildTime = "unknown"
+	Name      = "godrive"
+	Namespace = "github.com/topisenpai/godrive"
+
+	Version   = "unknown"
+	Commit    = "unknown"
+	BuildTime = "unknown"
 )
 
 var (
@@ -47,7 +51,6 @@ var (
 )
 
 func main() {
-	log.Printf("Starting godrive with version: %s (commit: %s, build time: %s)...", version, commit, buildTime)
 	cfgPath := flag.String("config", "", "path to godrive.json")
 	flag.Parse()
 
@@ -88,6 +91,9 @@ func main() {
 	}); err != nil {
 		log.Fatalln("Error while unmarshalling config:", err)
 	}
+	setupLogger(cfg.Log)
+	buildTime, _ := time.Parse(time.RFC3339, BuildTime)
+	log.Printf("Starting godrive with version: %s (commit: %s, build time: %s)...", Version, Commit, buildTime)
 	log.Println("Config:", cfg)
 
 	if cfg.Debug {
@@ -185,7 +191,7 @@ func main() {
 		assets = http.FS(Assets)
 	}
 
-	s := godrive.NewServer(godrive.FormatBuildVersion(version, commit, buildTime), cfg, db, auth, storage, assets, tmplFunc, jsFunc, cssFunc)
+	s := godrive.NewServer(godrive.FormatBuildVersion(Version, Commit, buildTime), cfg, db, auth, storage, assets, tmplFunc, jsFunc, cssFunc)
 	log.Println("godrive listening on:", cfg.ListenAddr)
 	go s.Start()
 	defer s.Close()
@@ -205,4 +211,18 @@ func writeDir(fs fs.FS, pattern string) func(w io.Writer) error {
 		_, err = io.Copy(w, fr)
 		return err
 	}
+}
+
+func setupLogger(cfg godrive.LogConfig) {
+	opts := &slog.HandlerOptions{
+		AddSource: cfg.AddSource,
+		Level:     cfg.Level,
+	}
+	var handler slog.Handler
+	if cfg.Format == "json" {
+		handler = slog.NewJSONHandler(os.Stdout, opts)
+	} else {
+		handler = slog.NewTextHandler(os.Stdout, opts)
+	}
+	slog.SetDefault(slog.New(handler))
 }
