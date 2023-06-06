@@ -21,7 +21,7 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/dustin/go-humanize"
-	"github.com/topisenpai/godrive/godrive"
+	"github.com/topi314/godrive/godrive"
 	"golang.org/x/exp/slog"
 	"golang.org/x/oauth2"
 
@@ -32,7 +32,7 @@ import (
 // These variables are set via the -ldflags option in go build
 var (
 	Name      = "godrive"
-	Namespace = "github.com/topisenpai/godrive"
+	Namespace = "github.com/topi314/godrive"
 
 	Version   = "unknown"
 	Commit    = "unknown"

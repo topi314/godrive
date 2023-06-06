@@ -1,4 +1,4 @@
-module github.com/topisenpai/godrive
+module github.com/topi314/godrive
 
 go 1.20
 
