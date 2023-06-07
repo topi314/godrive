@@ -6,12 +6,11 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/topisenpai/godrive/godrive"
+	"github.com/topi314/godrive/godrive"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/metric/global"
 	"go.opentelemetry.io/otel/propagation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -74,7 +73,7 @@ func newMeter(cfg godrive.OtelConfig) (metric.Meter, error) {
 		sdkmetric.WithReader(exp),
 		sdkmetric.WithResource(resources(cfg)),
 	)
-	global.SetMeterProvider(mp)
+	otel.SetMeterProvider(mp)
 
 	go func() {
 		server := &http.Server{
