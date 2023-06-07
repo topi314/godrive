@@ -11,14 +11,17 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
-func NewStorage(ctx context.Context, config StorageConfig) (Storage, error) {
+func NewStorage(ctx context.Context, config StorageConfig, tracer trace.Tracer) (Storage, error) {
 	switch config.Type {
 	case StorageTypeLocal:
-		return newLocalStorage(config)
+		return newLocalStorage(config, tracer)
 	case StorageTypeS3:
-		return newS3Storage(ctx, config)
+		return newS3Storage(ctx, config, tracer)
 	}
 	return nil, errors.New("unknown storage type")
 }
@@ -30,13 +33,14 @@ type Storage interface {
 	DeleteObject(ctx context.Context, filePath string) error
 }
 
-func newLocalStorage(config StorageConfig) (Storage, error) {
+func newLocalStorage(config StorageConfig, tracer trace.Tracer) (Storage, error) {
 	if err := os.MkdirAll(config.Path, 0777); err != nil {
 		return nil, fmt.Errorf("failed to create storage directory: %w", err)
 	}
 
 	l := &localStorage{
-		path: config.Path,
+		path:   config.Path,
+		tracer: tracer,
 	}
 	if err := l.cleanup(); err != nil {
 		return nil, fmt.Errorf("failed to cleanup storage directory: %w", err)
@@ -46,12 +50,26 @@ func newLocalStorage(config StorageConfig) (Storage, error) {
 }
 
 type localStorage struct {
-	path string
+	path   string
+	tracer trace.Tracer
 }
 
-func (l *localStorage) GetObject(_ context.Context, filePath string, start *int64, end *int64) (io.ReadCloser, error) {
+func (l *localStorage) GetObject(ctx context.Context, filePath string, start *int64, end *int64) (io.ReadCloser, error) {
+	attrs := []attribute.KeyValue{
+		attribute.String("filePath", filePath),
+	}
+	if start != nil {
+		attrs = append(attrs, attribute.Int64("start", *start))
+	}
+	if end != nil {
+		attrs = append(attrs, attribute.Int64("end", *end))
+	}
+	ctx, span := l.tracer.Start(ctx, "localStorage.GetObject", trace.WithAttributes(attrs...))
+	defer span.End()
 	file, err := os.Open(l.path + filePath)
 	if err != nil {
+		span.SetStatus(codes.Error, "failed to open file")
+		span.RecordError(err)
 		return nil, err
 	}
 
@@ -83,32 +101,62 @@ func (l *limitedReader) Close() error {
 	return nil
 }
 
-func (l *localStorage) PutObject(_ context.Context, filePath string, _ uint64, reader io.Reader, _ string) error {
+func (l *localStorage) PutObject(ctx context.Context, filePath string, size uint64, reader io.Reader, contentType string) error {
+	ctx, span := l.tracer.Start(ctx, "localStorage.PutObject", trace.WithAttributes(
+		attribute.String("filePath", filePath),
+		attribute.Int64("size", int64(size)),
+		attribute.String("contentType", contentType),
+	))
+	defer span.End()
+
 	if err := os.MkdirAll(path.Dir(l.path+filePath), 0777); err != nil {
+		span.SetStatus(codes.Error, "failed to create directory")
+		span.RecordError(err)
 		return err
 	}
 	file, err := os.Create(l.path + filePath)
 	if err != nil {
+		span.SetStatus(codes.Error, "failed to create file")
+		span.RecordError(err)
 		return err
 	}
 	defer file.Close()
 
 	_, err = io.Copy(file, reader)
+	if err != nil {
+		span.SetStatus(codes.Error, "failed to copy file")
+		span.RecordError(err)
+	}
 	return err
 }
 
-func (l *localStorage) MoveObject(_ context.Context, from string, to string) error {
+func (l *localStorage) MoveObject(ctx context.Context, from string, to string) error {
+	ctx, span := l.tracer.Start(ctx, "localStorage.MoveObject", trace.WithAttributes(
+		attribute.String("from", from),
+		attribute.String("to", to),
+	))
+	defer span.End()
 	if err := os.MkdirAll(path.Dir(l.path+to), 0777); err != nil {
+		span.SetStatus(codes.Error, "failed to create directory")
+		span.RecordError(err)
 		return err
 	}
 	if err := os.Rename(l.path+from, l.path+to); err != nil {
+		span.SetStatus(codes.Error, "failed to rename file")
+		span.RecordError(err)
 		return err
 	}
 	return l.cleanup()
 }
 
-func (l *localStorage) DeleteObject(_ context.Context, filePath string) error {
+func (l *localStorage) DeleteObject(ctx context.Context, filePath string) error {
+	ctx, span := l.tracer.Start(ctx, "localStorage.DeleteObject", trace.WithAttributes(
+		attribute.String("filePath", filePath),
+	))
+	defer span.End()
 	if err := os.Remove(l.path + filePath); err != nil {
+		span.SetStatus(codes.Error, "failed to delete file")
+		span.RecordError(err)
 		return err
 	}
 	return l.cleanup()
@@ -118,7 +166,7 @@ func (l *localStorage) cleanup() error {
 	return nil
 }
 
-func newS3Storage(ctx context.Context, config StorageConfig) (Storage, error) {
+func newS3Storage(ctx context.Context, config StorageConfig, tracer trace.Tracer) (Storage, error) {
 	client, err := minio.New(config.Endpoint, &minio.Options{
 		Creds:     credentials.NewStaticV4(config.AccessKeyID, config.SecretAccessKey, ""),
 		Secure:    config.Secure,
@@ -144,25 +192,50 @@ func newS3Storage(ctx context.Context, config StorageConfig) (Storage, error) {
 	return &s3Storage{
 		client: client,
 		bucket: config.Bucket,
+		tracer: tracer,
 	}, nil
 }
 
 type s3Storage struct {
 	client *minio.Client
 	bucket string
+	tracer trace.Tracer
 }
 
 func (s *s3Storage) GetObject(ctx context.Context, filePath string, start *int64, end *int64) (io.ReadCloser, error) {
+	attrs := []attribute.KeyValue{
+		attribute.String("filePath", filePath),
+	}
+	if start != nil {
+		attrs = append(attrs, attribute.Int64("start", *start))
+	}
+	if end != nil {
+		attrs = append(attrs, attribute.Int64("end", *end))
+	}
+	ctx, span := s.tracer.Start(ctx, "s3Storage.GetObject", trace.WithAttributes(attrs...))
+	defer span.End()
 	opts := minio.GetObjectOptions{}
 	if start != nil && end != nil {
 		if err := opts.SetRange(*start, *end); err != nil {
+			span.SetStatus(codes.Error, "failed to set range")
+			span.RecordError(err)
 			return nil, fmt.Errorf("failed to set range: %w", err)
 		}
 	}
-	return s.client.GetObject(ctx, s.bucket, filePath, opts)
+	r, err := s.client.GetObject(ctx, s.bucket, filePath, opts)
+	if err != nil {
+		span.SetStatus(codes.Error, "failed to get object")
+		span.RecordError(err)
+	}
+	return r, err
 }
 
 func (s *s3Storage) MoveObject(ctx context.Context, from string, to string) error {
+	ctx, span := s.tracer.Start(ctx, "s3Storage.MoveObject", trace.WithAttributes(
+		attribute.String("from", from),
+		attribute.String("to", to),
+	))
+	defer span.End()
 	_, err := s.client.CopyObject(ctx, minio.CopyDestOptions{
 		Bucket: s.bucket,
 		Object: to,
@@ -171,18 +244,44 @@ func (s *s3Storage) MoveObject(ctx context.Context, from string, to string) erro
 		Object: from,
 	})
 	if err != nil {
+		span.SetStatus(codes.Error, "failed to copy object")
+		span.RecordError(err)
 		return err
 	}
-	return s.client.RemoveObject(ctx, s.bucket, from, minio.RemoveObjectOptions{})
+	err = s.client.RemoveObject(ctx, s.bucket, from, minio.RemoveObjectOptions{})
+	if err != nil {
+		span.SetStatus(codes.Error, "failed to remove object")
+		span.RecordError(err)
+	}
+	return err
 }
 
 func (s *s3Storage) PutObject(ctx context.Context, filePath string, size uint64, reader io.Reader, contentType string) error {
+	ctx, span := s.tracer.Start(ctx, "s3Storage.PutObject", trace.WithAttributes(
+		attribute.String("filePath", filePath),
+		attribute.Int64("size", int64(size)),
+		attribute.String("contentType", contentType),
+	))
+	defer span.End()
 	_, err := s.client.PutObject(ctx, s.bucket, filePath, reader, int64(size), minio.PutObjectOptions{
 		ContentType: contentType,
 	})
+	if err != nil {
+		span.SetStatus(codes.Error, "failed to put object")
+		span.RecordError(err)
+	}
 	return err
 }
 
 func (s *s3Storage) DeleteObject(ctx context.Context, filePath string) error {
-	return s.client.RemoveObject(ctx, s.bucket, filePath, minio.RemoveObjectOptions{})
+	ctx, span := s.tracer.Start(ctx, "s3Storage.DeleteObject", trace.WithAttributes(
+		attribute.String("filePath", filePath),
+	))
+	defer span.End()
+	err := s.client.RemoveObject(ctx, s.bucket, filePath, minio.RemoveObjectOptions{})
+	if err != nil {
+		span.SetStatus(codes.Error, "failed to remove object")
+		span.RecordError(err)
+	}
+	return err
 }

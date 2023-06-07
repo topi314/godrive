@@ -7,7 +7,6 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -20,6 +19,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.18.0"
+	"golang.org/x/exp/slog"
 	"modernc.org/sqlite"
 	_ "modernc.org/sqlite"
 )
@@ -76,7 +76,11 @@ func NewDB(ctx context.Context, cfg DatabaseConfig, schema string) (*DB, error) 
 		if cfg.Debug {
 			pgCfg.Tracer = &tracelog.TraceLog{
 				Logger: tracelog.LoggerFunc(func(ctx context.Context, level tracelog.LogLevel, msg string, data map[string]any) {
-					log.Println(msg, data)
+					args := make([]any, 0, len(data))
+					for k, v := range data {
+						args = append(args, slog.Any(k, v))
+					}
+					slog.DebugCtx(ctx, msg, slog.Group("data", args...))
 				}),
 				LogLevel: tracelog.LogLevelDebug,
 			}
@@ -123,11 +127,6 @@ func NewDB(ctx context.Context, cfg DatabaseConfig, schema string) (*DB, error) 
 	if err = dbx.PingContext(ctx); err != nil {
 		return nil, err
 	}
-	// execute schema
-	if _, err = dbx.ExecContext(ctx, schema); err != nil {
-		return nil, err
-	}
-
 	// execute schema
 	if _, err = dbx.ExecContext(ctx, schema); err != nil {
 		return nil, err

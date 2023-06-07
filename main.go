@@ -10,7 +10,6 @@ import (
 	"html/template"
 	"io"
 	"io/fs"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -22,6 +21,8 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/dustin/go-humanize"
 	"github.com/topi314/godrive/godrive"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/slog"
 	"golang.org/x/oauth2"
 
@@ -79,7 +80,8 @@ func main() {
 		viper.AddConfigPath("/etc/godrive/")
 	}
 	if err := viper.ReadInConfig(); err != nil {
-		log.Fatalln("Error while reading config:", err)
+		slog.Error("Error while reading config", slog.Any("err", err))
+		os.Exit(-1)
 	}
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.SetEnvPrefix("godrive")
@@ -89,22 +91,37 @@ func main() {
 	if err := viper.Unmarshal(&cfg, func(config *mapstructure.DecoderConfig) {
 		config.TagName = "cfg"
 	}); err != nil {
-		log.Fatalln("Error while unmarshalling config:", err)
+		slog.Error("Error while unmarshalling config", slog.Any("err", err))
+		os.Exit(-1)
 	}
 	setupLogger(cfg.Log)
 	buildTime, _ := time.Parse(time.RFC3339, BuildTime)
-	log.Printf("Starting godrive with version: %s (commit: %s, build time: %s)...", Version, Commit, buildTime)
-	log.Println("Config:", cfg)
+	slog.Info("Starting godrive", slog.Any("version", Version), slog.Any("commit", Commit), slog.Any("buildTime", buildTime), slog.Any("config", cfg))
 
-	if cfg.Debug {
-		log.SetFlags(log.LstdFlags | log.Lshortfile)
+	var (
+		tracer trace.Tracer
+		meter  metric.Meter
+		err    error
+	)
+	if cfg.Otel != nil {
+		tracer, err = newTracer(*cfg.Otel)
+		if err != nil {
+			slog.Error("Error while creating tracer", slog.Any("err", err))
+			os.Exit(1)
+		}
+		meter, err = newMeter(*cfg.Otel)
+		if err != nil {
+			slog.Error("Error while creating meter", slog.Any("err", err))
+			os.Exit(1)
+		}
 	}
 
 	var auth *godrive.Auth
 	if cfg.Auth != nil {
 		provider, err := oidc.NewProvider(context.Background(), cfg.Auth.Issuer)
 		if err != nil {
-			log.Fatalln("Error while creating Auth provider:", err)
+			slog.Error("Error while creating oidc provider", slog.Any("err", err))
+			os.Exit(-1)
 		}
 
 		auth = &godrive.Auth{
@@ -128,13 +145,15 @@ func main() {
 	defer cancel()
 	db, err := godrive.NewDB(ctx, cfg.Database, Schema)
 	if err != nil {
-		log.Fatalln("Error while connecting to database:", err)
+		slog.Error("Error while connecting to database", slog.Any("err", err))
+		os.Exit(-1)
 	}
 	defer db.Close()
 
-	storage, err := godrive.NewStorage(context.Background(), cfg.Storage)
+	storage, err := godrive.NewStorage(context.Background(), cfg.Storage, tracer)
 	if err != nil {
-		log.Fatalln("Error while creating storage:", err)
+		slog.Error("Error while creating storage", slog.Any("err", err))
+		os.Exit(-1)
 	}
 
 	funcs := template.FuncMap{
@@ -158,7 +177,7 @@ func main() {
 		assets   http.FileSystem
 	)
 	if cfg.DevMode {
-		log.Println("Development mode enabled")
+		slog.Info("Running in dev mode")
 		tmplFunc = func(wr io.Writer, name string, data any) error {
 			tmpl := template.New("").Funcs(funcs)
 			tmpl = template.Must(tmpl.ParseGlob("templates/*"))
@@ -174,12 +193,12 @@ func main() {
 
 		jsBuff := new(bytes.Buffer)
 		if err = writeDir(Assets, "assets/js/*")(jsBuff); err != nil {
-			log.Fatalln("Error while minifying js:", err)
+			slog.Error("Error while minifying js", slog.Any("err", err))
 		}
 
 		cssBuff := new(bytes.Buffer)
 		if err = writeDir(Assets, "assets/css/*")(cssBuff); err != nil {
-			log.Fatalln("Error while minifying css:", err)
+			slog.Error("Error while minifying css", slog.Any("err", err))
 		}
 
 		jsFunc = func(w io.Writer) error {
@@ -193,8 +212,8 @@ func main() {
 		assets = http.FS(Assets)
 	}
 
-	s := godrive.NewServer(godrive.FormatBuildVersion(Version, Commit, buildTime), cfg, db, auth, storage, assets, tmplFunc, jsFunc, cssFunc)
-	log.Println("godrive listening on:", cfg.ListenAddr)
+	s := godrive.NewServer(godrive.FormatBuildVersion(Version, Commit, buildTime), cfg, db, auth, storage, tracer, meter, assets, tmplFunc, jsFunc, cssFunc)
+	slog.Info("godrive listening", slog.String("listen_addr", cfg.ListenAddr))
 	go s.Start()
 	defer s.Close()
 

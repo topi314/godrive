@@ -1,17 +1,17 @@
 package godrive
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/riandyrn/otelchi"
+	"github.com/topi314/godrive/internal/log"
+	"golang.org/x/exp/slog"
 )
 
 func (s *Server) Routes() http.Handler {
@@ -22,9 +22,7 @@ func (s *Server) Routes() http.Handler {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Maybe(
-		middleware.RequestLogger(&middleware.DefaultLogFormatter{
-			Logger: log.Default(),
-		}),
+		log.StructuredLogger,
 		func(r *http.Request) bool {
 			// Don't log requests for assets
 			return !strings.HasPrefix(r.URL.Path, "/assets")
@@ -122,7 +120,7 @@ func (s *Server) GetSettings(w http.ResponseWriter, r *http.Request) {
 		Users: templateUsers,
 	}
 	if err = s.tmpl(w, "settings.gohtml", vars); err != nil {
-		s.log(r, "template", err)
+		slog.ErrorCtx(r.Context(), "error rendering template", slog.Any("err", err))
 	}
 }
 
@@ -134,7 +132,7 @@ func (s *Server) handleWriter(wf WriterFunc, mediaType string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", mediaType)
 		if err := wf(w); err != nil {
-			s.log(r, "writer", err)
+			slog.ErrorCtx(r.Context(), "error writing response", slog.Any("err", err))
 		}
 	})
 }
@@ -145,19 +143,12 @@ func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) log(r *http.Request, logType string, err error) {
-	if errors.Is(err, context.DeadlineExceeded) {
-		return
-	}
-	log.Printf("Error while handling %s(%s) %s: %s\n", logType, middleware.GetReqID(r.Context()), r.RequestURI, err)
-}
-
 func (s *Server) error(w http.ResponseWriter, r *http.Request, err error, status int) {
 	if errors.Is(err, http.ErrHandlerTimeout) {
 		return
 	}
 	if status == http.StatusInternalServerError {
-		s.log(r, "request", err)
+		slog.ErrorCtx(r.Context(), "internal server error", slog.Any("err", err))
 	}
 	s.json(w, r, ErrorResponse{
 		Message:   err.Error(),
@@ -178,7 +169,7 @@ func (s *Server) warn(w http.ResponseWriter, r *http.Request, message string, st
 
 func (s *Server) prettyError(w http.ResponseWriter, r *http.Request, err error, status int) {
 	if status == http.StatusInternalServerError {
-		s.log(r, "pretty request", err)
+		slog.ErrorCtx(r.Context(), "internal server error", slog.Any("err", err))
 	}
 	w.WriteHeader(status)
 
@@ -190,7 +181,7 @@ func (s *Server) prettyError(w http.ResponseWriter, r *http.Request, err error, 
 		"Theme":     "dark",
 	}
 	if tmplErr := s.tmpl(w, "error.gohtml", vars); tmplErr != nil {
-		s.log(r, "template", tmplErr)
+		slog.ErrorCtx(r.Context(), "failed to execute error template", slog.Any("err", tmplErr))
 	}
 }
 
@@ -206,7 +197,7 @@ func (s *Server) json(w http.ResponseWriter, r *http.Request, v any, status int)
 	}
 
 	if err := json.NewEncoder(w).Encode(v); err != nil && err != http.ErrHandlerTimeout {
-		s.log(r, "json", err)
+		slog.ErrorCtx(r.Context(), "failed to encode json", slog.Any("err", err))
 	}
 }
 

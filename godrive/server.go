@@ -3,12 +3,15 @@ package godrive
 import (
 	"fmt"
 	"io"
-	"log"
 	"math/rand"
 	"net/http"
 	"runtime"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/exp/slog"
 )
 
 type (
@@ -16,13 +19,15 @@ type (
 	WriterFunc          func(w io.Writer) error
 )
 
-func NewServer(version string, cfg Config, db *DB, auth *Auth, storage Storage, assets http.FileSystem, tmpl ExecuteTemplateFunc, js WriterFunc, css WriterFunc) *Server {
+func NewServer(version string, cfg Config, db *DB, auth *Auth, storage Storage, tracer trace.Tracer, meter metric.Meter, assets http.FileSystem, tmpl ExecuteTemplateFunc, js WriterFunc, css WriterFunc) *Server {
 	s := &Server{
 		version: version,
 		cfg:     cfg,
 		db:      db,
 		auth:    auth,
 		storage: storage,
+		tracer:  tracer,
+		meter:   meter,
 		assets:  assets,
 		tmpl:    tmpl,
 		js:      js,
@@ -45,6 +50,8 @@ type Server struct {
 	server  *http.Server
 	auth    *Auth
 	storage Storage
+	tracer  trace.Tracer
+	meter   metric.Meter
 	assets  http.FileSystem
 	tmpl    ExecuteTemplateFunc
 	js      WriterFunc
@@ -54,17 +61,17 @@ type Server struct {
 
 func (s *Server) Start() {
 	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalln("Error while listening:", err)
+		slog.Error("Error while listening", slog.Any("err", err))
 	}
 }
 
 func (s *Server) Close() {
 	if err := s.server.Close(); err != nil {
-		log.Println("Error while closing server:", err)
+		slog.Error("Error while closing server", slog.Any("err", err))
 	}
 
 	if err := s.db.Close(); err != nil {
-		log.Println("Error while closing database:", err)
+		slog.Error("Error while closing database", slog.Any("err", err))
 	}
 }
 
