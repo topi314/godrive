@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"net/http"
 	"path"
+	"sync"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/exp/slices"
+	"golang.org/x/exp/slog"
 	"golang.org/x/oauth2"
 )
 
@@ -21,6 +23,20 @@ type Auth struct {
 	Verifier *oidc.IDTokenVerifier
 	Config   *oauth2.Config
 	Provider *oidc.Provider
+
+	// session id <-> id token
+	Sessions   map[string]*Session
+	SessionsMu sync.Mutex
+	// state <-> nonce
+	States   map[string]string
+	StatesMu sync.Mutex
+}
+
+type Session struct {
+	AccessToken  string
+	Expiry       time.Time
+	RefreshToken string
+	IDToken      string
 }
 
 type UserInfo struct {
@@ -71,77 +87,94 @@ func (s *Server) isGuest(info *UserInfo) bool {
 	return slices.Contains(info.Groups, "guest")
 }
 
-func (s *Server) setCookie(w http.ResponseWriter, name string, value string, maxAge time.Duration) {
+const SessionCookieName = "X-Session-ID"
+
+func (s *Server) setSession(w http.ResponseWriter, sessionID string, session *Session) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     name,
-		Value:    value,
+		Name:     SessionCookieName,
+		Value:    sessionID,
 		Path:     "/",
-		MaxAge:   int(maxAge.Seconds()),
 		Secure:   s.cfg.Auth.Secure,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
+
+	s.auth.SessionsMu.Lock()
+	defer s.auth.SessionsMu.Unlock()
+	s.auth.Sessions[sessionID] = session
 }
 
-func (s *Server) removeCookie(w http.ResponseWriter, name string) {
+func (s *Server) removeSession(w http.ResponseWriter, sessionID string) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     name,
+		Name:     SessionCookieName,
 		Path:     "/",
 		MaxAge:   -1,
 		Secure:   s.cfg.Auth.Secure,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
+
+	s.auth.SessionsMu.Lock()
+	defer s.auth.SessionsMu.Unlock()
+	delete(s.auth.Sessions, sessionID)
 }
 
 func (s *Server) Auth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var (
-			accessToken  string
-			expiry       time.Time
-			refreshToken string
-		)
-		if cookie, err := r.Cookie("access_token"); err == nil {
-			accessToken = cookie.Value
-			expiry = cookie.Expires
-		}
-		if cookie, err := r.Cookie("refresh_token"); err == nil {
-			refreshToken = cookie.Value
+		var sessionID string
+		if cookie, err := r.Cookie(SessionCookieName); err == nil {
+			sessionID = cookie.Value
 		}
 
-		if accessToken == "" && refreshToken == "" {
+		if sessionID == "" {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		tk := s.auth.Config.TokenSource(r.Context(), &oauth2.Token{
-			AccessToken:  accessToken,
+		s.auth.SessionsMu.Lock()
+		session, ok := s.auth.Sessions[sessionID]
+		s.auth.SessionsMu.Unlock()
+		if !ok {
+			slog.Debug("session not found", slog.Any("sessionID", sessionID))
+			s.removeSession(w, sessionID)
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		tokenSource := s.auth.Config.TokenSource(r.Context(), &oauth2.Token{
+			AccessToken:  session.AccessToken,
 			TokenType:    "bearer",
-			RefreshToken: refreshToken,
-			Expiry:       expiry,
+			RefreshToken: session.RefreshToken,
+			Expiry:       session.Expiry,
 		})
 
-		userInfo, err := s.auth.Provider.UserInfo(r.Context(), tk)
+		token, err := tokenSource.Token()
 		if err != nil {
-			s.removeCookie(w, "access_token")
-			s.removeCookie(w, "refresh_token")
+			slog.Error("failed to get token", slog.Any("err", err))
+			s.removeSession(w, sessionID)
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		token, err := tk.Token()
-		if err != nil {
-			s.error(w, r, err, http.StatusInternalServerError)
-			return
-		}
-		if token.AccessToken != accessToken || token.RefreshToken != refreshToken {
-			s.setCookie(w, "access_token", token.AccessToken, token.Expiry.Sub(time.Now()))
-			s.setCookie(w, "refresh_token", token.RefreshToken, 90*time.Minute)
+		if token.AccessToken != session.AccessToken {
+			session.AccessToken = token.AccessToken
+			session.Expiry = token.Expiry
+			session.RefreshToken = token.RefreshToken
+			session.IDToken = token.Extra("id_token").(string)
 		}
 
-		info := new(UserInfo)
-		info.UserInfo = *userInfo
-		if err = userInfo.Claims(info); err != nil {
+		idToken, err := s.auth.Verifier.Verify(r.Context(), session.IDToken)
+		if err != nil {
+			slog.Error("failed to verify ID Token: %w", slog.Any("err", err), slog.Any("rawIDToken", session.IDToken))
+			s.removeSession(w, sessionID)
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		var info UserInfo
+		if err = idToken.Claims(&info); err != nil {
+			slog.Error("failed to parse claims: %w", slog.Any("err", err))
+			s.removeSession(w, sessionID)
 			s.error(w, r, err, http.StatusInternalServerError)
 			return
 		}
@@ -153,7 +186,7 @@ func (s *Server) Auth(next http.Handler) http.Handler {
 		}
 		info.Home = user.Home
 
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), UserInfoKey, info)))
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), UserInfoKey, &info)))
 	})
 }
 
@@ -198,28 +231,24 @@ func GetUserInfo(r *http.Request) *UserInfo {
 }
 
 func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
-	state := s.newID()
-	nonce := s.newID()
-	s.setCookie(w, "state", state, time.Minute)
-	s.setCookie(w, "nonce", nonce, time.Minute)
+	state := s.newID(16)
+	nonce := s.newID(16)
+	s.auth.States[state] = nonce
 	http.Redirect(w, r, s.auth.Config.AuthCodeURL(state, oidc.Nonce(nonce)), http.StatusFound)
 }
 
 func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
-	s.removeCookie(w, "access_token")
-	s.removeCookie(w, "refresh_token")
+	sessionID, err := r.Cookie("X-Session-ID")
+	if err == nil {
+		s.removeSession(w, sessionID.Value)
+	}
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
 func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
-	state, err := r.Cookie("state")
-	if err != nil {
-		s.prettyError(w, r, err, http.StatusBadRequest)
-		return
-	}
-	s.removeCookie(w, "state")
-	if state.Value != r.URL.Query().Get("state") {
-		s.prettyError(w, r, errors.New("invalid state"), http.StatusBadRequest)
+	nonce, ok := s.auth.States[r.URL.Query().Get("state")]
+	if !ok {
+		s.error(w, r, errors.New("invalid state"), http.StatusBadRequest)
 		return
 	}
 
@@ -240,13 +269,7 @@ func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	nonce, err := r.Cookie("nonce")
-	if err != nil {
-		s.prettyError(w, r, err, http.StatusBadRequest)
-		return
-	}
-	s.removeCookie(w, "nonce")
-	if idToken.Nonce != nonce.Value {
+	if idToken.Nonce != nonce {
 		s.prettyError(w, r, errors.New("invalid nonce"), http.StatusBadRequest)
 		return
 	}
@@ -267,8 +290,13 @@ func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.setCookie(w, "access_token", token.AccessToken, token.Expiry.Sub(time.Now())-time.Minute)
-	s.setCookie(w, "refresh_token", token.RefreshToken, s.cfg.Auth.RefreshTokenLifespan-time.Minute)
+	sessionID := s.newID(32)
+	s.setSession(w, sessionID, &Session{
+		AccessToken:  token.AccessToken,
+		RefreshToken: token.RefreshToken,
+		Expiry:       token.Expiry,
+		IDToken:      rawIDToken,
+	})
 
 	http.Redirect(w, r, "/", http.StatusFound)
 }

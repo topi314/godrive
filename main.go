@@ -113,6 +113,8 @@ func main() {
 				RedirectURL:  cfg.Auth.RedirectURL,
 				Scopes:       []string{oidc.ScopeOpenID, "groups", "email", "profile", oidc.ScopeOfflineAccess},
 			},
+			Sessions: map[string]*godrive.Session{},
+			States:   map[string]string{},
 		}
 	}
 

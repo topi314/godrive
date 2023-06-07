@@ -68,8 +68,8 @@ func (s *Server) Close() {
 	}
 }
 
-func (s *Server) newID() string {
-	b := make([]rune, 16)
+func (s *Server) newID(length int) string {
+	b := make([]rune, length)
 	for i := range b {
 		b[i] = letters[s.rand.Intn(len(letters))]
 	}
