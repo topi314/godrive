@@ -1,170 +1,279 @@
 {{ template "head.gohtml" . }}
 <body>
-<dialog id="upload-dialog">
-    <div>
-        <div class="dialog-header">
-            <h2>Upload</h2>
-        </div>
-        <div class="dialog-main">
-            <label for="upload-file-dir">
-                Directory
-                <input id="upload-file-dir" type="text" value="{{ .Path }}" autocomplete="off">
-            </label>
-            <div id="upload-files"></div>
-        </div>
-        <div class="dialog-footer">
-            <button id="upload-cancel-btn" class="btn danger">Cancel</button>
-            <button id="upload-confirm-btn" class="btn primary">Upload</button>
-        </div>
-    </div>
+<dialog v-scope id="upload-dialog" :open="uploadDialog.open">
+	<div>
+		<div class="dialog-header">
+			<h2>Upload</h2>
+		</div>
+		<div class="dialog-main">
+			<label for="upload-file-dir">
+				Directory
+				<input type="text" v-model="uploadDialog.dir" autocomplete="off">
+			</label>
+			<div>
+				[[ uploadDialog.files ]]
+			</div>
+			<div id="upload-files">
+				<div v-for="file in uploadDialog.files" class="upload-file">
+					<div>
+						<span class="icon icon-large file-icon"></span>
+					</div>
+
+					<div class="upload-file-content">
+						<div id="upload-file-fields">
+							<label for="file-${i}-name">Name</label>
+							<div><input type="text" id="file-${i}-name" v-model="file.name"></div>
+
+							<label for="file-${i}-description">Description</label>
+							<div><textarea id="file-${i}-description" v-model="file.description"></textarea></div>
+						</div>
+						<div id="upload-${i}-error" class="upload-error"></div>
+						<div class="progress">
+							<div id="upload-${i}-progress-bar" class="progress-bar"></div>
+						</div>
+					</div>
+
+					<div>
+						<button id="close" class="icon-btn" @click="uploadDialog.files.splice(uploadDialog.files.indexOf(file), 1)"></button>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="dialog-footer">
+			<button class="btn danger" @click="uploadDialog.open = false">Cancel</button>
+			<button class="btn primary" @click="uploadFiles">Upload</button>
+		</div>
+	</div>
 </dialog>
 <dialog id="edit-dialog">
-    <div>
-        <div class="dialog-header">
-            <h2>Edit</h2>
-        </div>
-        <div class="dialog-main">
-            <div id="edit-file" class="dialog-main-content">
-                <input id="edit-file-name" type="text" autocomplete="off" hidden>
-                <label for="edit-file-new-dir">
-                    Dir
-                    <input id="edit-file-new-dir" type="text" autocomplete="off">
-                </label>
-                <label for="edit-file-new-name">
-                    Name
-                    <input id="edit-file-new-name" type="text" autocomplete="off">
-                </label>
-                <label for="edit-file-description">
-                    Description
-                    <input id="edit-file-description" type="text" autocomplete="off">
-                </label>
-                <div id="edit-upload" class="file-upload">
-                    <input type="file" id="file" hidden>
-                    <label for="file">Choose file or drop here.</label>
-                </div>
-            </div>
-            <div id="edit-feedback" class="dialog-main-feedback">
-                <div id="edit-error" class="upload-error"></div>
-                <div class="progress">
-                    <div id="edit-progress-bar"></div>
-                </div>
-            </div>
-        </div>
-        <div class="dialog-footer">
-            <button id="edit-cancel-btn" class="btn danger">Cancel</button>
-            <button id="edit-confirm-btn" class="btn primary">Edit</button>
-        </div>
-    </div>
+	<div>
+		<div class="dialog-header">
+			<h2>Edit</h2>
+		</div>
+		<div class="dialog-main">
+			<div id="edit-file" class="dialog-main-content">
+				<input id="edit-file-name" type="text" autocomplete="off" hidden>
+				<label for="edit-file-new-dir">
+					Dir
+					<input id="edit-file-new-dir" type="text" autocomplete="off">
+				</label>
+				<label for="edit-file-new-name">
+					Name
+					<input id="edit-file-new-name" type="text" autocomplete="off">
+				</label>
+				<label for="edit-file-description">
+					Description
+					<input id="edit-file-description" type="text" autocomplete="off">
+				</label>
+				<div id="edit-upload" class="file-upload">
+					<input type="file" id="file" hidden>
+					<label for="file">Choose file or drop here.</label>
+				</div>
+			</div>
+			<div id="edit-feedback" class="dialog-main-feedback">
+				<div id="edit-error" class="upload-error"></div>
+				<div class="progress">
+					<div id="edit-progress-bar"></div>
+				</div>
+			</div>
+		</div>
+		<div class="dialog-footer">
+			<button id="edit-cancel-btn" class="btn danger">Cancel</button>
+			<button id="edit-confirm-btn" class="btn primary">Edit</button>
+		</div>
+	</div>
 </dialog>
 <dialog id="move-dialog">
-    <div>
-        <div class="dialog-header">
-            <h2>Move</h2>
-        </div>
-        <div class="dialog-main">
-            <div id="move-files" class="dialog-main-content">
-                <label for="move-files-dir">
-                    Dir
-                    <input id="move-files-dir" type="text" autocomplete="off">
-                </label>
-            </div>
-            <div id="move-feedback" class="dialog-main-feedback">
-                <div id="move-error" class="upload-error"></div>
-            </div>
-        </div>
-        <div class="dialog-footer">
-            <button id="move-cancel-btn" class="btn danger">Cancel</button>
-            <button id="move-confirm-btn" class="btn primary">Move</button>
-        </div>
-    </div>
+	<div>
+		<div class="dialog-header">
+			<h2>Move</h2>
+		</div>
+		<div class="dialog-main">
+			<div id="move-files" class="dialog-main-content">
+				<label for="move-files-dir">
+					Dir
+					<input id="move-files-dir" type="text" autocomplete="off">
+				</label>
+			</div>
+			<div id="move-feedback" class="dialog-main-feedback">
+				<div id="move-error" class="upload-error"></div>
+			</div>
+		</div>
+		<div class="dialog-footer">
+			<button id="move-cancel-btn" class="btn danger">Cancel</button>
+			<button id="move-confirm-btn" class="btn primary">Move</button>
+		</div>
+	</div>
 </dialog>
 {{ template "header.gohtml" . }}
 <main>
-    <div id="navigation">
-        <div>
-            <input type="checkbox" id="files-select" class="checkbox" data-file="{{ .Path }}" autocomplete="off">
-            <label for="files-select"></label>
-        </div>
-        <div class="navigation-path">
-            <a href="/">/</a>
+	<div id="navigation">
+		<div>
+			<input v-scope type="checkbox" id="files-select" class="checkbox" autocomplete="off" :checked="selectedFiles.length === files.length" @click="toggleFiles">
+			<label for="files-select"></label>
+		</div>
+		<div class="navigation-path">
+			<a href="/">/</a>
             {{ range $index, $path := .PathParts }}
-                <a href="/{{ assemblePath $.PathParts $index }}">{{ $path }}{{ if not (isLast $.PathParts $index) }}/{{end}}</a>
+				<a href="/{{ assemblePath $.PathParts $index }}">{{ $path }}{{ if not (isLast $.PathParts $index) }}/{{end}}</a>
             {{ end }}
-        </div>
+		</div>
 		<div>
 			<a class="btn primary" href="{{ .User.Home }}">Home</a>
 		</div>
-        <div>
-            <select id="files-more" class="file-more" autocomplete="off" disabled>
-                <option value="none" selected disabled hidden>More</option>
-                <option value="download">Download</option>
-                <option value="move">Move</option>
-                <option value="delete">Delete</option>
-            </select>
-        </div>
-    </div>
-    <div id="file-list" class="table-list">
-        <div class="table-list-header">
-            <div></div>
-            <div>Type</div>
-            <div>Name</div>
-            <div>Size</div>
-            <div>Date</div>
-            <div>Description</div>
-            <div>Owner</div>
-            <div></div>
-        </div>
+		<div v-scope>
+			<select id="files-more" class="file-more" autocomplete="off" :disabled="selectedFiles.length === 0" @change="fileMore">
+				<option value="none" selected disabled hidden>More</option>
+				<option value="download">Download</option>
+				<option value="move">Move</option>
+				<option value="delete">Delete</option>
+			</select>
+		</div>
+	</div>
+	<div v-scope>
+		[[ selectedFiles ]]
+	</div>
+	<div id="file-list" class="table-list">
+		<div class="table-list-header">
+			<div></div>
+			<div>Type</div>
+			<div>Name</div>
+			<div>Size</div>
+			<div>Date</div>
+			<div>Description</div>
+			<div>Owner</div>
+			<div></div>
+		</div>
         {{ range $index, $file := .Files }}
-            <div class="table-list-entry">
-                <div>
-                    <input type="checkbox" id="file-select-{{ $index }}" class="file-select checkbox {{ if $file.IsDir }}folder{{ else }}file{{ end }}" data-name="{{ $file.Name }}" autocomplete="off">
-                    <label for="file-select-{{ $index }}"></label>
-                </div>
-                <div>
-                    <span class="icon {{ if $file.IsDir }}folder{{ else }}file{{ end }}-icon"></span>
-                </div>
-                <div>
-                    <a href="{{ $file.Path }}">{{ $file.Name }}</a>
-                </div>
-                <div>{{ humanizeIBytes $file.Size }}</div>
-                <div>{{ humanizeTime $file.Date }}</div>
-                <div>{{ $file.Description }}</div>
-                <div>{{ $file.Owner }}</div>
-                <div>
-                    <select class="file-more" data-file="{{ $file.Path }}" data-name="{{ $file.Name }}" data-description="{{ $file.Description }}" autocomplete="off">
-                        <option value="none" selected disabled hidden>More</option>
-                        <option value="download">Download</option>
+			<div class="table-list-entry">
+				<div>
+					<input v-scope type="checkbox" id="file-select-{{ $index }}" class="file-select checkbox {{ if $file.IsDir }}folder{{ else }}file{{ end }}" autocomplete="off" :checked="selectedFiles.includes('{{ $file.Name }}')" @click="toggleFile('{{ $file.Name }}')">
+					<label for="file-select-{{ $index }}"></label>
+				</div>
+				<div>
+					<span class="icon {{ if $file.IsDir }}folder{{ else }}file{{ end }}-icon"></span>
+				</div>
+				<div>
+					<a href="{{ $file.Path }}">{{ $file.Name }}</a>
+				</div>
+				<div>{{ humanizeIBytes $file.Size }}</div>
+				<div>{{ humanizeTime $file.Date }}</div>
+				<div>{{ $file.Description }}</div>
+				<div>{{ $file.Owner }}</div>
+				<div>
+					<select v-scope class="file-more" autocomplete="off" @change="fileMore($event, '{{ $file.Path }}')">
+						<option value="none" selected disabled hidden>More</option>
+						<option value="download">Download</option>
                         {{ if $file.Permissions.Has $.PermissionWrite }}
-                            <option value="edit">Edit</option>
+							<option value="edit">Edit</option>
                         {{ end }}
                         {{ if $file.Permissions.Has $.PermissionDelete }}
-                            <option value="delete">Delete</option>
+							<option value="delete">Delete</option>
                         {{ end }}
-                    </select>
-                </div>
-                <div>
-                    <select id="file-more-{{ $index }}" class="file-more" data-file="{{ $file.Path }}" data-name="{{ $file.Name }}" data-description="{{ $file.Description }}" autocomplete="off">
-                        <option value="none" selected disabled hidden></option>
-                        <option value="download">Download</option>
+					</select>
+				</div>
+				<div>
+					<select id="file-more-{{ $index }}" class="file-more" autocomplete="off">
+						<option value="none" selected disabled hidden></option>
+						<option value="download">Download</option>
                         {{ if $file.Permissions.Has $.PermissionWrite }}
-                            <option value="edit">Edit</option>
+							<option value="edit">Edit</option>
                         {{ end }}
                         {{ if $file.Permissions.Has $.PermissionDelete }}
-                            <option value="delete">Delete</option>
+							<option value="delete">Delete</option>
                         {{ end }}
-                    </select>
-                </div>
-            </div>
+					</select>
+				</div>
+			</div>
         {{ end }}
-    </div>
+	</div>
     {{ if .Permissions.Has $.PermissionCreate }}
-        <div class="file-upload">
-            <input type="file" id="files" multiple hidden>
-            <label for="files">Choose files or drop here.</label>
-        </div>
+		<div v-scope class="file-upload" @dragover="toggleUploadActive($event, true)" @dragenter="toggleUploadActive($event, true)" @dragleave="toggleUploadActive($event, false)" @dragend="toggleUploadActive($event, false)" @drop="dropFiles">
+			<input type="file" id="files" multiple hidden>
+			<label for="files">Choose files or drop here.</label>
+		</div>
     {{ end }}
 </main>
 <script src="/assets/theme.js" defer></script>
-<script src="/assets/script.js" defer></script>
+{{/*<script src="/assets/script.js" defer></script>*/}}
+<script type="module">
+	import {createApp} from 'https://unpkg.com/petite-vue?module'
+
+	createApp({
+		$delimiters: ['[[', ']]'],
+		files: JSON.parse("{{ .FilesJSON }}"),
+		selectedFiles: [],
+		uploadDialog: {
+			open: false,
+			dir: '{{ .Path }}',
+			files: [],
+			requests: [],
+			error: '',
+		},
+		dropFiles(e) {
+			console.log(e.dataTransfer.files)
+			this.toggleUploadActive(e, false);
+			this.uploadDialog.files.splice(0, this.uploadDialog.files.length, ...e.dataTransfer.files);
+			this.uploadDialog.open = true;
+		},
+		toggleUploadActive(e, active) {
+			e.preventDefault();
+			e.stopPropagation();
+			e.target.classList.toggle("active", active);
+		},
+		toggleFiles() {
+			if (this.selectedFiles.length === this.files.length) {
+				this.selectedFiles.splice(0, this.selectedFiles.length);
+				return;
+			}
+			for (const file of this.files) {
+				if (this.selectedFiles.includes(file.name)) {
+					continue;
+				}
+				this.selectedFiles.push(file.name);
+			}
+		},
+		toggleFile(file) {
+			if (this.selectedFiles.includes(file)) {
+				this.selectedFiles.splice(this.selectedFiles.indexOf(file), 1);
+			} else {
+				this.selectedFiles.push(file);
+			}
+		},
+		downloadFiles() {
+			window.open(`${window.location.href}?dl=${this.selectedFiles.join(',')}`, '_blank');
+		},
+		fileMore(e, path) {
+			e.preventDefault();
+			e.stopPropagation();
+
+			switch (e.target.value) {
+				case "download":
+					if (path) {
+						window.open(`${path}?dl=1`, '_blank');
+					} else {
+						this.downloadFiles();
+					}
+					break;
+				case "edit":
+					openEditDialog(e.target.dataset);
+					break;
+
+				case "move":
+					openMoveDialog();
+					break;
+
+				case "delete":
+					openDeleteDialog(e);
+					break;
+
+				case "share":
+					document.querySelector("#share-dialog").showModal();
+					break;
+			}
+			e.target.value = "none";
+		}
+	}).mount()
+</script>
 </body>
 </html>

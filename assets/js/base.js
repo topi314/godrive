@@ -1,29 +1,4 @@
-const files = [];
-const requests = [];
 
-function registerAll(query, event, callback) {
-    const elements = document.querySelectorAll(query);
-    if (!elements) {
-        return;
-    }
-    elements.forEach(element => {
-        element.addEventListener(event, callback);
-    });
-}
-
-function register(query, event, callback) {
-    const element = document.querySelector(query);
-    if (!element) {
-        return;
-    }
-    element.addEventListener(event, callback);
-}
-
-function toggleUploadActive(e, active) {
-    e.preventDefault();
-    e.stopPropagation();
-    e.target.classList.toggle("active", active);
-}
 
 function uploadFile(method, path, file, dir, name, description, doneCallback, errorCallback, progressCallback) {
     const data = new FormData();

@@ -193,6 +193,12 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	filesJSON, err := json.Marshal(templateFiles)
+	if err != nil {
+		s.error(w, r, err, http.StatusInternalServerError)
+		return
+	}
+
 	vars := IndexVariables{
 		BaseVariables: BaseVariables{
 			Theme: "dark",
@@ -208,6 +214,7 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 		Path:             r.URL.Path,
 		PathParts:        strings.FieldsFunc(r.URL.Path, func(r rune) bool { return r == '/' }),
 		Files:            templateFiles,
+		FilesJSON:        string(filesJSON),
 	}
 	if err = s.tmpl(w, "index.gohtml", vars); err != nil {
 		slog.ErrorCtx(r.Context(), "error executing template", slog.Any("err", err))
