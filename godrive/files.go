@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"golang.org/x/exp/slices"
+	"golang.org/x/exp/slog"
 )
 
 func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
@@ -78,7 +79,7 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err = s.writeFile(r.Context(), w, files[0].Path, start, end); err != nil {
-			s.log(r, "error writing file", err)
+			slog.ErrorCtx(r.Context(), "Failed to write file", slog.Any("err", err))
 		}
 		return
 	}
@@ -209,7 +210,7 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 		Files:            templateFiles,
 	}
 	if err = s.tmpl(w, "index.gohtml", vars); err != nil {
-		s.log(r, "template", err)
+		slog.ErrorCtx(r.Context(), "error executing template", slog.Any("err", err))
 	}
 }
 

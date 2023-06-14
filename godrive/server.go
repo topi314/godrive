@@ -3,12 +3,15 @@ package godrive
 import (
 	"fmt"
 	"io"
-	"log"
 	"math/rand"
 	"net/http"
 	"runtime"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/exp/slog"
 )
 
 type (
@@ -16,13 +19,15 @@ type (
 	WriterFunc          func(w io.Writer) error
 )
 
-func NewServer(version string, cfg Config, db *DB, auth *Auth, storage Storage, assets http.FileSystem, tmpl ExecuteTemplateFunc, js WriterFunc, css WriterFunc) *Server {
+func NewServer(version string, cfg Config, db *DB, auth *Auth, storage Storage, tracer trace.Tracer, meter metric.Meter, assets http.FileSystem, tmpl ExecuteTemplateFunc, js WriterFunc, css WriterFunc) *Server {
 	s := &Server{
 		version: version,
 		cfg:     cfg,
 		db:      db,
 		auth:    auth,
 		storage: storage,
+		tracer:  tracer,
+		meter:   meter,
 		assets:  assets,
 		tmpl:    tmpl,
 		js:      js,
@@ -45,6 +50,8 @@ type Server struct {
 	server  *http.Server
 	auth    *Auth
 	storage Storage
+	tracer  trace.Tracer
+	meter   metric.Meter
 	assets  http.FileSystem
 	tmpl    ExecuteTemplateFunc
 	js      WriterFunc
@@ -54,22 +61,22 @@ type Server struct {
 
 func (s *Server) Start() {
 	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalln("Error while listening:", err)
+		slog.Error("Error while listening", slog.Any("err", err))
 	}
 }
 
 func (s *Server) Close() {
 	if err := s.server.Close(); err != nil {
-		log.Println("Error while closing server:", err)
+		slog.Error("Error while closing server", slog.Any("err", err))
 	}
 
 	if err := s.db.Close(); err != nil {
-		log.Println("Error while closing database:", err)
+		slog.Error("Error while closing database", slog.Any("err", err))
 	}
 }
 
-func (s *Server) newID() string {
-	b := make([]rune, 16)
+func (s *Server) newID(length int) string {
+	b := make([]rune, length)
 	for i := range b {
 		b[i] = letters[s.rand.Intn(len(letters))]
 	}
@@ -88,17 +95,14 @@ func cacheControl(next http.Handler) http.Handler {
 	})
 }
 
-func FormatBuildVersion(version string, commit string, buildTime string) string {
+func FormatBuildVersion(version string, commit string, buildTime time.Time) string {
 	if len(commit) > 7 {
 		commit = commit[:7]
 	}
 
 	buildTimeStr := "unknown"
-	if buildTime != "unknown" {
-		parsedTime, _ := time.Parse(time.RFC3339, buildTime)
-		if !parsedTime.IsZero() {
-			buildTimeStr = parsedTime.Format(time.ANSIC)
-		}
+	if !buildTime.IsZero() {
+		buildTimeStr = buildTime.Format(time.ANSIC)
 	}
 	return fmt.Sprintf("Go Version: %s\nVersion: %s\nCommit: %s\nBuild Time: %s\nOS/Arch: %s/%s\n", runtime.Version(), version, commit, buildTimeStr, runtime.GOOS, runtime.GOARCH)
 }
