@@ -3,19 +3,23 @@ package godrive
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	_ "embed"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
+	"github.com/XSAM/otelsql"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/jackc/pgx/v5/tracelog"
 	"github.com/jmoiron/sqlx"
+	"go.opentelemetry.io/otel/attribute"
+	semconv "go.opentelemetry.io/otel/semconv/v1.18.0"
+	"golang.org/x/exp/slog"
 	"modernc.org/sqlite"
 	_ "modernc.org/sqlite"
 )
@@ -59,6 +63,7 @@ func NewDB(ctx context.Context, cfg DatabaseConfig, schema string) (*DB, error) 
 	var (
 		driverName     string
 		dataSourceName string
+		dbSystem       attribute.KeyValue
 	)
 	switch cfg.Type {
 	case DatabaseTypePostgres:
@@ -71,23 +76,57 @@ func NewDB(ctx context.Context, cfg DatabaseConfig, schema string) (*DB, error) 
 		if cfg.Debug {
 			pgCfg.Tracer = &tracelog.TraceLog{
 				Logger: tracelog.LoggerFunc(func(ctx context.Context, level tracelog.LogLevel, msg string, data map[string]any) {
-					log.Println(msg, data)
+					args := make([]any, 0, len(data))
+					for k, v := range data {
+						args = append(args, slog.Any(k, v))
+					}
+					slog.DebugCtx(ctx, msg, slog.Group("data", args...))
 				}),
 				LogLevel: tracelog.LogLevelDebug,
 			}
 		}
 		dataSourceName = stdlib.RegisterConnConfig(pgCfg)
+		dbSystem = semconv.DBSystemPostgreSQL
 	case DatabaseTypeSQLite:
 		driverName = "sqlite"
 		dataSourceName = cfg.Path
+		dbSystem = semconv.DBSystemSqlite
 	default:
 		return nil, errors.New("invalid database type, must be one of: postgres, sqlite")
 	}
-	dbx, err := sqlx.ConnectContext(ctx, driverName, dataSourceName)
+
+	sqlDB, err := otelsql.Open(driverName, dataSourceName,
+		otelsql.WithAttributes(dbSystem),
+		otelsql.WithSQLCommenter(true),
+		otelsql.WithAttributesGetter(func(ctx context.Context, method otelsql.Method, query string, args []driver.NamedValue) []attribute.KeyValue {
+			attrs := []attribute.KeyValue{
+				semconv.DBOperationKey.String(string(method)),
+				attribute.String("db.statement", query),
+			}
+			for _, arg := range args {
+				name := "db.statement.args."
+				if arg.Name == "" {
+					name += fmt.Sprintf("$%d", arg.Ordinal)
+				} else {
+					name += arg.Name
+				}
+				attrs = append(attrs, attribute.String(name, fmt.Sprintf("%v", arg.Value)))
+			}
+			return attrs
+		}),
+	)
 	if err != nil {
 		return nil, err
 	}
 
+	if err = otelsql.RegisterDBStatsMetrics(sqlDB, otelsql.WithAttributes(dbSystem)); err != nil {
+		return nil, err
+	}
+
+	dbx := sqlx.NewDb(sqlDB, driverName)
+	if err = dbx.PingContext(ctx); err != nil {
+		return nil, err
+	}
 	// execute schema
 	if _, err = dbx.ExecContext(ctx, schema); err != nil {
 		return nil, err
