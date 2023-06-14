@@ -39,7 +39,6 @@ func (s *Server) Routes() http.Handler {
 	}
 
 	r.Route("/assets", func(r chi.Router) {
-		r.Handle("/script.js", s.handleWriter(s.js, "application/javascript"))
 		r.Handle("/style.css", s.handleWriter(s.css, "text/css"))
 		r.Mount("/", http.FileServer(s.assets))
 	})

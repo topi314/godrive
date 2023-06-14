@@ -1,0 +1,38 @@
+
+<dialog id="edit-dialog" :open="editDialog.open" @close="editDialog.close">
+	<div>
+		<div class="dialog-header">
+			<h2>Edit</h2>
+		</div>
+		<div class="dialog-main">
+			<div id="edit-file" class="dialog-main-content">
+				<label for="edit-file-new-dir">
+					Dir
+					<input id="edit-file-new-dir" type="text" v-model="editDialog.dir" autocomplete="off" >
+				</label>
+				<label for="edit-file-new-name">
+					Name
+					<input id="edit-file-new-name" type="text" v-model="editDialog.name" autocomplete="off">
+				</label>
+				<label for="edit-file-description">
+					Description
+					<input id="edit-file-description" type="text" v-model="editDialog.description" autocomplete="off">
+				</label>
+				<div id="edit-upload" class="file-upload">
+					<input type="file" hidden @change="editDialog.selectFile">
+					<label for="file">Choose file or drop here.</label>
+				</div>
+			</div>
+			<div id="edit-feedback" class="dialog-main-feedback">
+				<div id="edit-error" class="upload-error"></div>
+				<div class="progress">
+					<div id="edit-progress-bar"></div>
+				</div>
+			</div>
+		</div>
+		<div class="dialog-footer">
+			<button class="btn danger" @click="editDialog.open = false">Cancel</button>
+			<button class="btn primary" @click="editDialog.edit">Edit</button>
+		</div>
+	</div>
+</dialog>

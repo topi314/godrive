@@ -19,7 +19,7 @@ type (
 	WriterFunc          func(w io.Writer) error
 )
 
-func NewServer(version string, cfg Config, db *DB, auth *Auth, storage Storage, tracer trace.Tracer, meter metric.Meter, assets http.FileSystem, tmpl ExecuteTemplateFunc, js WriterFunc, css WriterFunc) *Server {
+func NewServer(version string, cfg Config, db *DB, auth *Auth, storage Storage, tracer trace.Tracer, meter metric.Meter, assets http.FileSystem, tmpl ExecuteTemplateFunc, css WriterFunc) *Server {
 	s := &Server{
 		version: version,
 		cfg:     cfg,
@@ -30,7 +30,6 @@ func NewServer(version string, cfg Config, db *DB, auth *Auth, storage Storage, 
 		meter:   meter,
 		assets:  assets,
 		tmpl:    tmpl,
-		js:      js,
 		css:     css,
 		rand:    rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
@@ -54,7 +53,6 @@ type Server struct {
 	meter   metric.Meter
 	assets  http.FileSystem
 	tmpl    ExecuteTemplateFunc
-	js      WriterFunc
 	css     WriterFunc
 	rand    *rand.Rand
 }
