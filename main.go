@@ -114,6 +114,8 @@ func main() {
 			slog.Error("Error while creating meter", slog.Any("err", err))
 			os.Exit(1)
 		}
+	} else {
+		tracer = trace.NewNoopTracerProvider().Tracer(Namespace)
 	}
 
 	var auth *godrive.Auth

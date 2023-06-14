@@ -91,12 +91,15 @@
                 <a href="/{{ assemblePath $.PathParts $index }}">{{ $path }}{{ if not (isLast $.PathParts $index) }}/{{end}}</a>
             {{ end }}
         </div>
+		<div>
+			<a class="btn primary" href="{{ .User.Home }}">Home</a>
+		</div>
         <div>
             <select id="files-more" class="file-more" autocomplete="off" disabled>
                 <option value="none" selected disabled hidden>More</option>
                 <option value="download">Download</option>
-                <option value="move" {{ if eq .User.Name "guest" }}disabled{{ end }}>Move</option>
-                <option value="delete" {{ if eq .User.Name "guest" }}disabled{{ end }}>Delete</option>
+                <option value="move">Move</option>
+                <option value="delete">Delete</option>
             </select>
         </div>
     </div>
@@ -131,18 +134,22 @@
                     <select class="file-more" data-file="{{ $file.Path }}" data-name="{{ $file.Name }}" data-description="{{ $file.Description }}" autocomplete="off">
                         <option value="none" selected disabled hidden>More</option>
                         <option value="download">Download</option>
-                        {{ if $file.IsOwner }}
+                        {{ if $file.Permissions.Has $.PermissionWrite }}
                             <option value="edit">Edit</option>
+                        {{ end }}
+                        {{ if $file.Permissions.Has $.PermissionDelete }}
                             <option value="delete">Delete</option>
                         {{ end }}
                     </select>
                 </div>
                 <div>
-                    <select class="file-more" data-file="{{ $file.Path }}" data-name="{{ $file.Name }}" data-description="{{ $file.Description }}" autocomplete="off">
+                    <select id="file-more-{{ $index }}" class="file-more" data-file="{{ $file.Path }}" data-name="{{ $file.Name }}" data-description="{{ $file.Description }}" autocomplete="off">
                         <option value="none" selected disabled hidden></option>
                         <option value="download">Download</option>
-                        {{ if $file.IsOwner }}
+                        {{ if $file.Permissions.Has $.PermissionWrite }}
                             <option value="edit">Edit</option>
+                        {{ end }}
+                        {{ if $file.Permissions.Has $.PermissionDelete }}
                             <option value="delete">Delete</option>
                         {{ end }}
                     </select>
@@ -150,7 +157,7 @@
             </div>
         {{ end }}
     </div>
-    {{ if ne .User.Name "guest" }}
+    {{ if .Permissions.Has $.PermissionCreate }}
         <div class="file-upload">
             <input type="file" id="files" multiple hidden>
             <label for="files">Choose files or drop here.</label>

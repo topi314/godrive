@@ -9,22 +9,24 @@ import (
 )
 
 type Config struct {
-	Log        LogConfig      `cfg:"log"`
-	DevMode    bool           `cfg:"dev_mode"`
-	Debug      bool           `cfg:"debug"`
-	ListenAddr string         `cfg:"listen_addr"`
-	Database   DatabaseConfig `cfg:"database"`
-	Storage    StorageConfig  `cfg:"storage"`
-	Auth       *AuthConfig    `cfg:"auth"`
-	Otel       *OtelConfig    `cfg:"otel"`
+	Log         LogConfig      `cfg:"log"`
+	DevMode     bool           `cfg:"dev_mode"`
+	Debug       bool           `cfg:"debug"`
+	ListenAddr  string         `cfg:"listen_addr"`
+	CacheAssets bool           `cfg:"cache_assets"`
+	Database    DatabaseConfig `cfg:"database"`
+	Storage     StorageConfig  `cfg:"storage"`
+	Auth        *AuthConfig    `cfg:"auth"`
+	Otel        *OtelConfig    `cfg:"otel"`
 }
 
 func (c Config) String() string {
-	return fmt.Sprintf("\n Log: %s\n DevMode: %t\n Debug: %t\n ListenAddr: %s\n Database: %s\n Storage: %s\n Auth: %s\n Otel: %s\n",
+	return fmt.Sprintf("\n Log: %s\n DevMode: %t\n Debug: %t\n ListenAddr: %s\n CacheAssets: %t\n Database: %s\n Storage: %s\n Auth: %s\n Otel: %s\n",
 		c.Log,
 		c.DevMode,
 		c.Debug,
 		c.ListenAddr,
+		c.CacheAssets,
 		c.Database,
 		c.Storage,
 		c.Auth,
@@ -172,17 +174,15 @@ func (c AuthConfig) String() string {
 }
 
 type AuthGroups struct {
-	Admin  string `cfg:"admin"`
-	User   string `cfg:"user"`
-	Viewer string `cfg:"viewer"`
-	Guest  bool   `cfg:"guest"`
+	Admin string `cfg:"admin"`
+	User  string `cfg:"user"`
+	Guest string `cfg:"guest"`
 }
 
 func (c AuthGroups) String() string {
-	return fmt.Sprintf("\n    Admin: %s\n    User: %s\n    Viewer: %s\n    Guest: %t",
+	return fmt.Sprintf("\n    Admin: %s\n    User: %s\n    Guest: %s",
 		c.Admin,
 		c.User,
-		c.Viewer,
 		c.Guest,
 	)
 }
