@@ -125,8 +125,7 @@ func (s *Server) removeSession(w http.ResponseWriter, sessionID string) {
 
 func (s *Server) Auth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx, span := s.tracer.Start(r.Context(), "auth")
-		defer span.End()
+		ctx, span := s.tracer.Start(r.Context(), "auth middleware")
 
 		var sessionID string
 		if cookie, err := r.Cookie(SessionCookieName); err == nil {
@@ -135,7 +134,8 @@ func (s *Server) Auth(next http.Handler) http.Handler {
 		}
 
 		if sessionID == "" {
-			next.ServeHTTP(w, r)
+			span.End()
+			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
 
@@ -148,7 +148,8 @@ func (s *Server) Auth(next http.Handler) http.Handler {
 			span.AddEvent("session not found", trace.WithAttributes(attribute.String("sessionID", sessionID)))
 			slog.Debug("session not found", slog.Any("sessionID", sessionID))
 			s.removeSession(w, sessionID)
-			next.ServeHTTP(w, r)
+			span.End()
+			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
 		span.AddEvent("session found", trace.WithAttributes(
@@ -171,7 +172,8 @@ func (s *Server) Auth(next http.Handler) http.Handler {
 			span.RecordError(err)
 			slog.Error("failed to get token", slog.Any("err", err))
 			s.removeSession(w, sessionID)
-			next.ServeHTTP(w, r)
+			span.End()
+			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
 
@@ -193,7 +195,8 @@ func (s *Server) Auth(next http.Handler) http.Handler {
 			span.RecordError(err)
 			slog.Error("failed to verify ID Token: %w", slog.Any("err", err), slog.Any("rawIDToken", session.IDToken))
 			s.removeSession(w, sessionID)
-			next.ServeHTTP(w, r)
+			span.End()
+			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
 		span.AddEvent("ID Token verified", trace.WithAttributes(attribute.String("idToken", session.IDToken)))
@@ -203,6 +206,7 @@ func (s *Server) Auth(next http.Handler) http.Handler {
 			span.RecordError(err)
 			slog.Error("failed to parse claims: %w", slog.Any("err", err))
 			s.removeSession(w, sessionID)
+			span.End()
 			s.error(w, r, err, http.StatusInternalServerError)
 			return
 		}
@@ -220,11 +224,13 @@ func (s *Server) Auth(next http.Handler) http.Handler {
 		if err != nil {
 			span.RecordError(err)
 			slog.Error("failed to get user by name: %w", slog.Any("err", err))
+			span.End()
 			s.error(w, r, err, http.StatusInternalServerError)
 			return
 		}
 		info.Home = user.Home
 
+		span.End()
 		next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, UserInfoKey, &info)))
 	})
 }

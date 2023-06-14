@@ -3,7 +3,6 @@ package godrive
 import (
 	"context"
 	"database/sql"
-	"database/sql/driver"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -98,22 +97,6 @@ func NewDB(ctx context.Context, cfg DatabaseConfig, schema string) (*DB, error) 
 	sqlDB, err := otelsql.Open(driverName, dataSourceName,
 		otelsql.WithAttributes(dbSystem),
 		otelsql.WithSQLCommenter(true),
-		otelsql.WithAttributesGetter(func(ctx context.Context, method otelsql.Method, query string, args []driver.NamedValue) []attribute.KeyValue {
-			attrs := []attribute.KeyValue{
-				semconv.DBOperationKey.String(string(method)),
-				attribute.String("db.statement", query),
-			}
-			for _, arg := range args {
-				name := "db.statement.args."
-				if arg.Name == "" {
-					name += fmt.Sprintf("$%d", arg.Ordinal)
-				} else {
-					name += arg.Name
-				}
-				attrs = append(attrs, attribute.String(name, fmt.Sprintf("%v", arg.Value)))
-			}
-			return attrs
-		}),
 	)
 	if err != nil {
 		return nil, err
