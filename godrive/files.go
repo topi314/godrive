@@ -16,6 +16,33 @@ import (
 	"golang.org/x/exp/slog"
 )
 
+func (s *Server) GetPermissions(w http.ResponseWriter, r *http.Request, paths []string) []FilePermissions {
+	perms, err := s.db.GetFilePermissions(r.Context(), append(paths, r.URL.Path))
+	if err != nil {
+		slog.ErrorCtx(r.Context(), "Failed to get file permissions", slog.Any("err", err))
+		s.prettyError(w, r, err, http.StatusInternalServerError)
+		return nil
+	}
+
+	if shareID := r.URL.Query().Get("share"); shareID != "" {
+		share, err := s.db.GetShare(r.Context(), shareID)
+		if err != nil {
+			slog.ErrorCtx(r.Context(), "Failed to get share", slog.Any("err", err))
+			s.prettyError(w, r, err, http.StatusInternalServerError)
+			return nil
+		}
+		userInfo := s.GetUserInfo(r)
+		perms = append(perms, FilePermissions{
+			Path:        share.Path,
+			Permissions: share.Permissions,
+			ObjectType:  ObjectTypeUser,
+			Object:      userInfo.Subject,
+		})
+	}
+
+	return perms
+}
+
 func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 	var (
 		download    bool
@@ -38,18 +65,18 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 	for i, file := range files {
 		paths[i] = file.Path
 	}
-	perms, err := s.db.GetFilePermissions(r.Context(), append(paths, r.URL.Path))
-	if err != nil {
-		s.error(w, r, err, http.StatusInternalServerError)
+
+	perms := s.GetPermissions(w, r, paths)
+	if perms == nil {
 		return
 	}
+	userInfo := s.GetUserInfo(r)
 
 	if download && len(files) == 0 {
 		s.notFound(w, r)
 		return
 	}
 
-	userInfo := s.GetUserInfo(r)
 	if len(files) == 1 && files[0].Path == r.URL.Path {
 		if !s.Permissions(perms, files[0].Path, userInfo).Has(PermissionRead) {
 			if download {
@@ -135,7 +162,7 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var templateFiles []TemplateFile
+	templateFiles := make([]TemplateFile, 0)
 	for _, file := range files {
 		if !s.Permissions(perms, files[0].Path, userInfo).Has(PermissionRead) {
 			continue
@@ -207,7 +234,7 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 		},
 		Permissions:      s.Permissions(perms, r.URL.Path, userInfo),
 		PermissionRead:   PermissionRead,
-		PermissionWrite:  PermissionWrite,
+		PermissionWrite:  PermissionEdit,
 		PermissionCreate: PermissionCreate,
 		PermissionDelete: PermissionDelete,
 		PermissionShare:  PermissionShare,
@@ -222,12 +249,11 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) PostFile(w http.ResponseWriter, r *http.Request) {
-	userInfo := s.GetUserInfo(r)
-	perms, err := s.db.GetFilePermissions(r.Context(), []string{r.URL.Path})
-	if err != nil {
-		s.error(w, r, err, http.StatusInternalServerError)
+	perms := s.GetPermissions(w, r, nil)
+	if perms == nil {
 		return
 	}
+	userInfo := s.GetUserInfo(r)
 
 	if !s.Permissions(perms, r.URL.Path, userInfo).Has(PermissionCreate) {
 		s.error(w, r, fmt.Errorf("unauhorized to create files at %s", r.URL.Path), http.StatusForbidden)
@@ -254,14 +280,12 @@ func (s *Server) PostFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) PatchFile(w http.ResponseWriter, r *http.Request) {
-	perms, err := s.db.GetFilePermissions(r.Context(), []string{r.URL.Path})
-	if err != nil {
-		s.error(w, r, err, http.StatusInternalServerError)
+	perms := s.GetPermissions(w, r, nil)
+	if perms == nil {
 		return
 	}
-
 	userInfo := s.GetUserInfo(r)
-	if !s.Permissions(perms, r.URL.Path, userInfo).Has(PermissionWrite) {
+	if !s.Permissions(perms, r.URL.Path, userInfo).Has(PermissionEdit) {
 		s.error(w, r, errors.New("unauthorized"), http.StatusUnauthorized)
 		return
 	}
@@ -330,13 +354,13 @@ func (s *Server) MoveFiles(w http.ResponseWriter, r *http.Request) {
 	for i, file := range files {
 		paths[i] = file.Path
 	}
-	perms, err := s.db.GetFilePermissions(r.Context(), append(paths, destination))
-	if err != nil {
-		s.error(w, r, err, http.StatusInternalServerError)
+
+	perms := s.GetPermissions(w, r, append(paths, destination))
+	if perms == nil {
 		return
 	}
-
 	userInfo := s.GetUserInfo(r)
+
 	if !s.Permissions(perms, destination, userInfo).Has(PermissionCreate) {
 		s.error(w, r, fmt.Errorf("unauhorized to create files at %s", destination), http.StatusUnauthorized)
 		return
@@ -417,13 +441,12 @@ func (s *Server) DeleteFiles(w http.ResponseWriter, r *http.Request) {
 	for i, file := range files {
 		paths[i] = file.Path
 	}
-	perms, err := s.db.GetFilePermissions(r.Context(), append(paths, r.URL.Path))
-	if err != nil {
-		s.error(w, r, err, http.StatusInternalServerError)
+	perms := s.GetPermissions(w, r, paths)
+	if perms == nil {
 		return
 	}
-
 	userInfo := s.GetUserInfo(r)
+
 	if len(files) == 0 {
 		s.error(w, r, errors.New("file not found"), http.StatusNotFound)
 		return

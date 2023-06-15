@@ -23,9 +23,9 @@
 							<label for="file-${i}-description">Description</label>
 							<div><textarea id="file-${i}-description" v-model="file.description"></textarea></div>
 						</div>
-						<div id="upload-${i}-error" class="upload-error"></div>
+						<div  class="upload-error">[[file.error]]</div>
 						<div class="progress">
-							<div id="upload-${i}-progress-bar" class="progress-bar" :style="{width: `${file.progress * 100}%`}"></div>
+							<div class="progress-bar" :style="{width: `${file.progress * 100}%`}"></div>
 						</div>
 					</div>
 

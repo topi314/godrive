@@ -71,6 +71,7 @@ func (s *Server) Routes() http.Handler {
 						r.Put("/", s.PutPermissions)
 					})
 				})
+				r.Post("/share", s.PostShare)
 			})
 		}
 
@@ -128,14 +129,21 @@ func (s *Server) GetSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	permissionsJSON, err := json.Marshal(perms)
+	if err != nil {
+		s.prettyError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+
 	vars := SettingsVariables{
 		BaseVariables: BaseVariables{
 			Theme: "dark",
 			Auth:  s.cfg.Auth != nil,
 			User:  s.ToTemplateUser(userInfo),
 		},
-		Users:       templateUsers,
-		Permissions: perms,
+		Users:           templateUsers,
+		Permissions:     perms,
+		PermissionsJSON: string(permissionsJSON),
 	}
 	if err = s.tmpl(w, "settings.gohtml", vars); err != nil {
 		slog.ErrorCtx(r.Context(), "error rendering template", slog.Any("err", err))

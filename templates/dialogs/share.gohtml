@@ -1,84 +1,26 @@
 
-<dialog v-scope id="upload-dialog" :open="uploadDialog.open" @close="uploadDialogClose">
+<dialog v-scope id="share-dialog" :open="shareDialog.open" @close="shareDialog.close">
 	<div>
 		<div class="dialog-header">
-			<h2>Upload</h2>
+			<h2>Share</h2>
 		</div>
 		<div class="dialog-main">
-			<label for="upload-file-dir">
-				Directory
-				<input type="text" v-model="uploadDialog.dir" autocomplete="off">
+			<label for="share-permissions">
+				Permissions
+				<select class="permission-perms" multiple v-model="shareDialog.permissions">
+					<option value="read">Read</option>
+					<option value="create">Create</option>
+					<option value="edit">Edit</option>
+					<option value="delete">Delete</option>
+					<option value="share">Share</option>
+				</select>
 			</label>
-			<div id="upload-files">
-				<div v-for="file in uploadDialog.files" class="upload-file">
-					<div>
-						<span class="icon icon-large file-icon"></span>
-					</div>
+			<div class="upload-error">[[ shareDialog.error ]]</div>
 
-					<div class="upload-file-content">
-						<div id="upload-file-fields">
-							<label for="file-${i}-name">Name</label>
-							<div><input type="text" id="file-${i}-name" v-model="file.name"></div>
-
-							<label for="file-${i}-description">Description</label>
-							<div><textarea id="file-${i}-description" v-model="file.description"></textarea></div>
-						</div>
-						<div id="upload-${i}-error" class="upload-error"></div>
-						<div class="progress">
-							<div id="upload-${i}-progress-bar" class="progress-bar" :style="{width: `${file.progress * 100}%`"></div>
-						</div>
-					</div>
-
-					<div>
-						<button id="close" class="icon-btn" @click="uploadDialog.files.splice(uploadDialog.files.indexOf(file), 1)"></button>
-					</div>
-				</div>
-			</div>
 		</div>
 		<div class="dialog-footer">
-			<button class="btn danger" @click="uploadDialog.open = false">Cancel</button>
-			<button class="btn primary" @click="uploadFiles">Upload</button>
+			<button class="btn danger" @click="shareDialog.open = false">Cancel</button>
+			<button class="btn primary" @click="shareDialog.copy">Copy</button>
 		</div>
 	</div>
 </dialog>
-
-<script type="module">
-	import { reactive } from 'https://unpkg.com/petite-vue?module'
-	import * as api from '/assets/api.js'
-
-	const uploadDialog = reactive({
-		open: false,
-		dir: '{{ .Path }}',
-		files: [],
-		close() {
-			for (const file of this.uploadDialog.files) {
-				file.request.abort();
-			}
-			this.files.splice(0, this.files.length);
-		},
-		upload() {
-			let done = 0;
-			for (const file of this.uploadDialog.files) {
-				api.uploadFile("POST",
-						this.uploadDialog.dir,
-						file.file,
-						undefined,
-						file.name,
-						file.description,
-						() => {
-							done++;
-							if (done === this.uploadDialog.files.length) {
-								window.location.reload();
-							}
-						},
-						(xhr) => {
-							file.error = xhr.responseText;
-						},
-						(e) => {
-							file.progress = e.loaded / e.total;
-						},
-				);
-			}
-		},
-	})
-</script>

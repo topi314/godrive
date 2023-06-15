@@ -27,9 +27,10 @@ type (
 
 	SettingsVariables struct {
 		BaseVariables
-		Users       []TemplateUser
-		Groups      []string
-		Permissions []FilePermissions
+		Users           []TemplateUser
+		Groups          []string
+		Permissions     []FilePermissions
+		PermissionsJSON string
 	}
 
 	TemplateUser struct {
@@ -79,5 +80,14 @@ type (
 		Permissions Permissions `json:"permissions"`
 		ObjectType  ObjectType  `json:"object_type"`
 		Object      string      `json:"object"`
+	}
+
+	ShareRequest struct {
+		Path        string      `json:"path"`
+		Permissions Permissions `json:"permissions"`
+	}
+
+	ShareResponse struct {
+		Token string `json:"token"`
 	}
 )

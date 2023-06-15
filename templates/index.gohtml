@@ -2,12 +2,13 @@
 <body>
 {{ template "upload.gohtml" . }}
 {{ template "edit.gohtml" . }}
-
+{{ template "move.gohtml" . }}
+{{ template "share.gohtml" . }}
 {{ template "header.gohtml" . }}
 <main>
 	<div id="navigation">
 		<div>
-			<input v-scope type="checkbox" id="files-select" class="checkbox" autocomplete="off" :checked="selectedFiles.length === files.length" @click="toggleFiles">
+			<input v-scope type="checkbox" id="files-select" class="checkbox" autocomplete="off" :checked="selectedFiles.length === files.length && files.length !== 0" @click="toggleFiles">
 			<label for="files-select"></label>
 		</div>
 		<div class="navigation-path">
@@ -24,6 +25,7 @@
 			<option value="download">Download</option>
 			<option value="move">Move</option>
 			<option value="delete">Delete</option>
+			<option value="share">Share</option>
 		</select>
 	</div>
 	<div id="file-list" class="table-list">
@@ -63,110 +65,29 @@
                         {{ if $file.Permissions.Has $.PermissionDelete }}
 							<option value="delete">Delete</option>
                         {{ end }}
+                        {{ if $file.Permissions.Has $.PermissionShare }}
+							<option value="share">Share</option>
+                        {{ end }}
 					</select>
 				</div>
 			</div>
         {{ end }}
 	</div>
     {{ if .Permissions.Has $.PermissionCreate }}
-		<div v-scope class="file-upload" @dragover="toggleUploadActive($event, true)" @dragenter="toggleUploadActive($event, true)" @dragleave="toggleUploadActive($event, false)" @dragend="toggleUploadActive($event, false)" @drop="dropFiles">
-			<input type="file" id="files" multiple hidden @change="selectFiles">
+		<div v-scope class="file-upload" @dragover="toggleUploadActive($event, true)" @dragenter="toggleUploadActive($event, true)" @dragleave="toggleUploadActive($event, false)" @dragend="toggleUploadActive($event, false)" @drop="uploadDialog.dropFiles">
+			<input type="file" id="files" multiple hidden @change="uploadDialog.selectFiles">
 			<label for="files">Choose files or drop here.</label>
 		</div>
     {{ end }}
 </main>
 <script src="/assets/theme.js" defer></script>
 <script type="module">
-	import {createApp, reactive} from 'https://unpkg.com/petite-vue?module'
-	import * as api from '/assets/api.js'
-
-	const uploadDialog = reactive({
-		open: false,
-		dir: '{{ .Path }}',
-		files: [],
-		removeFile(file) {
-			this.files.splice(this.files.indexOf(file), 1);
-		},
-		close() {
-			for (const file of this.files) {
-				file.request.abort();
-			}
-			this.files.splice(0, this.files.length);
-		},
-		upload() {
-			let done = 0;
-			for (const file of this.files) {
-				api.uploadFile("POST",
-						this.dir,
-						file.file,
-						undefined,
-						file.name,
-						file.description,
-						() => {
-							done++;
-							if (done === this.files.length) {
-								window.location.reload();
-							}
-						},
-						(xhr) => {
-							file.error = xhr.res;
-						},
-						(e) => {
-							file.progress = e.loaded / e.total;
-						},
-				);
-			}
-		},
-	})
-
-	const editDialog = reactive({
-		open: false,
-		editFile: '',
-		dir: '{{ .Path }}',
-		name: '',
-		description: '',
-		file: null,
-		request: null,
-		progress: 0,
-		error: '',
-		selectFile(e) {
-			this.file = e.target.files[0];
-			this.name = this.file.name;
-		},
-		close() {
-			if (this.request) {
-				this.request.abort();
-			}
-			this.file = null;
-			this.name = '';
-			this.description = '';
-			this.progress = 0;
-			this.error = '';
-			this.request = null;
-		},
-		edit() {
-			let path = window.location.pathname;
-			if (!path.endsWith("/")) {
-				path += "/";
-			}
-			api.uploadFile("PATCH",
-					path + this.editFile,
-					this.file,
-					this.dir,
-					this.name,
-					this.description,
-					() => {
-						window.location.reload();
-					},
-					(xhr) => {
-						this.error = xhr.responseText;
-					},
-					(e) => {
-						this.progress = e.loaded / e.total;
-					},
-			);
-		},
-	})
+	import {createApp} from '/assets/js/petite-vue.js'
+	import {uploadDialog} from '/assets/js/upload.js'
+	import {editDialog} from '/assets/js/edit.js'
+	import {moveDialog} from '/assets/js/move.js'
+	import {shareDialog} from '/assets/js/share.js'
+	import {openDeleteDialog} from '/assets/js/delete.js'
 
 	createApp({
 		$delimiters: ['[[', ']]'],
@@ -174,37 +95,8 @@
 		selectedFiles: [],
 		uploadDialog,
 		editDialog,
-
-		dropFiles(e) {
-			this.toggleUploadActive(e, false);
-			this.setUploadFiles(e.dataTransfer.files);
-			this.uploadDialog.open = true;
-		},
-		selectFiles(e) {
-			e.preventDefault();
-			e.stopPropagation();
-			this.setUploadFiles(e.target.files);
-			this.uploadDialog.open = true;
-		},
-		setUploadFiles(files) {
-			this.uploadDialog.files.splice(0, this.uploadDialog.files.length);
-			console.log(files)
-			for (const file of files) {
-				this.uploadDialog.files.push({
-					file: file,
-					name: file.name,
-					description: '',
-					progress: 0,
-					error: '',
-					request: null,
-				});
-			}
-		},
-		toggleUploadActive(e, active) {
-			e.preventDefault();
-			e.stopPropagation();
-			e.target.classList.toggle("active", active);
-		},
+		moveDialog,
+		shareDialog,
 		toggleFiles() {
 			if (this.selectedFiles.length === this.files.length) {
 				this.selectedFiles.splice(0, this.selectedFiles.length);
@@ -233,12 +125,16 @@
 			switch (e.target.value) {
 				case "download":
 					if (file) {
-						window.open(`${file.Path}?dl=1`, '_blank');
+						window.open(`${file.path}?dl=1`, '_blank');
 						return;
 					}
 					window.open(`${window.location.href}?dl=${this.selectedFiles.join(',')}`, '_blank');
 					break;
 				case "edit":
+					this.editDialog.editFile = file.name;
+					this.editDialog.dir = file.dir;
+					this.editDialog.name = file.name;
+					this.editDialog.description = file.description;
 					this.editDialog.open = true;
 					break;
 
@@ -247,11 +143,12 @@
 					break;
 
 				case "delete":
-					this.deleteDialog.open = true;
+					openDeleteDialog(file ? [file.name] : this.selectedFiles);
 					break;
 
 				case "share":
 					this.shareDialog.open = true;
+					this.shareDialog.path =  file ? file.path : window.location.pathname;
 					break;
 			}
 			e.target.value = "none";

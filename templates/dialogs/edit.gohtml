@@ -1,5 +1,4 @@
-
-<dialog id="edit-dialog" :open="editDialog.open" @close="editDialog.close">
+<dialog v-scope id="edit-dialog" :open="editDialog.open" @close="editDialog.close">
 	<div>
 		<div class="dialog-header">
 			<h2>Edit</h2>
@@ -19,14 +18,14 @@
 					<input id="edit-file-description" type="text" v-model="editDialog.description" autocomplete="off">
 				</label>
 				<div id="edit-upload" class="file-upload">
-					<input type="file" hidden @change="editDialog.selectFile">
+					<input type="file" id="file" hidden @change="editDialog.selectFile">
 					<label for="file">Choose file or drop here.</label>
 				</div>
 			</div>
-			<div id="edit-feedback" class="dialog-main-feedback">
-				<div id="edit-error" class="upload-error"></div>
+			<div class="dialog-main-feedback">
+				<div class="upload-error">[[ editDialog.error ]]</div>
 				<div class="progress">
-					<div id="edit-progress-bar"></div>
+					<div class="progress-bar" :style="{width: `${editDialog.progress * 100}%`}"></div>
 				</div>
 			</div>
 		</div>

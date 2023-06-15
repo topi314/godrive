@@ -1,0 +1,32 @@
+import {reactive} from './petite-vue.js'
+
+export const shareDialog = reactive({
+	open: false,
+	permissions: [],
+	path: "",
+	error: "",
+	close() {
+		this.permissions.splice(0, this.permissions.length);
+		this.path = "";
+		this.error = "";
+	},
+	copy() {
+		const xhr = new XMLHttpRequest();
+		xhr.responseType = "json";
+		xhr.addEventListener("load", async () => {
+			if (xhr.status === 200) {
+				const link = `${this.window.location.href}?${xhr.response.token}`;
+				await navigator.clipboard.writeText(link)
+				this.error = "Link copied to clipboard";
+			} else {
+				this.error = xhr.response?.message || xhr.statusText;
+			}
+		})
+		xhr.open("POST", "/share");
+		xhr.setRequestHeader("Content-Type", "application/json");
+		xhr.send(JSON.stringify({
+			path: this.path,
+			permissions: this.permissions,
+		}));
+	},
+})

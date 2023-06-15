@@ -15,24 +15,24 @@ export function uploadFile(method, path, file, dir, name, description, doneCallb
 		data.append("file", new Blob([""]), name);
 	}
 
-	const rq = new XMLHttpRequest();
-	rq.responseType = "json";
-	rq.addEventListener("load", () => {
-		if (rq.status >= 200 && rq.status < 300) {
-			doneCallback(rq);
+	const xhr = new XMLHttpRequest();
+	xhr.responseType = "json";
+	xhr.addEventListener("load", () => {
+		if (xhr.status >= 200 && xhr.status < 300) {
+			doneCallback(xhr);
 		} else {
-			errorCallback(rq);
+			errorCallback(xhr);
 		}
 	});
-	rq.upload.addEventListener("error", () => {
-		errorCallback(rq);
+	xhr.upload.addEventListener("error", () => {
+		errorCallback(xhr);
 	});
-	rq.upload.addEventListener("progress", (e) => {
+	xhr.upload.addEventListener("progress", (e) => {
 		if (e.lengthComputable) {
 			progressCallback(e);
 		}
 	});
-	rq.open(method, path);
-	rq.send(data);
-	return rq;
+	xhr.open(method, path);
+	xhr.send(data);
+	return xhr;
 }

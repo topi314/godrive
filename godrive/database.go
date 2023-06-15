@@ -31,6 +31,8 @@ var (
 	ErrFileNotFound      = errors.New("file not found")
 	ErrFileAlreadyExists = errors.New("file already exists")
 	ErrUserNotFound      = errors.New("user not found")
+	ErrShareNotFound     = errors.New("share not found")
+	ErrSessionNotFound   = errors.New("session not found")
 )
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
@@ -56,17 +58,48 @@ type UpdateFile struct {
 }
 
 type FilePermissions struct {
-	Path        string      `db:"path"`
-	Permissions Permissions `db:"permissions"`
-	ObjectType  ObjectType  `db:"object_type"`
-	Object      string      `db:"object"`
+	Path        string      `db:"path" json:"path"`
+	Permissions Permissions `db:"permissions" json:"permissions"`
+	ObjectType  ObjectType  `db:"object_type" json:"object_type"`
+	Object      string      `db:"object" json:"object"`
 }
 
 type User struct {
 	ID       string `db:"id"`
 	Username string `db:"username"`
+	Groups   Groups `db:"groups"`
 	Email    string `db:"email"`
 	Home     string `db:"home"`
+}
+
+type Share struct {
+	ID          string      `db:"id"`
+	Path        string      `db:"path"`
+	Permissions Permissions `db:"permissions"`
+	UserID      string      `db:"user_id"`
+}
+
+type Session struct {
+	ID           string    `db:"id"`
+	AccessToken  string    `db:"access_token"`
+	Expiry       time.Time `db:"expiry"`
+	RefreshToken string    `db:"refresh_token"`
+	IDToken      string    `db:"id_token"`
+}
+
+type Groups []string
+
+func (g *Groups) Scan(src interface{}) error {
+	if v, ok := src.(string); ok {
+		*g = strings.Split(v, ",")
+		return nil
+	}
+	return errors.New("invalid type for groups")
+
+}
+
+func (g Groups) Value() (driver.Value, error) {
+	return strings.Join(g, ","), nil
 }
 
 func NewDB(ctx context.Context, cfg DatabaseConfig, schema string) (*DB, error) {
@@ -271,7 +304,7 @@ func (d *DB) GetFilePermissions(ctx context.Context, filePaths []string) ([]File
 	if err != nil {
 		return nil, err
 	}
-	var permissions []FilePermissions
+	permissions := make([]FilePermissions, 0)
 	if err = d.dbx.SelectContext(ctx, &permissions, d.dbx.Rebind(query), args...); err != nil {
 		return nil, fmt.Errorf("error getting path permissions: %w", err)
 	}
@@ -279,7 +312,7 @@ func (d *DB) GetFilePermissions(ctx context.Context, filePaths []string) ([]File
 }
 
 func (d *DB) GetAllFilePermissions(ctx context.Context) ([]FilePermissions, error) {
-	var perms []FilePermissions
+	perms := make([]FilePermissions, 0)
 	if err := d.dbx.SelectContext(ctx, &perms, "SELECT * FROM file_permissions"); err != nil {
 		return nil, fmt.Errorf("error getting all file permissions: %w", err)
 	}
@@ -313,14 +346,15 @@ func (d *DB) DeleteAllFilePermissions(ctx context.Context) error {
 	return nil
 }
 
-func (d *DB) UpsertUser(ctx context.Context, id string, username string, email string, home string) error {
+func (d *DB) UpsertUser(ctx context.Context, id string, username string, groups []string, email string, home string) error {
 	user := &User{
 		ID:       id,
 		Username: username,
+		Groups:   groups,
 		Email:    email,
 		Home:     home,
 	}
-	query, args, err := sqlx.Named("INSERT INTO users (id, username, email, home) VALUES (:id, :username, :email, :home) ON CONFLICT (id) DO UPDATE SET username = :username, email = :email RETURNING home", user)
+	query, args, err := sqlx.Named("INSERT INTO users (id, username, groups, email, home) VALUES (:id, :username, :groups, :email, :home) ON CONFLICT (id) DO UPDATE SET username = :username, groups = :groups, email = :email RETURNING home", user)
 	if err != nil {
 		return fmt.Errorf("error upserting user: %w", err)
 	}
@@ -378,4 +412,98 @@ func (d *DB) GetAllUsers(ctx context.Context) ([]User, error) {
 	}
 
 	return users, nil
+}
+
+func (d *DB) DeleteUser(ctx context.Context, id string) error {
+	if _, err := d.dbx.ExecContext(ctx, "DELETE FROM users WHERE id = $1", id); err != nil {
+		return fmt.Errorf("error deleting user: %w", err)
+	}
+	return nil
+}
+
+func (d *DB) DeleteAllUsers(ctx context.Context) error {
+	if _, err := d.dbx.ExecContext(ctx, "DELETE FROM users"); err != nil {
+		return fmt.Errorf("error deleting all users: %w", err)
+	}
+	return nil
+}
+
+func (d *DB) CreateShare(ctx context.Context, id string, path string, permissions Permissions, userID string) (string, error) {
+	share := &Share{
+		ID:          id,
+		Path:        path,
+		Permissions: permissions,
+		UserID:      userID,
+	}
+
+	query, args, err := sqlx.Named("INSERT INTO shares (id, path, permissions, user_id) VALUES (:id, :path, :permissions, :user_id) ON CONFLICT DO NOTHING RETURNING id", share)
+	if err != nil {
+		return "", fmt.Errorf("error creating share: %w", err)
+	}
+	var shareID string
+	if err = d.dbx.GetContext(ctx, &shareID, query, args...); err != nil {
+		return "", fmt.Errorf("error creating share: %w", err)
+	}
+	return shareID, nil
+}
+
+func (d *DB) GetShare(ctx context.Context, id string) (*Share, error) {
+	var share Share
+	if err := d.dbx.GetContext(ctx, &share, "SELECT * FROM shares WHERE id = $1", id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			err = ErrShareNotFound
+		}
+		return nil, fmt.Errorf("error getting share: %w", err)
+	}
+
+	return &share, nil
+}
+
+func (d *DB) GetShares(ctx context.Context, userID string) ([]Share, error) {
+	var shares []Share
+	if err := d.dbx.SelectContext(ctx, &shares, "SELECT * FROM shares WHERE user_id = $1", userID); err != nil {
+		return nil, fmt.Errorf("error getting shares: %w", err)
+	}
+
+	return shares, nil
+}
+
+func (d *DB) DeleteShare(ctx context.Context, id string) error {
+	if _, err := d.dbx.ExecContext(ctx, "DELETE FROM shares WHERE id = $1", id); err != nil {
+		return fmt.Errorf("error deleting share: %w", err)
+	}
+	return nil
+}
+
+func (d *DB) DeleteAllShares(ctx context.Context) error {
+	if _, err := d.dbx.ExecContext(ctx, "DELETE FROM shares"); err != nil {
+		return fmt.Errorf("error deleting all shares: %w", err)
+	}
+	return nil
+}
+
+func (d *DB) CreateSession(ctx context.Context, session Session) error {
+	if _, err := d.dbx.NamedExecContext(ctx, "INSERT INTO sessions (id, access_token, expiry, refresh_token, id_token) VALUES (:id, :access_token, :expiry, :refresh_token, :id_token) ", session); err != nil {
+		return fmt.Errorf("error creating session: %w", err)
+	}
+	return nil
+}
+
+func (d *DB) DeleteSession(ctx context.Context, id string) error {
+	if _, err := d.dbx.ExecContext(ctx, "DELETE FROM sessions WHERE id = $1", id); err != nil {
+		return fmt.Errorf("error deleting session: %w", err)
+	}
+	return nil
+}
+
+func (d *DB) GetSession(ctx context.Context, id string) (*Session, error) {
+	var session Session
+	if err := d.dbx.GetContext(ctx, &session, "SELECT * FROM sessions WHERE id = $1", id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			err = ErrSessionNotFound
+		}
+		return nil, fmt.Errorf("error getting session: %w", err)
+	}
+
+	return &session, nil
 }

@@ -2,6 +2,7 @@ package godrive
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -45,8 +46,8 @@ const (
 
 var AllPermissions = map[Permissions]string{
 	PermissionRead:   "read",
-	PermissionWrite:  "write",
 	PermissionCreate: "create",
+	PermissionEdit:   "edit",
 	PermissionDelete: "delete",
 	PermissionShare:  "share",
 }
@@ -55,16 +56,16 @@ type Permissions int
 
 const (
 	PermissionRead Permissions = 1 << iota
-	PermissionWrite
 	PermissionCreate
+	PermissionEdit
 	PermissionDelete
 	PermissionShare
 	PermissionsNone = 0
-	PermissionsAll  = PermissionRead | PermissionWrite | PermissionCreate | PermissionDelete | PermissionShare
+	PermissionsAll  = PermissionRead | PermissionCreate | PermissionEdit | PermissionDelete | PermissionShare
 )
 
 func (p Permissions) MarshalJSON() ([]byte, error) {
-	var perms []string
+	perms := make([]string, 0)
 	for perm, name := range AllPermissions {
 		if p.Has(perm) {
 			perms = append(perms, name)
@@ -187,4 +188,49 @@ func (s *Server) PutPermissions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) PostShare(w http.ResponseWriter, r *http.Request) {
+	var share ShareRequest
+	defer r.Body.Close()
+	if err := json.NewDecoder(r.Body).Decode(&share); err != nil {
+		s.error(w, r, err, http.StatusBadRequest)
+		return
+	}
+
+	if share.Path == "" {
+		s.error(w, r, errors.New("path is required"), http.StatusBadRequest)
+		return
+	}
+
+	if share.Permissions == PermissionsNone {
+		s.error(w, r, errors.New("permissions are required"), http.StatusBadRequest)
+		return
+	}
+
+	perms, err := s.db.GetFilePermissions(r.Context(), []string{share.Path})
+	if err != nil {
+		s.error(w, r, err, http.StatusInternalServerError)
+		return
+	}
+
+	userInfo := s.GetUserInfo(r)
+	permissions := s.Permissions(perms, share.Path, userInfo)
+	if !permissions.Has(PermissionShare) {
+		http.Error(w, "permission denied", http.StatusForbidden)
+		return
+	}
+
+	shareID, err := s.db.CreateShare(r.Context(), s.newID(8), share.Path, share.Permissions, userInfo.Subject)
+	if err != nil {
+		s.error(w, r, err, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err = json.NewEncoder(w).Encode(ShareResponse{
+		Token: shareID,
+	}); err != nil {
+		s.error(w, r, err, http.StatusInternalServerError)
+	}
 }
