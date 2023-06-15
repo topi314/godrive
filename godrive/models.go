@@ -15,6 +15,7 @@ type (
 		Path      string
 		PathParts []string
 		Files     []TemplateFile
+		FilesJSON string
 
 		Permissions      Permissions
 		PermissionRead   Permissions
@@ -26,9 +27,10 @@ type (
 
 	SettingsVariables struct {
 		BaseVariables
-		Users       []TemplateUser
-		Groups      []string
-		Permissions []FilePermissions
+		Users           []TemplateUser
+		Groups          []string
+		Permissions     []FilePermissions
+		PermissionsJSON string
 	}
 
 	TemplateUser struct {
@@ -42,15 +44,15 @@ type (
 	}
 
 	TemplateFile struct {
-		IsDir       bool
-		Path        string
-		Dir         string
-		Name        string
-		Size        uint64
-		Description string
-		Date        time.Time
-		Owner       string
-		Permissions Permissions
+		IsDir       bool        `json:"is_dir"`
+		Path        string      `json:"path"`
+		Dir         string      `json:"dir"`
+		Name        string      `json:"name"`
+		Size        uint64      `json:"size"`
+		Description string      `json:"description"`
+		Date        time.Time   `json:"date"`
+		Owner       string      `json:"owner"`
+		Permissions Permissions `json:"permissions"`
 	}
 
 	FileRequest struct {
@@ -78,5 +80,14 @@ type (
 		Permissions Permissions `json:"permissions"`
 		ObjectType  ObjectType  `json:"object_type"`
 		Object      string      `json:"object"`
+	}
+
+	ShareRequest struct {
+		Path        string      `json:"path"`
+		Permissions Permissions `json:"permissions"`
+	}
+
+	ShareResponse struct {
+		Token string `json:"token"`
 	}
 )

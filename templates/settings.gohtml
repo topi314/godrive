@@ -3,64 +3,102 @@
 {{ template "header.gohtml" . }}
 <main>
     <div id="settings">
-        <h1>Settings</h1>
-        <div id="user-list" class="table-list">
-            <div class="table-list-header">
-                <div>Name</div>
-                <div>Email</div>
-                <div>Home</div>
-            </div>
-            {{ range $index, $user := .Users }}
-                <div class="table-list-entry">
-                    <div>
-                        <span class="icon user-icon"></span>
-                        <span class="user-name">{{ $user.Name }}</span>
-                    </div>
-                    <div><span class="user-email">{{ $user.Email }}</span></div>
-                    <div><span class="user-home">{{ $user.Home }}</span></div>
-                </div>
-            {{ end }}
-        </div>
-        <div id="permission-list" class="table-list">
-            <div class="table-list-header">
-                <div>Path</div>
-                <div>Permissions</div>
-                <div>Object Type</div>
-                <div>Object</div>
-				<div>Action</div>
-            </div>
-            {{ range $index, $perms := .Permissions }}
-                <div class="table-list-entry">
-                    <div><input class="permission-path" type="text" placeholder="path" value="{{ $perms.Path }}"></div>
-                    <div>
-                        <select class="permission-perms" multiple>
-                            <option value="read" {{ if $perms.Permissions.Has 1 }}selected{{ end }}>Read</option>
-                            <option value="write" {{ if $perms.Permissions.Has 2 }}selected{{ end }}>Write</option>
-                            <option value="create" {{ if $perms.Permissions.Has 4 }}selected{{ end }}>Create</option>
-                            <option value="delete" {{ if $perms.Permissions.Has 8 }}selected{{ end }}>Delete</option>
-                            <option value="share" {{ if $perms.Permissions.Has 16 }}selected{{ end }}>Share</option>
-                        </select>
-                    </div>
-                    <div>
-                        <select class="permission-object-type">
-                            <option value="user" {{ if eq $perms.ObjectType 1 }}selected{{ end }}>User</option>
-                            <option value="group" {{ if eq $perms.ObjectType 2 }}selected{{ end }}>Group</option>
-                        </select>
-                    </div>
-                    <div>
-                        <input class="permission-object" type="text" placeholder="User/Group" value="{{ $perms.Object }}">
-                    </div>
-					<div>
-						<button class="delete-permission">Delete</button>
+		<div>
+			<h2>Users</h2>
+			<div id="user-list" class="table-list">
+				<div class="table-list-header">
+					<div></div>
+					<div>ID</div>
+					<div>Name</div>
+					<div>Email</div>
+					<div>Home</div>
+				</div>
+                {{ range $index, $user := .Users }}
+					<div class="table-list-entry">
+						<div><span class="icon user-icon"></span></div>
+						<div><span class="user-id">{{ $user.ID }}</span></div>
+						<div><span class="user-name">{{ $user.Name }}</span></div>
+						<div><span class="user-email">{{ $user.Email }}</span></div>
+						<div><span class="user-home">{{ $user.Home }}</span></div>
 					</div>
-                </div>
-            {{ end }}
-        </div>
-        <button id="new-permission">New</button>
-        <button id="save-permissions">Save</button>
+                {{ end }}
+			</div>
+		</div>
+
+
+		<div v-scope>
+			<h2>Permissions</h2>
+			<div id="permission-list" class="table-list">
+				<div class="table-list-header">
+					<div>Path</div>
+					<div>Permissions</div>
+					<div>Object Type</div>
+					<div>Object</div>
+					<div>Action</div>
+				</div>
+				<div v-scope v-for="perms in permissions" class="table-list-entry">
+					<div><input class="permission-path" type="text" placeholder="path" v-model="perms.path"></div>
+					<div>
+						<select class="permission-perms" multiple v-model="perms.permissions">
+							<option value="read">Read</option>
+							<option value="create">Create</option>
+							<option value="edit">Edit</option>
+							<option value="delete">Delete</option>
+							<option value="share">Share</option>
+						</select>
+					</div>
+					<div>
+						<select class="permission-object-type" v-model="perms.object_type">
+							<option value="user">User</option>
+							<option value="group">Group</option>
+						</select>
+					</div>
+					<div>
+						<input class="permission-object" type="text" placeholder="User/Group" v-model="perms.object">
+					</div>
+					<div>
+						<button class="delete-permission" @click="removePermission(perms)">Delete</button>
+					</div>
+				</div>
+			</div>
+			<button v-scope @click="addPermission">New</button>
+			<button v-scope @click="save">Save</button>
+		</div>
     </div>
 </main>
 <script src="/assets/theme.js" defer></script>
-<script src="/assets/script.js" defer></script>
+<script type="module">
+	import {createApp} from '/assets/js/petite-vue.js'
+
+	createApp({
+		$delimiters: ['[[', ']]'],
+		permissions: JSON.parse("{{ .PermissionsJSON }}"),
+		removePermission(perms) {
+			this.permissions.splice(this.permissions.indexOf(perms), 1)
+		},
+		addPermission() {
+			this.permissions.push({
+				path: "",
+				permissions: [],
+				object_type: "user",
+				object: ""
+			})
+		},
+		save() {
+			const xhr = new XMLHttpRequest();
+			xhr.responseType = "json";
+			xhr.onload = () => {
+				if (xhr.status === 204) {
+					// window.location.reload();
+				} else {
+					alert(xhr.response?.message || xhr.statusText);
+				}
+			}
+			xhr.open("PUT", "/settings/permissions");
+			xhr.setRequestHeader("Content-Type", "application/json");
+			xhr.send(JSON.stringify(this.permissions));
+		}
+	}).mount()
+</script>
 </body>
 </html>

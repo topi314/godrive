@@ -138,8 +138,7 @@ func main() {
 				RedirectURL:  cfg.Auth.RedirectURL,
 				Scopes:       []string{oidc.ScopeOpenID, "groups", "email", "profile", oidc.ScopeOfflineAccess},
 			},
-			Sessions: map[string]*godrive.Session{},
-			States:   map[string]string{},
+			States: map[string]string{},
 		}
 	}
 
@@ -174,7 +173,6 @@ func main() {
 
 	var (
 		tmplFunc godrive.ExecuteTemplateFunc
-		jsFunc   godrive.WriterFunc
 		cssFunc  godrive.WriterFunc
 		assets   http.FileSystem
 	)
@@ -182,15 +180,16 @@ func main() {
 		slog.Info("Running in dev mode")
 		tmplFunc = func(wr io.Writer, name string, data any) error {
 			tmpl := template.New("").Funcs(funcs)
-			tmpl = template.Must(tmpl.ParseGlob("templates/*"))
+			tmpl = template.Must(tmpl.ParseGlob("templates/*.gohtml"))
+			tmpl = template.Must(tmpl.ParseGlob("templates/dialogs/*.gohtml"))
 			return tmpl.ExecuteTemplate(wr, name, data)
 		}
-		jsFunc = writeDir(os.DirFS("assets"), "js/*")
 		cssFunc = writeDir(os.DirFS("assets"), "css/*")
 		assets = http.Dir(".")
 	} else {
 		tmpl := template.New("").Funcs(funcs)
-		tmpl = template.Must(tmpl.ParseFS(Templates, "templates/*"))
+		tmpl = template.Must(tmpl.ParseFS(Templates, "templates/*.gohtml"))
+		tmpl = template.Must(tmpl.ParseFS(Templates, "templates/dialogs/*.gohtml"))
 		tmplFunc = tmpl.ExecuteTemplate
 
 		jsBuff := new(bytes.Buffer)
@@ -203,10 +202,6 @@ func main() {
 			slog.Error("Error while minifying css", slog.Any("err", err))
 		}
 
-		jsFunc = func(w io.Writer) error {
-			_, err = w.Write(jsBuff.Bytes())
-			return err
-		}
 		cssFunc = func(w io.Writer) error {
 			_, err = w.Write(cssBuff.Bytes())
 			return err
@@ -214,7 +209,7 @@ func main() {
 		assets = http.FS(Assets)
 	}
 
-	s := godrive.NewServer(godrive.FormatBuildVersion(Version, Commit, buildTime), cfg, db, auth, storage, tracer, meter, assets, tmplFunc, jsFunc, cssFunc)
+	s := godrive.NewServer(godrive.FormatBuildVersion(Version, Commit, buildTime), cfg, db, auth, storage, tracer, meter, assets, tmplFunc, cssFunc)
 	slog.Info("godrive listening", slog.String("listen_addr", cfg.ListenAddr))
 	go s.Start()
 	defer s.Close()

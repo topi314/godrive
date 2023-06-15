@@ -69,7 +69,7 @@ main {
 }
 
 #file-list {
-    grid-template-columns: 2.5rem 3.5rem repeat(5, auto) 6rem;
+    grid-template-columns: 2.5rem 3.5rem repeat(5, auto) 2rem;
 }
 
 .file-more {
@@ -101,8 +101,21 @@ main {
     background-image: var(--theme);
 }
 
+#upload-files {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
 #upload-files > div {
     padding: 0.5rem;
+}
+
+#edit-file > label {
+	display: flex;
+	flex-direction: row;
+	align-items: baseline;
+	gap: 0.5rem;
 }
 
 .upload-file {
@@ -132,15 +145,14 @@ main {
     gap: 0.5rem;
 }
 
-#upload-file-fields {
-    flex-grow: 1;
+.file-fields {
     display: grid;
     grid-template-columns: auto 1fr;
     grid-gap: 0.5rem;
 }
 
 .dialog-main-feedback {
-    display: none;
+    display: flex;
     flex-direction: column;
     gap: 0.5rem;
     padding: 0.5rem;

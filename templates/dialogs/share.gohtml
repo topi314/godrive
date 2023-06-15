@@ -1,0 +1,25 @@
+<dialog v-scope id="share-dialog" @close="shareDialog.onClose">
+	<div>
+		<div class="dialog-header">
+			<h2>Share</h2>
+		</div>
+		<div class="dialog-main">
+			<label for="share-permissions">
+				Permissions
+				<select class="permission-perms" multiple v-model="shareDialog.permissions">
+					<option value="read">Read</option>
+					<option value="create">Create</option>
+					<option value="edit">Edit</option>
+					<option value="delete">Delete</option>
+					<option value="share">Share</option>
+				</select>
+			</label>
+			<div class="upload-error">[[ shareDialog.error ]]</div>
+
+		</div>
+		<div class="dialog-footer">
+			<button class="btn danger" @click="shareDialog.close">Cancel</button>
+			<button class="btn primary" @click="shareDialog.copy">Copy</button>
+		</div>
+	</div>
+</dialog>

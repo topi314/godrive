@@ -1,0 +1,22 @@
+<dialog v-scope id="move-dialog" @close="moveDialog.onClose">
+	<div>
+		<div class="dialog-header">
+			<h2>Move</h2>
+		</div>
+		<div class="dialog-main">
+			<div class="dialog-main-content">
+				<label for="move-files-dir">
+					Dir
+					<input id="move-files-dir" type="text" v-model="moveDialog.dir" autocomplete="off">
+				</label>
+			</div>
+			<div class="dialog-main-feedback">
+				<div class="upload-error">[[ moveDialog.error ]]</div>
+			</div>
+		</div>
+		<div class="dialog-footer">
+			<button class="btn danger" @click="moveDialog.close">Cancel</button>
+			<button class="btn primary" @click="moveDialog.move(selectedFiles)">Move</button>
+		</div>
+	</div>
+</dialog>

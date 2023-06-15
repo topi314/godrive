@@ -1,45 +1,30 @@
-function openMoveDialog() {
-    document.querySelector("#move-files-dir").value = window.location.pathname;
-    document.querySelector("#move-dialog").showModal();
-}
+import {reactive} from './petite-vue.js'
 
-register("#move-cancel-btn", "click", () => {
-    document.querySelector("#move-dialog").close();
-});
-
-register("#move-confirm-btn", "click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    const moveDir = document.querySelector("#move-files-dir");
-    moveDir.disabled = true;
-    const confirmBtn = document.querySelector("#move-confirm-btn");
-    confirmBtn.disabled = true;
-    document.querySelector("#move-feedback").style.display = "flex";
-
-    const rq = new XMLHttpRequest();
-    rq.responseType = "json";
-    rq.addEventListener("load", () => {
-        if (rq.status === 204) {
-            window.location.reload();
-        } else if (rq.status === 200) {
-            setUploadError(`#move-error`, rq)
-        } else {
-            setUploadError(`#move-error`, rq)
-        }
-    })
-    rq.open("PUT", window.location.pathname);
-    rq.setRequestHeader("Content-Type", "application/json");
-    rq.setRequestHeader("Destination", moveDir.value);
-    rq.send(JSON.stringify(selectedFiles));
-});
-
-register("#move-dialog", "close", () => {
-    for (const request of requests) {
-        request.abort();
-    }
-    selectedFiles.splice(0, selectedFiles.length);
-    document.querySelector("#move-feedback").style.display = "none";
-    document.querySelector("#move-confirm-btn").disabled = false;
-    document.querySelector("#move-files-dir").disabled = false;
-});
+export const moveDialog = reactive({
+	dir: window.location.pathname,
+	error: '',
+	open() {
+		document.querySelector('#move-dialog').showModal();
+	},
+	close() {
+		document.querySelector('#move-dialog').close();
+	},
+	onClose() {
+		this.error = '';
+	},
+	move(files) {
+		const xhr = new XMLHttpRequest();
+		xhr.responseType = "json";
+		xhr.addEventListener("load", () => {
+			if (xhr.status === 204) {
+				window.location.reload();
+			} else {
+				this.error = xhr.response?.message || xhr.statusText;
+			}
+		})
+		xhr.open("PUT", window.location.pathname);
+		xhr.setRequestHeader("Content-Type", "application/json");
+		xhr.setRequestHeader("Destination", this.dir);
+		xhr.send(JSON.stringify(files));
+	}
+})

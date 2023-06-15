@@ -1,0 +1,42 @@
+<dialog v-scope id="upload-dialog" @close="uploadDialog.onClose">
+	<div>
+		<div class="dialog-header">
+			<h2>Upload</h2>
+		</div>
+		<div class="dialog-main">
+			<label for="upload-file-dir">
+				Directory
+				<input type="text" v-model="uploadDialog.dir" autocomplete="off">
+			</label>
+			<div id="upload-files">
+				<div v-for="file in uploadDialog.files" class="upload-file">
+					<div>
+						<span class="icon icon-large file-icon"></span>
+					</div>
+
+					<div class="upload-file-content">
+						<div class="file-fields">
+							<label for="file-${i}-name">Name</label>
+							<div><input type="text" id="file-${i}-name" v-model="file.name"></div>
+
+							<label for="file-${i}-description">Description</label>
+							<div><textarea id="file-${i}-description" v-model="file.description"></textarea></div>
+						</div>
+						<div  class="upload-error">[[file.error]]</div>
+						<div class="progress">
+							<div class="progress-bar" :style="{width: `${file.progress * 100}%`}"></div>
+						</div>
+					</div>
+
+					<div>
+						<button id="close" class="icon-btn" @click="uploadDialog.removeFile(file)"></button>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="dialog-footer">
+			<button class="btn danger" @click="uploadDialog.close">Cancel</button>
+			<button class="btn primary" @click="uploadDialog.upload">Upload</button>
+		</div>
+	</div>
+</dialog>

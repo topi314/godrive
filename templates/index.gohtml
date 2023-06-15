@@ -1,170 +1,154 @@
 {{ template "head.gohtml" . }}
 <body>
-<dialog id="upload-dialog">
-    <div>
-        <div class="dialog-header">
-            <h2>Upload</h2>
-        </div>
-        <div class="dialog-main">
-            <label for="upload-file-dir">
-                Directory
-                <input id="upload-file-dir" type="text" value="{{ .Path }}" autocomplete="off">
-            </label>
-            <div id="upload-files"></div>
-        </div>
-        <div class="dialog-footer">
-            <button id="upload-cancel-btn" class="btn danger">Cancel</button>
-            <button id="upload-confirm-btn" class="btn primary">Upload</button>
-        </div>
-    </div>
-</dialog>
-<dialog id="edit-dialog">
-    <div>
-        <div class="dialog-header">
-            <h2>Edit</h2>
-        </div>
-        <div class="dialog-main">
-            <div id="edit-file" class="dialog-main-content">
-                <input id="edit-file-name" type="text" autocomplete="off" hidden>
-                <label for="edit-file-new-dir">
-                    Dir
-                    <input id="edit-file-new-dir" type="text" autocomplete="off">
-                </label>
-                <label for="edit-file-new-name">
-                    Name
-                    <input id="edit-file-new-name" type="text" autocomplete="off">
-                </label>
-                <label for="edit-file-description">
-                    Description
-                    <input id="edit-file-description" type="text" autocomplete="off">
-                </label>
-                <div id="edit-upload" class="file-upload">
-                    <input type="file" id="file" hidden>
-                    <label for="file">Choose file or drop here.</label>
-                </div>
-            </div>
-            <div id="edit-feedback" class="dialog-main-feedback">
-                <div id="edit-error" class="upload-error"></div>
-                <div class="progress">
-                    <div id="edit-progress-bar"></div>
-                </div>
-            </div>
-        </div>
-        <div class="dialog-footer">
-            <button id="edit-cancel-btn" class="btn danger">Cancel</button>
-            <button id="edit-confirm-btn" class="btn primary">Edit</button>
-        </div>
-    </div>
-</dialog>
-<dialog id="move-dialog">
-    <div>
-        <div class="dialog-header">
-            <h2>Move</h2>
-        </div>
-        <div class="dialog-main">
-            <div id="move-files" class="dialog-main-content">
-                <label for="move-files-dir">
-                    Dir
-                    <input id="move-files-dir" type="text" autocomplete="off">
-                </label>
-            </div>
-            <div id="move-feedback" class="dialog-main-feedback">
-                <div id="move-error" class="upload-error"></div>
-            </div>
-        </div>
-        <div class="dialog-footer">
-            <button id="move-cancel-btn" class="btn danger">Cancel</button>
-            <button id="move-confirm-btn" class="btn primary">Move</button>
-        </div>
-    </div>
-</dialog>
+{{ template "upload.gohtml" . }}
+{{ template "edit.gohtml" . }}
+{{ template "move.gohtml" . }}
+{{ template "share.gohtml" . }}
 {{ template "header.gohtml" . }}
 <main>
-    <div id="navigation">
-        <div>
-            <input type="checkbox" id="files-select" class="checkbox" data-file="{{ .Path }}" autocomplete="off">
-            <label for="files-select"></label>
-        </div>
-        <div class="navigation-path">
-            <a href="/">/</a>
-            {{ range $index, $path := .PathParts }}
-                <a href="/{{ assemblePath $.PathParts $index }}">{{ $path }}{{ if not (isLast $.PathParts $index) }}/{{end}}</a>
-            {{ end }}
-        </div>
+	<div id="navigation">
 		<div>
-			<a class="btn primary" href="{{ .User.Home }}">Home</a>
+			<input v-scope type="checkbox" id="files-select" class="checkbox" autocomplete="off" :checked="selectedFiles.length === files.length && files.length !== 0" @click="toggleFiles">
+			<label for="files-select"></label>
 		</div>
-        <div>
-            <select id="files-more" class="file-more" autocomplete="off" disabled>
-                <option value="none" selected disabled hidden>More</option>
-                <option value="download">Download</option>
-                <option value="move">Move</option>
-                <option value="delete">Delete</option>
-            </select>
-        </div>
-    </div>
-    <div id="file-list" class="table-list">
-        <div class="table-list-header">
-            <div></div>
-            <div>Type</div>
-            <div>Name</div>
-            <div>Size</div>
-            <div>Date</div>
-            <div>Description</div>
-            <div>Owner</div>
-            <div></div>
-        </div>
+		<div class="navigation-path">
+			<a href="/">/</a>
+            {{ range $index, $path := .PathParts }}
+				<a href="/{{ assemblePath $.PathParts $index }}">{{ $path }}{{ if not (isLast $.PathParts $index) }}/{{end}}</a>
+            {{ end }}
+		</div>
+
+		<a class="btn primary" href="{{ .User.Home }}">Home</a>
+
+		<select v-scope id="files-more" class="file-more" autocomplete="off" :disabled="selectedFiles.length === 0" @change="fileMore">
+			<option value="none" selected disabled hidden>More</option>
+			<option value="download">Download</option>
+			<option value="move">Move</option>
+			<option value="delete">Delete</option>
+			<option value="share">Share</option>
+		</select>
+	</div>
+	<div id="file-list" class="table-list">
+		<div class="table-list-header">
+			<div></div>
+			<div>Type</div>
+			<div>Name</div>
+			<div>Size</div>
+			<div>Date</div>
+			<div>Description</div>
+			<div>Owner</div>
+			<div></div>
+		</div>
         {{ range $index, $file := .Files }}
-            <div class="table-list-entry">
-                <div>
-                    <input type="checkbox" id="file-select-{{ $index }}" class="file-select checkbox {{ if $file.IsDir }}folder{{ else }}file{{ end }}" data-name="{{ $file.Name }}" autocomplete="off">
-                    <label for="file-select-{{ $index }}"></label>
-                </div>
-                <div>
-                    <span class="icon {{ if $file.IsDir }}folder{{ else }}file{{ end }}-icon"></span>
-                </div>
-                <div>
-                    <a href="{{ $file.Path }}">{{ $file.Name }}</a>
-                </div>
-                <div>{{ humanizeIBytes $file.Size }}</div>
-                <div>{{ humanizeTime $file.Date }}</div>
-                <div>{{ $file.Description }}</div>
-                <div>{{ $file.Owner }}</div>
-                <div>
-                    <select class="file-more" data-file="{{ $file.Path }}" data-name="{{ $file.Name }}" data-description="{{ $file.Description }}" autocomplete="off">
-                        <option value="none" selected disabled hidden>More</option>
-                        <option value="download">Download</option>
+			<div class="table-list-entry">
+				<div>
+					<input v-scope type="checkbox" id="file-select-{{ $index }}" class="file-select checkbox {{ if $file.IsDir }}folder{{ else }}file{{ end }}" autocomplete="off" :checked="selectedFiles.includes('{{ $file.Name }}')" @click="toggleFile('{{ $file.Name }}')">
+					<label for="file-select-{{ $index }}"></label>
+				</div>
+				<div>
+					<span class="icon {{ if $file.IsDir }}folder{{ else }}file{{ end }}-icon"></span>
+				</div>
+				<div>
+					<a href="{{ $file.Path }}">{{ $file.Name }}</a>
+				</div>
+				<div>{{ humanizeIBytes $file.Size }}</div>
+				<div>{{ humanizeTime $file.Date }}</div>
+				<div>{{ $file.Description }}</div>
+				<div>{{ $file.Owner }}</div>
+				<div>
+					<select v-scope class="file-more" autocomplete="off" @change="fileMore($event, {{ $index }})">
+						<option value="none" selected disabled hidden></option>
+						<option value="download">Download</option>
                         {{ if $file.Permissions.Has $.PermissionWrite }}
-                            <option value="edit">Edit</option>
+							<option value="edit">Edit</option>
                         {{ end }}
                         {{ if $file.Permissions.Has $.PermissionDelete }}
-                            <option value="delete">Delete</option>
+							<option value="delete">Delete</option>
                         {{ end }}
-                    </select>
-                </div>
-                <div>
-                    <select id="file-more-{{ $index }}" class="file-more" data-file="{{ $file.Path }}" data-name="{{ $file.Name }}" data-description="{{ $file.Description }}" autocomplete="off">
-                        <option value="none" selected disabled hidden></option>
-                        <option value="download">Download</option>
-                        {{ if $file.Permissions.Has $.PermissionWrite }}
-                            <option value="edit">Edit</option>
+                        {{ if $file.Permissions.Has $.PermissionShare }}
+							<option value="share">Share</option>
                         {{ end }}
-                        {{ if $file.Permissions.Has $.PermissionDelete }}
-                            <option value="delete">Delete</option>
-                        {{ end }}
-                    </select>
-                </div>
-            </div>
+					</select>
+				</div>
+			</div>
         {{ end }}
-    </div>
+	</div>
     {{ if .Permissions.Has $.PermissionCreate }}
-        <div class="file-upload">
-            <input type="file" id="files" multiple hidden>
-            <label for="files">Choose files or drop here.</label>
-        </div>
+		<div v-scope class="file-upload" @dragover="toggleUploadActive($event, true)" @dragenter="toggleUploadActive($event, true)" @dragleave="toggleUploadActive($event, false)" @dragend="toggleUploadActive($event, false)" @drop="uploadDialog.dropFiles">
+			<input type="file" id="files" multiple hidden @change="uploadDialog.selectFiles">
+			<label for="files">Choose files or drop here.</label>
+		</div>
     {{ end }}
 </main>
 <script src="/assets/theme.js" defer></script>
-<script src="/assets/script.js" defer></script>
+<script type="module">
+	import {createApp} from '/assets/js/petite-vue.js'
+	import {uploadDialog} from '/assets/js/upload.js'
+	import {editDialog} from '/assets/js/edit.js'
+	import {moveDialog} from '/assets/js/move.js'
+	import {shareDialog} from '/assets/js/share.js'
+	import {openDeleteDialog} from '/assets/js/delete.js'
+
+	createApp({
+		$delimiters: ['[[', ']]'],
+		files: JSON.parse("{{ .FilesJSON }}"),
+		selectedFiles: [],
+		uploadDialog,
+		editDialog,
+		moveDialog,
+		shareDialog,
+		toggleFiles() {
+			if (this.selectedFiles.length === this.files.length) {
+				this.selectedFiles.splice(0, this.selectedFiles.length);
+				return;
+			}
+			for (const file of this.files) {
+				if (this.selectedFiles.includes(file.name)) {
+					continue;
+				}
+				this.selectedFiles.push(file.name);
+			}
+		},
+		toggleFile(file) {
+			if (this.selectedFiles.includes(file)) {
+				this.selectedFiles.splice(this.selectedFiles.indexOf(file), 1);
+			} else {
+				this.selectedFiles.push(file);
+			}
+		},
+		fileMore(e, fileIndex) {
+			e.preventDefault();
+			e.stopPropagation();
+
+			const file = fileIndex > -1 ? this.files[fileIndex] : null;
+
+			switch (e.target.value) {
+				case "download":
+					if (file) {
+						window.open(`${file.path}?dl=1`, '_blank');
+						return;
+					}
+					window.open(`${window.location.href}?dl=${this.selectedFiles.join(',')}`, '_blank');
+					break;
+				case "edit":
+					this.editDialog.open(file.name, file.dir, file.name, file.description);
+					break;
+
+				case "move":
+					this.moveDialog.open();
+					break;
+
+				case "delete":
+					openDeleteDialog(file ? [file.name] : this.selectedFiles);
+					break;
+
+				case "share":
+					this.shareDialog.open(file ? file.path : window.location.pathname);
+					break;
+			}
+			e.target.value = "none";
+		}
+	}).mount()
+</script>
 </body>
 </html>

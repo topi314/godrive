@@ -8,8 +8,12 @@
     max-width: 50rem;
 }
 
+.user-icon {
+	background-image: var(--user);
+}
+
 #user-list {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: 2.5rem repeat(4, auto);
 }
 
 #permission-list {

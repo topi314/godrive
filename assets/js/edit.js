@@ -1,76 +1,62 @@
-const selectedFiles = [];
+import {reactive} from './petite-vue.js'
+import * as api from './api.js'
 
-register("#file", "change", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    files.splice(0, files.length, ...e.target.files);
-    document.querySelector("#edit-file-new-name").value = files[0].name;
-});
-
-register("#edit-cancel-btn", "click", () => {
-    document.querySelector("#edit-dialog").close();
-});
-
-register("#edit-confirm-btn", "click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    let file;
-    if (files && files.length > 0) {
-        file = files[0];
-    }
-    let path = window.location.pathname;
-    if (!path.endsWith("/")) {
-        path += "/";
-    }
-    path += document.querySelector("#edit-file-name").value;
-
-    const fileNewDir = document.querySelector("#edit-file-new-dir");
-    const fileNewName = document.querySelector("#edit-file-new-name");
-    const fileDescription = document.querySelector("#edit-file-description");
-
-    fileNewDir.disabled = true;
-    fileNewName.disabled = true;
-    fileDescription.disabled = true;
-
-    document.querySelector("#edit-upload").style.display = "none";
-    document.querySelector("#edit-feedback").style.display = "flex";
-
-    uploadFile("PATCH",
-        path,
-        file,
-        fileNewDir.value,
-        fileNewName.value,
-        fileDescription.value,
-        (xhr) => {
-            window.location.reload();
-        },
-        (xhr) => {
-            setUploadError("#edit-error", xhr)
-        },
-        (e) => {
-            document.querySelector("#edit-progress-bar").style.width = `${e.loaded / e.total * 100}%`;
-        }
-    );
-});
-
-register("#edit-dialog", "close", () => {
-    for (const request of requests) {
-        request.abort();
-    }
-    files.splice(0, files.length)
-    requests.splice(0, requests.length);
-    document.querySelector("#edit-error").textContent = "";
-    document.querySelector("#edit-progress-bar").style.width = "0";
-    document.querySelector("#edit-file").style.display = "flex";
-    document.querySelector("#edit-feedback").style.display = "none";
-    document.querySelector("#edit-upload").style.display = "flex";
-});
-
-
-function openEditDialog(dataset) {
-    document.querySelector("#edit-file-name").value = dataset.name;
-    document.querySelector("#edit-file-new-dir").value = window.location.pathname;
-    document.querySelector("#edit-file-new-name").value = dataset.name;
-    document.querySelector("#edit-file-description").value = dataset.description;
-    document.querySelector("#edit-dialog").showModal();
-}
+export const editDialog = reactive({
+	name: '',
+	dir: '',
+	newName: '',
+	description: '',
+	file: null,
+	request: null,
+	progress: 0,
+	error: '',
+	open(name, dir, newName, description) {
+		this.name = name;
+		this.dir = dir;
+		this.newName = newName;
+		this.description = description;
+		document.querySelector("#edit-dialog").showModal();
+	},
+	close() {
+		document.querySelector("#edit-dialog").close();
+	},
+	selectFile(e) {
+		this.file = e.target.files[0];
+		if (this.file.name !== this.newName) {
+			this.newName = this.file.name;
+		}
+	},
+	onClose() {
+		if (this.request) {
+			this.request.abort();
+		}
+		this.file = null;
+		this.name = '';
+		this.description = '';
+		this.progress = 0;
+		this.error = '';
+		this.request = null;
+	},
+	edit() {
+		let path = window.location.pathname;
+		if (!path.endsWith("/")) {
+			path += "/";
+		}
+		this.request = api.uploadFile("PATCH",
+				path + this.name,
+				this.file,
+				this.dir,
+				this.newName,
+				this.description,
+				() => {
+					window.location.reload();
+				},
+				(xhr) => {
+					this.error = xhr.response?.message || xhr.statusText;
+				},
+				(e) => {
+					this.progress = e.loaded / e.total;
+				},
+		);
+	},
+})
