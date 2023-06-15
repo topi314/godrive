@@ -1,4 +1,4 @@
-<dialog v-scope id="move-dialog" :open="moveDialog.open" @close="moveDialog.close">
+<dialog v-scope id="move-dialog" @close="moveDialog.onClose">
 	<div>
 		<div class="dialog-header">
 			<h2>Move</h2>
@@ -15,7 +15,7 @@
 			</div>
 		</div>
 		<div class="dialog-footer">
-			<button class="btn danger" @click="moveDialog.open = false">Cancel</button>
+			<button class="btn danger" @click="moveDialog.close">Cancel</button>
 			<button class="btn primary" @click="moveDialog.move(selectedFiles)">Move</button>
 		</div>
 	</div>

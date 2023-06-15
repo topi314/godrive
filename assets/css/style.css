@@ -111,6 +111,13 @@ main {
     padding: 0.5rem;
 }
 
+#edit-file > label {
+	display: flex;
+	flex-direction: row;
+	align-items: baseline;
+	gap: 0.5rem;
+}
+
 .upload-file {
     display: flex;
     align-items: start;
@@ -138,8 +145,7 @@ main {
     gap: 0.5rem;
 }
 
-#upload-file-fields {
-    flex-grow: 1;
+.file-fields {
     display: grid;
     grid-template-columns: auto 1fr;
     grid-gap: 0.5rem;

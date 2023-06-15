@@ -1,11 +1,17 @@
 import {reactive} from './petite-vue.js'
 
 export const shareDialog = reactive({
-	open: false,
 	permissions: [],
 	path: "",
 	error: "",
+	open(path) {
+		this.path = path;
+		document.querySelector("#share-dialog").showModal();
+	},
 	close() {
+		document.querySelector("#share-dialog").close();
+	},
+	onClose() {
 		this.permissions.splice(0, this.permissions.length);
 		this.path = "";
 		this.error = "";

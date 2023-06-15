@@ -1,5 +1,4 @@
-
-<dialog v-scope id="upload-dialog" :open="uploadDialog.open" @close="uploadDialog.close">
+<dialog v-scope id="upload-dialog" @close="uploadDialog.onClose">
 	<div>
 		<div class="dialog-header">
 			<h2>Upload</h2>
@@ -16,7 +15,7 @@
 					</div>
 
 					<div class="upload-file-content">
-						<div id="upload-file-fields">
+						<div class="file-fields">
 							<label for="file-${i}-name">Name</label>
 							<div><input type="text" id="file-${i}-name" v-model="file.name"></div>
 
@@ -36,7 +35,7 @@
 			</div>
 		</div>
 		<div class="dialog-footer">
-			<button class="btn danger" @click="uploadDialog.open = false">Cancel</button>
+			<button class="btn danger" @click="uploadDialog.close">Cancel</button>
 			<button class="btn primary" @click="uploadDialog.upload">Upload</button>
 		</div>
 	</div>

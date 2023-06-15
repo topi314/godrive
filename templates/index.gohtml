@@ -131,15 +131,11 @@
 					window.open(`${window.location.href}?dl=${this.selectedFiles.join(',')}`, '_blank');
 					break;
 				case "edit":
-					this.editDialog.editFile = file.name;
-					this.editDialog.dir = file.dir;
-					this.editDialog.name = file.name;
-					this.editDialog.description = file.description;
-					this.editDialog.open = true;
+					this.editDialog.open(file.name, file.dir, file.name, file.description);
 					break;
 
 				case "move":
-					this.moveDialog.open = true;
+					this.moveDialog.open();
 					break;
 
 				case "delete":
@@ -147,8 +143,7 @@
 					break;
 
 				case "share":
-					this.shareDialog.open = true;
-					this.shareDialog.path =  file ? file.path : window.location.pathname;
+					this.shareDialog.open(file ? file.path : window.location.pathname);
 					break;
 			}
 			e.target.value = "none";

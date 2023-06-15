@@ -1,26 +1,18 @@
-<dialog v-scope id="edit-dialog" :open="editDialog.open" @close="editDialog.close">
+<dialog v-scope id="edit-dialog" @close="editDialog.onClose">
 	<div>
 		<div class="dialog-header">
 			<h2>Edit</h2>
 		</div>
 		<div class="dialog-main">
-			<div id="edit-file" class="dialog-main-content">
-				<label for="edit-file-new-dir">
-					Dir
-					<input id="edit-file-new-dir" type="text" v-model="editDialog.dir" autocomplete="off" >
-				</label>
-				<label for="edit-file-new-name">
-					Name
-					<input id="edit-file-new-name" type="text" v-model="editDialog.name" autocomplete="off">
-				</label>
-				<label for="edit-file-description">
-					Description
-					<input id="edit-file-description" type="text" v-model="editDialog.description" autocomplete="off">
-				</label>
-				<div id="edit-upload" class="file-upload">
-					<input type="file" id="file" hidden @change="editDialog.selectFile">
-					<label for="file">Choose file or drop here.</label>
-				</div>
+			<div class="file-fields">
+				<label for="edit-file-new-dir">Dir</label>
+				<div><input id="edit-file-new-dir" type="text" v-model="editDialog.dir" autocomplete="off"></div>
+
+				<label for="edit-file-new-name">Name</label>
+				<div><input id="edit-file-new-name" type="text" v-model="editDialog.name" autocomplete="off"></div>
+
+				<label for="edit-file-description">Description</label>
+				<div><textarea id="edit-file-description" v-model="editDialog.description"></textarea></div>
 			</div>
 			<div class="dialog-main-feedback">
 				<div class="upload-error">[[ editDialog.error ]]</div>
@@ -28,9 +20,16 @@
 					<div class="progress-bar" :style="{width: `${editDialog.progress * 100}%`}"></div>
 				</div>
 			</div>
+			<div id="edit-upload" class="file-upload">
+				<input type="file" id="file" hidden @change="editDialog.selectFile">
+				<label for="file">
+					<span v-if="editDialog.file">[[ editDialog.file.name ]]</span>
+					<span v-else>Choose file or drop here.</span>
+				</label>
+			</div>
 		</div>
 		<div class="dialog-footer">
-			<button class="btn danger" @click="editDialog.open = false">Cancel</button>
+			<button class="btn danger" @click="editDialog.close">Cancel</button>
 			<button class="btn primary" @click="editDialog.edit">Edit</button>
 		</div>
 	</div>

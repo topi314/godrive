@@ -1,10 +1,15 @@
 import {reactive} from './petite-vue.js'
 
 export const moveDialog = reactive({
-	open: false,
 	dir: window.location.pathname,
 	error: '',
+	open() {
+		document.querySelector('#move-dialog').showModal();
+	},
 	close() {
+		document.querySelector('#move-dialog').close();
+	},
+	onClose() {
 		this.error = '';
 	},
 	move(files) {

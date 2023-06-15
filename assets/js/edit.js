@@ -2,22 +2,31 @@ import {reactive} from './petite-vue.js'
 import * as api from './api.js'
 
 export const editDialog = reactive({
-	open: false,
-	editFile: '',
-	dir: '',
 	name: '',
+	dir: '',
+	newName: '',
 	description: '',
 	file: null,
 	request: null,
 	progress: 0,
 	error: '',
-	selectFile(e) {
-		this.file = e.target.files[0];
-		if (this.editFile === this.name) {
-			this.name = this.file.name;
-		}
+	open(name, dir, newName, description) {
+		this.name = name;
+		this.dir = dir;
+		this.newName = newName;
+		this.description = description;
+		document.querySelector("#edit-dialog").showModal();
 	},
 	close() {
+		document.querySelector("#edit-dialog").close();
+	},
+	selectFile(e) {
+		this.file = e.target.files[0];
+		if (this.file.name !== this.newName) {
+			this.newName = this.file.name;
+		}
+	},
+	onClose() {
 		if (this.request) {
 			this.request.abort();
 		}
@@ -33,11 +42,11 @@ export const editDialog = reactive({
 		if (!path.endsWith("/")) {
 			path += "/";
 		}
-		api.uploadFile("PATCH",
-				path + this.editFile,
+		this.request = api.uploadFile("PATCH",
+				path + this.name,
 				this.file,
 				this.dir,
-				this.name,
+				this.newName,
 				this.description,
 				() => {
 					window.location.reload();

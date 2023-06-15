@@ -2,15 +2,9 @@ import {reactive} from './petite-vue.js'
 import * as api from './api.js'
 
 export const uploadDialog = reactive({
-	open: false,
 	dir: window.location.pathname,
 	files: [],
-	toggleUploadActive(e, active) {
-		e.preventDefault();
-		e.stopPropagation();
-		e.target.classList.toggle("active", active);
-	},
-	setFiles(files) {
+	open(files) {
 		this.files.splice(0, this.files.length);
 		for (const file of files) {
 			this.files.push({
@@ -22,31 +16,40 @@ export const uploadDialog = reactive({
 				request: null,
 			});
 		}
+		document.querySelector("#upload-dialog").showModal();
+	},
+	close() {
+		document.querySelector("#upload-dialog").close();
+	},
+	onClose() {
+		for (const file of this.files) {
+			if (file.request) {
+				file.request.abort();
+			}
+		}
+		this.files.splice(0, this.files.length);
+	},
+	toggleUploadActive(e, active) {
+		e.preventDefault();
+		e.stopPropagation();
+		e.target.classList.toggle("active", active);
 	},
 	dropFiles(e) {
 		this.toggleUploadActive(e, false);
-		this.setFiles(e.dataTransfer.files);
-		this.open = true;
+		this.open(e.dataTransfer.files);
 	},
 	selectFiles(e) {
 		e.preventDefault();
 		e.stopPropagation();
-		this.setFiles(e.target.files);
-		this.open = true;
+		this.open(e.target.files);
 	},
 	removeFile(file) {
 		this.files.splice(this.files.indexOf(file), 1);
 	},
-	close() {
-		for (const file of this.files) {
-			file.request.abort();
-		}
-		this.files.splice(0, this.files.length);
-	},
 	upload() {
 		let done = 0;
 		for (const file of this.files) {
-			api.uploadFile("POST",
+			file.request = api.uploadFile("POST",
 					this.dir,
 					file.file,
 					undefined,

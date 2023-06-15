@@ -1,5 +1,4 @@
-
-<dialog v-scope id="share-dialog" :open="shareDialog.open" @close="shareDialog.close">
+<dialog v-scope id="share-dialog" @close="shareDialog.onClose">
 	<div>
 		<div class="dialog-header">
 			<h2>Share</h2>
@@ -19,7 +18,7 @@
 
 		</div>
 		<div class="dialog-footer">
-			<button class="btn danger" @click="shareDialog.open = false">Cancel</button>
+			<button class="btn danger" @click="shareDialog.close">Cancel</button>
 			<button class="btn primary" @click="shareDialog.copy">Copy</button>
 		</div>
 	</div>
