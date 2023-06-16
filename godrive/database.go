@@ -286,6 +286,15 @@ func (d *DB) DeleteFile(ctx context.Context, path string) error {
 	return nil
 }
 
+func (d *DB) MoveFilePermissions(ctx context.Context, oldPath string, newPath string) error {
+	_, err := d.dbx.ExecContext(ctx, "UPDATE file_permissions SET path = $1 WHERE path = $2", newPath, oldPath)
+	if err != nil {
+		return fmt.Errorf("error moving file permissions: %w", err)
+	}
+
+	return nil
+}
+
 func (d *DB) GetFilePermissions(ctx context.Context, filePaths []string) ([]FilePermissions, error) {
 	var paths []string
 	for _, filePath := range filePaths {

@@ -43,22 +43,32 @@ main {
     border-bottom: 1px solid var(--bg-secondary);
 }
 
-.navigation-path {
+#navigation-path-wrapper {
+	display: flex;
+	flex-direction: row;
+	align-items: start;
+	gap: 1rem;
+	flex-grow: 1;
+}
+
+#navigation-path {
     display: flex;
     align-items: center;
     font-size: 1.5rem;
     font-weight: bold;
     color: var(--text-primary);
-    flex-grow: 1;
+	background-color: var(--bg-secondary);
+	padding: 0.5rem;
+	border-radius: 0.5rem;
 }
 
-.navigation-path a {
+#navigation-path a {
     text-decoration: none;
     text-decoration-thickness: 2px;
     color: var(--text-primary);
 }
 
-.navigation-path a:hover {
+#navigation-path a:hover {
     text-decoration: underline;
 }
 

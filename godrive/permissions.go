@@ -190,9 +190,23 @@ func (s *Server) PutPermissions(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (s *Server) GetPermissions(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Query().Get("path")
+	if path == "" {
+		path = "/"
+	}
+
+	perms, err := s.db.GetFilePermissions(r.Context(), []string{path})
+	if err != nil {
+		s.error(w, r, err, http.StatusInternalServerError)
+		return
+	}
+
+	s.ok(w, r, perms)
+}
+
 func (s *Server) PostShare(w http.ResponseWriter, r *http.Request) {
 	var share ShareRequest
-	defer r.Body.Close()
 	if err := json.NewDecoder(r.Body).Decode(&share); err != nil {
 		s.error(w, r, err, http.StatusBadRequest)
 		return
@@ -227,10 +241,5 @@ func (s *Server) PostShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err = json.NewEncoder(w).Encode(ShareResponse{
-		Token: shareID,
-	}); err != nil {
-		s.error(w, r, err, http.StatusInternalServerError)
-	}
+	s.ok(w, r, ShareResponse{Token: shareID})
 }

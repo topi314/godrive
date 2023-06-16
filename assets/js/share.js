@@ -28,7 +28,7 @@ export const shareDialog = reactive({
 				this.error = xhr.response?.message || xhr.statusText;
 			}
 		})
-		xhr.open("POST", "/share");
+		xhr.open("POST", "/api/share");
 		xhr.setRequestHeader("Content-Type", "application/json");
 		xhr.send(JSON.stringify({
 			path: this.path,

@@ -16,7 +16,7 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-func (s *Server) GetPermissions(w http.ResponseWriter, r *http.Request, paths []string) []FilePermissions {
+func (s *Server) getPermissions(w http.ResponseWriter, r *http.Request, paths []string) []FilePermissions {
 	perms, err := s.db.GetFilePermissions(r.Context(), append(paths, r.URL.Path))
 	if err != nil {
 		slog.ErrorCtx(r.Context(), "Failed to get file permissions", slog.Any("err", err))
@@ -66,7 +66,7 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 		paths[i] = file.Path
 	}
 
-	perms := s.GetPermissions(w, r, paths)
+	perms := s.getPermissions(w, r, paths)
 	if perms == nil {
 		return
 	}
@@ -249,7 +249,7 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) PostFile(w http.ResponseWriter, r *http.Request) {
-	perms := s.GetPermissions(w, r, nil)
+	perms := s.getPermissions(w, r, nil)
 	if perms == nil {
 		return
 	}
@@ -276,11 +276,21 @@ func (s *Server) PostFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	for _, perm := range file.Permissions {
+		if err = s.db.UpsertFilePermission(r.Context(), file.Path, perm.Permissions, perm.ObjectType, perm.Object); err != nil {
+			err = errors.Join(err, fmt.Errorf("failed to set permissions for %s", perm.Object))
+		}
+	}
+	if err != nil {
+		s.error(w, r, err, http.StatusInternalServerError)
+		return
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) PatchFile(w http.ResponseWriter, r *http.Request) {
-	perms := s.GetPermissions(w, r, nil)
+	perms := s.getPermissions(w, r, nil)
 	if perms == nil {
 		return
 	}
@@ -297,10 +307,6 @@ func (s *Server) PatchFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defer file.Content.Close()
-	if err = s.db.UpdateFile(r.Context(), r.URL.Path, file.Path, file.Size, file.ContentType, file.Description); err != nil {
-		s.error(w, r, err, http.StatusInternalServerError)
-		return
-	}
 	if file.Size > 0 {
 		if err = s.storage.PutObject(r.Context(), file.Path, file.Size, file.Content, file.ContentType); err != nil {
 			s.error(w, r, err, http.StatusInternalServerError)
@@ -314,6 +320,16 @@ func (s *Server) PatchFile(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if r.URL.Path != file.Path {
 		if err = s.storage.MoveObject(r.Context(), r.URL.Path, file.Path); err != nil {
+			s.error(w, r, err, http.StatusInternalServerError)
+			return
+		}
+	}
+	if err = s.db.UpdateFile(r.Context(), r.URL.Path, file.Path, file.Size, file.ContentType, file.Description); err != nil {
+		s.error(w, r, err, http.StatusInternalServerError)
+		return
+	}
+	if r.URL.Path != file.Path {
+		if err = s.db.MoveFilePermissions(r.Context(), r.URL.Path, file.Path); err != nil {
 			s.error(w, r, err, http.StatusInternalServerError)
 			return
 		}
@@ -355,7 +371,7 @@ func (s *Server) MoveFiles(w http.ResponseWriter, r *http.Request) {
 		paths[i] = file.Path
 	}
 
-	perms := s.GetPermissions(w, r, append(paths, destination))
+	perms := s.getPermissions(w, r, append(paths, destination))
 	if perms == nil {
 		return
 	}
@@ -441,7 +457,7 @@ func (s *Server) DeleteFiles(w http.ResponseWriter, r *http.Request) {
 	for i, file := range files {
 		paths[i] = file.Path
 	}
-	perms := s.GetPermissions(w, r, paths)
+	perms := s.getPermissions(w, r, paths)
 	if perms == nil {
 		return
 	}
@@ -524,6 +540,7 @@ type parsedFile struct {
 	Size        uint64
 	ContentType string
 	Content     io.ReadCloser
+	Permissions []ObjectPermissions
 }
 
 func (s *Server) parseMultipartBody(r *http.Request) (*parsedFile, error) {
@@ -571,6 +588,7 @@ func (s *Server) parseMultipartBody(r *http.Request) (*parsedFile, error) {
 		Size:        file.Size,
 		ContentType: contentType,
 		Content:     part,
+		Permissions: file.Permissions,
 	}, nil
 }
 

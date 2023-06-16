@@ -52,26 +52,17 @@ func (s *Server) Routes() http.Handler {
 	r.Group(func(r chi.Router) {
 		if s.cfg.Auth != nil {
 			r.Use(s.Auth)
-			r.Group(func(r chi.Router) {
+			r.Route("/api", func(r chi.Router) {
 				r.Get("/login", s.Login)
 				r.Get("/callback", s.Callback)
 				r.Get("/logout", s.Logout)
-				r.Route("/settings", func(r chi.Router) {
-					r.Use(s.CheckAuth(func(r *http.Request, info *UserInfo) AuthAction {
-						if s.isAdmin(info) {
-							return AuthActionAllow
-						}
-						return AuthActionDeny
-					}))
-					r.Get("/", s.GetSettings)
-					// r.Head("/", s.GetSettings)
-					// r.Patch("/", s.PatchSettings)
+				r.Group(func(r chi.Router) {
+					r.Post("/share", s.PostShare)
 					r.Route("/permissions", func(r chi.Router) {
-						// r.Get("/", s.GetPermissions)
+						r.Get("/", s.GetPermissions)
 						r.Put("/", s.PutPermissions)
 					})
 				})
-				r.Post("/share", s.PostShare)
 			})
 		}
 
@@ -86,6 +77,16 @@ func (s *Server) Routes() http.Handler {
 					}
 					return AuthActionDeny
 				}))
+
+				r.Route("/settings", func(r chi.Router) {
+					r.Use(s.CheckAuth(func(r *http.Request, info *UserInfo) AuthAction {
+						if s.isAdmin(info) {
+							return AuthActionAllow
+						}
+						return AuthActionDeny
+					}))
+					r.Get("/", s.GetSettings)
+				})
 			}
 			r.Get("/*", s.GetFiles)
 			r.Head("/*", s.GetFiles)

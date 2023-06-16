@@ -18,10 +18,10 @@
                     {{ if .User.IsAdmin }}
                         <a href="/settings">Settings</a>
                     {{ end }}
-                    <a href="/logout">Logout</a>
+                    <a href="/api/logout">Logout</a>
                 </nav>
             {{ else }}
-                <a id="login" class="btn primary" href="/login">Login</a>
+                <a id="login" class="btn primary" href="/api/login">Login</a>
             {{ end }}
         {{ end }}
     </div>

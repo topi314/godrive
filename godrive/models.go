@@ -56,9 +56,16 @@ type (
 	}
 
 	FileRequest struct {
-		Size        uint64 `json:"size"`
-		Description string `json:"description"`
-		Dir         string `json:"dir"`
+		Size        uint64              `json:"size"`
+		Description string              `json:"description"`
+		Dir         string              `json:"dir"`
+		Permissions []ObjectPermissions `json:"permissions"`
+	}
+
+	ObjectPermissions struct {
+		Permissions Permissions `json:"permissions"`
+		ObjectType  ObjectType  `json:"object_type"`
+		Object      string      `json:"object"`
 	}
 
 	ErrorResponse struct {

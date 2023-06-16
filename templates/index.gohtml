@@ -11,11 +11,15 @@
 			<input v-scope type="checkbox" id="files-select" class="checkbox" autocomplete="off" :checked="selectedFiles.length === files.length && files.length !== 0" @click="toggleFiles">
 			<label for="files-select"></label>
 		</div>
-		<div class="navigation-path">
-			<a href="/">/</a>
-            {{ range $index, $path := .PathParts }}
-				<a href="/{{ assemblePath $.PathParts $index }}">{{ $path }}{{ if not (isLast $.PathParts $index) }}/{{end}}</a>
-            {{ end }}
+		<div id="navigation-path-wrapper">
+			<div id="navigation-path" contenteditable="true">
+				<a href="/">/</a>
+                {{ range $index, $path := .PathParts }}
+					<a href="/{{ assemblePath $.PathParts $index }}">{{ $path }}{{ if not (isLast $.PathParts $index) }}/{{end}}</a>
+                {{ end }}
+			</div>
+
+			<button v-scope class="icon-btn" @click="openPath">Go</button>
 		</div>
 
 		<a class="btn primary" href="{{ .User.Home }}">Home</a>
@@ -97,6 +101,9 @@
 		editDialog,
 		moveDialog,
 		shareDialog,
+		openPath() {
+			window.location.href = document.querySelector('#navigation-path').innerText;
+		},
 		toggleFiles() {
 			if (this.selectedFiles.length === this.files.length) {
 				this.selectedFiles.splice(0, this.selectedFiles.length);

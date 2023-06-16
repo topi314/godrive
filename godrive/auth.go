@@ -33,11 +33,11 @@ type Auth struct {
 }
 
 type UserInfo struct {
-	oidc.UserInfo `json:"-"`
-	Home          string   `json:"home"`
-	Audience      []string `json:"aud"`
-	Groups        []string `json:"groups"`
-	Username      string   `json:"preferred_username"`
+	oidc.UserInfo
+	Home     string   `json:"home"`
+	Audience []string `json:"aud"`
+	Groups   []string `json:"groups"`
+	Username string   `json:"preferred_username"`
 }
 
 func (s *Server) ToTemplateUser(info *UserInfo) TemplateUser {
