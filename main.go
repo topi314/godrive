@@ -169,6 +169,9 @@ func main() {
 		"gravatarURL": func(email string) string {
 			return fmt.Sprintf("https://www.gravatar.com/avatar/%x?s=%d&d=retro", md5.Sum([]byte(strings.ToLower(email))), 80)
 		},
+		"formatGroups": func(groups []string) string {
+			return strings.Join(groups, ", ")
+		},
 	}
 
 	var (

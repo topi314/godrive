@@ -117,10 +117,11 @@ func (s *Server) GetSettings(w http.ResponseWriter, r *http.Request) {
 	templateUsers := make([]TemplateUser, len(users))
 	for i, user := range users {
 		templateUsers[i] = TemplateUser{
-			ID:    user.ID,
-			Name:  user.Username,
-			Email: user.Email,
-			Home:  user.Home,
+			ID:     user.ID,
+			Name:   user.Username,
+			Email:  user.Email,
+			Groups: user.Groups,
+			Home:   user.Home,
 		}
 	}
 

@@ -13,7 +13,7 @@
 }
 
 #user-list {
-    grid-template-columns: 2.5rem repeat(4, auto);
+    grid-template-columns: 2.5rem repeat(5, auto);
 }
 
 #permission-list {

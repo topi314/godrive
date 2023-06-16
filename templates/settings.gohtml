@@ -2,7 +2,7 @@
 <body>
 {{ template "header.gohtml" . }}
 <main>
-    <div id="settings">
+	<div id="settings">
 		<div>
 			<h2>Users</h2>
 			<div id="user-list" class="table-list">
@@ -10,16 +10,18 @@
 					<div></div>
 					<div>ID</div>
 					<div>Name</div>
+					<div>Groups</div>
 					<div>Email</div>
 					<div>Home</div>
 				</div>
                 {{ range $index, $user := .Users }}
 					<div class="table-list-entry">
 						<div><span class="icon user-icon"></span></div>
-						<div><span class="user-id">{{ $user.ID }}</span></div>
-						<div><span class="user-name">{{ $user.Name }}</span></div>
-						<div><span class="user-email">{{ $user.Email }}</span></div>
-						<div><span class="user-home">{{ $user.Home }}</span></div>
+						<div><span>{{ $user.ID }}</span></div>
+						<div><span>{{ $user.Name }}</span></div>
+						<div><span>{{ formatGroups $user.Groups }}</span></div>
+						<div><span>{{ $user.Email }}</span></div>
+						<div><span>{{ $user.Home }}</span></div>
 					</div>
                 {{ end }}
 			</div>
@@ -64,7 +66,7 @@
 			<button v-scope @click="addPermission">New</button>
 			<button v-scope @click="save">Save</button>
 		</div>
-    </div>
+	</div>
 </main>
 <script src="/assets/theme.js" defer></script>
 <script type="module">

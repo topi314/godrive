@@ -53,6 +53,10 @@
     color: var(--text-primary);
 }
 
+.table-list-entry > *:nth-child(8) {
+	justify-content: flex-end;
+}
+
 .table-list-entry > *:nth-child(8) > select {
 	width: 1rem;
 	height: 2rem;
@@ -80,9 +84,9 @@
 
     .table-list-entry {
         display: grid;
-        grid-template-columns: 2.5rem auto auto 1fr min-content;
+        grid-template-columns: 2.5rem auto auto 1fr 2rem;
         grid-template-areas: "select name name name more"
-        "select size owner date more";
+                             "select size owner date more";
         border-bottom: 1px solid var(--bg-secondary);
     }
 
@@ -139,6 +143,10 @@
         padding-top: 0;
         color: var(--text-secondary);
     }
+
+	.table-list-entry > *:nth-child(8) {
+		grid-area: more;
+	}
 
     dialog {
         width: 100%;

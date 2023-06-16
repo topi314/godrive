@@ -11,21 +11,19 @@
 			<input v-scope type="checkbox" id="files-select" class="checkbox" autocomplete="off" :checked="selectedFiles.length === files.length && files.length !== 0" @click="toggleFiles">
 			<label for="files-select"></label>
 		</div>
-		<div id="navigation-path-wrapper">
-			<div id="navigation-path" contenteditable="true">
-				<a href="/">/</a>
-                {{ range $index, $path := .PathParts }}
-					<a href="/{{ assemblePath $.PathParts $index }}">{{ $path }}{{ if not (isLast $.PathParts $index) }}/{{end}}</a>
-                {{ end }}
-			</div>
 
-			<button v-scope class="icon-btn" @click="openPath">Go</button>
+		<div id="navigation-path">
+			<a href="/">/</a>
+            {{ range $index, $path := .PathParts }}
+				<a href="/{{ assemblePath $.PathParts $index }}">{{ $path }}{{ if not (isLast $.PathParts $index) }}/{{end}}</a>
+            {{ end }}
 		</div>
+
 
 		<a class="btn primary" href="{{ .User.Home }}">Home</a>
 
 		<select v-scope id="files-more" class="file-more" autocomplete="off" :disabled="selectedFiles.length === 0" @change="fileMore">
-			<option value="none" selected disabled hidden>More</option>
+			<option value="none" selected disabled hidden></option>
 			<option value="download">Download</option>
 			<option value="move">Move</option>
 			<option value="delete">Delete</option>
@@ -77,12 +75,10 @@
 			</div>
         {{ end }}
 	</div>
-    {{ if .Permissions.Has $.PermissionCreate }}
-		<div v-scope class="file-upload" @dragover="toggleUploadActive($event, true)" @dragenter="toggleUploadActive($event, true)" @dragleave="toggleUploadActive($event, false)" @dragend="toggleUploadActive($event, false)" @drop="uploadDialog.dropFiles">
-			<input type="file" id="files" multiple hidden @change="uploadDialog.selectFiles">
-			<label for="files">Choose files or drop here.</label>
-		</div>
-    {{ end }}
+	<div v-scope class="file-upload" @dragover="toggleUploadActive($event, true)" @dragenter="toggleUploadActive($event, true)" @dragleave="toggleUploadActive($event, false)" @dragend="toggleUploadActive($event, false)" @drop="uploadDialog.dropFiles">
+		<input type="file" id="files" multiple hidden @change="uploadDialog.selectFiles">
+		<label for="files">Choose files or drop here.</label>
+	</div>
 </main>
 <script src="/assets/theme.js" defer></script>
 <script type="module">
@@ -96,13 +92,14 @@
 	createApp({
 		$delimiters: ['[[', ']]'],
 		files: JSON.parse("{{ .FilesJSON }}"),
+		path: "{{ .Path }}",
 		selectedFiles: [],
 		uploadDialog,
 		editDialog,
 		moveDialog,
 		shareDialog,
 		openPath() {
-			window.location.href = document.querySelector('#navigation-path').innerText;
+			window.location.href = this.path;
 		},
 		toggleFiles() {
 			if (this.selectedFiles.length === this.files.length) {

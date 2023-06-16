@@ -37,6 +37,7 @@ type (
 		ID      string
 		Name    string
 		Email   string
+		Groups  []string
 		Home    string
 		IsAdmin bool
 		IsUser  bool

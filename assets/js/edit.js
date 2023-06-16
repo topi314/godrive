@@ -7,6 +7,7 @@ export const editDialog = reactive({
 	newName: '',
 	description: '',
 	file: null,
+	permissions: [],
 	request: null,
 	progress: 0,
 	error: '',

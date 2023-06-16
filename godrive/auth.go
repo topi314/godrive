@@ -45,6 +45,7 @@ func (s *Server) ToTemplateUser(info *UserInfo) TemplateUser {
 		ID:      info.Subject,
 		Name:    info.Username,
 		Email:   info.Email,
+		Groups:  info.Groups,
 		Home:    info.Home,
 		IsAdmin: s.isAdmin(info),
 		IsUser:  s.isUser(info),

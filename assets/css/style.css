@@ -43,22 +43,19 @@ main {
     border-bottom: 1px solid var(--bg-secondary);
 }
 
-#navigation-path-wrapper {
-	display: flex;
-	flex-direction: row;
-	align-items: start;
-	gap: 1rem;
-	flex-grow: 1;
+#navigation > a {
+	color: #ffffff;
 }
 
 #navigation-path {
     display: flex;
     align-items: center;
-    font-size: 1.5rem;
+    font-size: 1.1rem;
     font-weight: bold;
     color: var(--text-primary);
+	flex-grow: 1;
 	background-color: var(--bg-secondary);
-	padding: 0.5rem;
+	padding: 0.5rem 1rem 0.5rem 1rem;
 	border-radius: 0.5rem;
 }
 
@@ -73,9 +70,14 @@ main {
 }
 
 #files-more {
-    padding: 0.5rem 1rem 0.5rem 0.5rem;
-    border-radius: 0.5rem;
-    background-color: var(--bg-secondary);
+	width: 1rem;
+	height: 2rem;
+	padding: 0;
+	background-image: var(--more);
+	background-repeat: no-repeat;
+	background-position: center;
+	background-size: 1.5rem;
+	border-radius: 0.5rem;
 }
 
 #file-list {
@@ -87,7 +89,7 @@ main {
     font-size: 1rem;
     padding: 0 1rem 0 0;
     width: 5rem;
-    border-radius: 0;
+	border-radius: 0.5rem;
     transition: background-color 0.2s ease, color 0.2s ease, filter 0.2s ease;
 }
 
@@ -196,4 +198,16 @@ main {
 
 .loading {
     background-image: url(/assets/icons/loading.gif) !important;
+}
+
+@media (max-width: 40rem) {
+	.upload-file > *:first-child {
+		display: none;
+	}
+
+	.file-fields {
+		grid-template-columns: 1fr;
+		grid-gap: 0.5rem;
+	}
+
 }
