@@ -22,7 +22,7 @@
 
 		<a class="btn primary" href="{{ .User.Home }}">Home</a>
 
-		<select v-scope id="files-more" class="file-more" autocomplete="off" :disabled="selectedFiles.length === 0" @change="fileMore">
+		<select v-scope id="files-more" class="file-more" autocomplete="off" @change="fileMore">
 			<option value="none" selected disabled hidden></option>
 			<option value="download">Download</option>
 			<option value="move">Move</option>
@@ -128,14 +128,18 @@
 
 			switch (e.target.value) {
 				case "download":
+					let dl = "1";
+					let url = window.location.href;
 					if (file) {
-						window.open(`${file.path}?dl=1`, '_blank');
-						return;
+						url = file.path;
 					}
-					window.open(`${window.location.href}?dl=${this.selectedFiles.join(',')}`, '_blank');
+					if (this.selectedFiles.length > 0) {
+						dl = this.selectedFiles.join(',');
+					}
+					window.open(`${url}?dl=${dl}`, '_blank');
 					break;
 				case "edit":
-					this.editDialog.open(file.name, file.dir, file.name, file.description);
+					this.editDialog.open(file);
 					break;
 
 				case "move":

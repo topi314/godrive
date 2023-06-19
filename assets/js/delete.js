@@ -6,7 +6,7 @@ export function openDeleteDialog(files) {
 	rq.responseType = "json";
 	rq.addEventListener("load", () => {
 		if (rq.status === 204) {
-			// window.location.reload();
+			window.location.reload();
 		} else if (rq.status === 200) {
 			alert(rq.response.message || rq.statusText);
 		} else {
@@ -19,7 +19,7 @@ export function openDeleteDialog(files) {
 		rq.setRequestHeader("Content-Type", "application/json");
 		body = JSON.stringify(files);
 	} else {
-		rq.open("DELETE", files[0]);
+		rq.open("DELETE", files[0] || window.location.href);
 	}
 	rq.send(body);
 }

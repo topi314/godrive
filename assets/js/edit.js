@@ -2,6 +2,7 @@ import {reactive} from './petite-vue.js'
 import * as api from './api.js'
 
 export const editDialog = reactive({
+	is_dir: false,
 	name: '',
 	dir: '',
 	newName: '',
@@ -11,11 +12,12 @@ export const editDialog = reactive({
 	request: null,
 	progress: 0,
 	error: '',
-	open(name, dir, newName, description) {
-		this.name = name;
-		this.dir = dir;
-		this.newName = newName;
-		this.description = description;
+	open(file) {
+		this.is_dir = file.is_dir;
+		this.name = file.name;
+		this.dir = file.dir;
+		this.newName = file.name;
+		this.description = file.description;
 		document.querySelector("#edit-dialog").showModal();
 	},
 	close() {

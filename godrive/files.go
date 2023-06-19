@@ -112,8 +112,8 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if download {
-		zipName := path.Dir(r.URL.Path)
-		if zipName == "/" || zipName == "." {
+		_, zipName := path.Split(r.URL.Path)
+		if zipName == "" {
 			zipName = "godrive"
 		}
 		w.Header().Set("Content-Disposition", "attachment; filename="+zipName+".zip")

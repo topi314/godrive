@@ -11,16 +11,18 @@
 				<label for="edit-file-new-name">Name</label>
 				<div><input id="edit-file-new-name" type="text" v-model="editDialog.name" autocomplete="off"></div>
 
-				<label for="edit-file-description">Description</label>
-				<div><textarea id="edit-file-description" v-model="editDialog.description"></textarea></div>
+				<template v-if="!editDialog.is_dir">
+					<label for="edit-file-description">Description</label>
+					<div><textarea id="edit-file-description" v-model="editDialog.description"></textarea></div>
+				</template>
 			</div>
 			<div class="dialog-main-feedback">
 				<div class="upload-error">[[ editDialog.error ]]</div>
-				<div class="progress">
+				<div v-if="!editDialog.is_dir" class="progress">
 					<div class="progress-bar" :style="{width: `${editDialog.progress * 100}%`}"></div>
 				</div>
 			</div>
-			<div id="edit-upload" class="file-upload">
+			<div v-if="!editDialog.is_dir" id="edit-upload" class="file-upload">
 				<input type="file" id="file" hidden @change="editDialog.selectFile">
 				<label for="file">
 					<span v-if="editDialog.file">[[ editDialog.file.name ]]</span>
