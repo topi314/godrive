@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 
+	"github.com/karrick/godirwalk"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -163,7 +164,33 @@ func (l *localStorage) DeleteObject(ctx context.Context, filePath string) error 
 }
 
 func (l *localStorage) cleanup() error {
-	return nil
+	return godirwalk.Walk(l.path, &godirwalk.Options{
+		Unsorted: true,
+		Callback: func(_ string, _ *godirwalk.Dirent) error {
+			return nil
+		},
+		PostChildrenCallback: func(osPathname string, _ *godirwalk.Dirent) error {
+			s, err := godirwalk.NewScanner(osPathname)
+			if err != nil {
+				return err
+			}
+
+			hasAtLeastOneChild := s.Scan()
+
+			if err = s.Err(); err != nil {
+				return err
+			}
+
+			if hasAtLeastOneChild {
+				return nil
+			}
+			if osPathname == l.path {
+				return nil
+			}
+
+			return os.Remove(osPathname)
+		},
+	})
 }
 
 func newS3Storage(ctx context.Context, config StorageConfig, tracer trace.Tracer) (Storage, error) {
