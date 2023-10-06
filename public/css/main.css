@@ -1,0 +1,678 @@
+/* assets/css/variables.css */
+:root {
+  --text-error: #f35757;
+  --primary: #e100ff;
+  --primary-dark: #842ce1;
+  --danger: #b75050;
+  --warning: #f5c357;
+  --checkbox: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-square" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">%0D%0A  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>%0D%0A  <path d="M3 3m0 2a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2z" />%0D%0A</svg>%0D%0A%0D%0A%0D%0A');
+  --checkbox-checked: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-square-check-filled" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">%0D%0A%09<path stroke="none" d="M0 0h24v24H0z" fill="none"/>%0D%0A%09<path d="M18.333 2c1.96 0 3.56 1.537 3.662 3.472l.005 .195v12.666c0 1.96 -1.537 3.56 -3.472 3.662l-.195 .005h-12.666a3.667 3.667 0 0 1 -3.662 -3.472l-.005 -.195v-12.666c0 -1.96 1.537 -3.56 3.472 -3.662l.195 -.005h12.666zm-2.626 7.293a1 1 0 0 0 -1.414 0l-3.293 3.292l-1.293 -1.292l-.094 -.083a1 1 0 0 0 -1.32 1.497l2 2l.094 .083a1 1 0 0 0 1.32 -.083l4 -4l.083 -.094a1 1 0 0 0 -.083 -1.32z" stroke-width="0" fill="currentColor"/>%0D%0A</svg>');
+  --checkbox-box: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-square-check-filled" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">%0D%0A%09<path stroke="none" d="M0 0h24v24H0z" fill="none"/>%0D%0A%09<path d="M18.333 2c1.96 0 3.56 1.537 3.662 3.472l.005 .195v12.666c0 1.96 -1.537 3.56 -3.472 3.662l-.195 .005h-12.666a3.667 3.667 0 0 1 -3.662 -3.472l-.005 -.195v-12.666c0 -1.96 1.537 -3.56 3.472 -3.662l.195" stroke-width="0" fill="currentColor"/>%0D%0A</svg>');
+  --checkbox-border: #d1d5da;
+  --github: url('data:image/svg+xml,<svg width="98" height="96" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M48.854 0C21.839 0 0 22 0 49.217c0 21.756 13.993 40.172 33.405 46.69 2.427.49 3.316-1.059 3.316-2.362 0-1.141-.08-5.052-.08-9.127-13.59 2.934-16.42-5.867-16.42-5.867-2.184-5.704-5.42-7.17-5.42-7.17-4.448-3.015.324-3.015.324-3.015 4.934.326 7.523 5.052 7.523 5.052 4.367 7.496 11.404 5.378 14.235 4.074.404-3.178 1.699-5.378 3.074-6.6-10.839-1.141-22.243-5.378-22.243-24.283 0-5.378 1.94-9.778 5.014-13.2-.485-1.222-2.184-6.275.486-13.038 0 0 4.125-1.304 13.426 5.052a46.97 46.97 0 0 1 12.214-1.63c4.125 0 8.33.571 12.213 1.63 9.302-6.356 13.427-5.052 13.427-5.052 2.67 6.763.97 11.816.485 13.038 3.155 3.422 5.015 7.822 5.015 13.2 0 18.905-11.404 23.06-22.324 24.283 1.78 1.548 3.316 4.481 3.316 9.126 0 6.6-.08 11.897-.08 13.526 0 1.304.89 2.853 3.316 2.364 19.412-6.52 33.405-24.935 33.405-46.691C97.707 22 75.788 0 48.854 0z"/></svg>');
+  --share: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-share" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">%0D%0A  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>%0D%0A  <path d="M6 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />%0D%0A  <path d="M18 6m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />%0D%0A  <path d="M18 18m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />%0D%0A  <path d="M8.7 10.7l6.6 -3.4" />%0D%0A  <path d="M8.7 13.3l6.6 3.4" />%0D%0A</svg>%0D%0A%0D%0A%0D%0A');
+  --remove: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-x" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">%0D%0A  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>%0D%0A  <path d="M18 6l-12 12" />%0D%0A  <path d="M6 6l12 12" />%0D%0A</svg>%0D%0A%0D%0A%0D%0A');
+  --upload: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-upload" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">%0D%0A  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>%0D%0A  <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2" />%0D%0A  <path d="M7 9l5 -5l5 5" />%0D%0A  <path d="M12 4l0 12" />%0D%0A</svg>%0D%0A%0D%0A%0D%0A');
+  --file: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-file-filled" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">%0D%0A  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>%0D%0A  <path d="M12 2l.117 .007a1 1 0 0 1 .876 .876l.007 .117v4l.005 .15a2 2 0 0 0 1.838 1.844l.157 .006h4l.117 .007a1 1 0 0 1 .876 .876l.007 .117v9a3 3 0 0 1 -2.824 2.995l-.176 .005h-10a3 3 0 0 1 -2.995 -2.824l-.005 -.176v-14a3 3 0 0 1 2.824 -2.995l.176 -.005h5z" stroke-width="0" fill="currentColor" />%0D%0A  <path d="M19 7h-4l-.001 -4.001z" stroke-width="0" fill="currentColor" />%0D%0A</svg>%0D%0A%0D%0A%0D%0A');
+  --folder: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-folder-filled" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">%0D%0A  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>%0D%0A  <path d="M9 3a1 1 0 0 1 .608 .206l.1 .087l2.706 2.707h6.586a3 3 0 0 1 2.995 2.824l.005 .176v8a3 3 0 0 1 -2.824 2.995l-.176 .005h-14a3 3 0 0 1 -2.995 -2.824l-.005 -.176v-11a3 3 0 0 1 2.824 -2.995l.176 -.005h4z" stroke-width="0" fill="currentColor" />%0D%0A</svg>%0D%0A%0D%0A%0D%0A');
+  --user: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">%0D%0A  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>%0D%0A  <path d="M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0" />%0D%0A  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />%0D%0A</svg>%0D%0A%0D%0A%0D%0A');
+  --cloud-upload: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-cloud-upload" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">%0D%0A  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>%0D%0A  <path d="M7 18a4.6 4.4 0 0 1 0 -9a5 4.5 0 0 1 11 2h1a3.5 3.5 0 0 1 0 7h-1" />%0D%0A  <path d="M9 15l3 -3l3 3" />%0D%0A  <path d="M12 12l0 9" />%0D%0A</svg>%0D%0A%0D%0A%0D%0A');
+}
+.dark {
+  --bg-primary: #282c34;
+  --bg-secondary: #1f2228;
+  --bg-secondary-active: #15171a;
+  --nav-button-bg: #373b41;
+  --text-primary: #ffffff;
+  --text-secondary: #828997;
+  --bg-scrollbar: #373b41;
+  --bg-scrollbar-thumb: #1f2228;
+  --bg-scrollbar-thumb-hover: #232529;
+  --arrow-down: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-caret-down-filled" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">%0D%0A  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>%0D%0A  <path d="M18 9c.852 0 1.297 .986 .783 1.623l-.076 .084l-6 6a1 1 0 0 1 -1.32 .083l-.094 -.083l-6 -6l-.083 -.094l-.054 -.077l-.054 -.096l-.017 -.036l-.027 -.067l-.032 -.108l-.01 -.053l-.01 -.06l-.004 -.057v-.118l.005 -.058l.009 -.06l.01 -.052l.032 -.108l.027 -.067l.07 -.132l.065 -.09l.073 -.081l.094 -.083l.077 -.054l.096 -.054l.036 -.017l.067 -.027l.108 -.032l.053 -.01l.06 -.01l.057 -.004l12.059 -.002z" stroke-width="0" fill="%23ffffff" />%0D%0A</svg>%0D%0A%0D%0A%0D%0A');
+  --theme: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-sun-filled" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">%0D%0A  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>%0D%0A  <path d="M12 19a1 1 0 0 1 .993 .883l.007 .117v1a1 1 0 0 1 -1.993 .117l-.007 -.117v-1a1 1 0 0 1 1 -1z" stroke-width="0" fill="currentColor" />%0D%0A  <path d="M18.313 16.91l.094 .083l.7 .7a1 1 0 0 1 -1.32 1.497l-.094 -.083l-.7 -.7a1 1 0 0 1 1.218 -1.567l.102 .07z" stroke-width="0" fill="currentColor" />%0D%0A  <path d="M7.007 16.993a1 1 0 0 1 .083 1.32l-.083 .094l-.7 .7a1 1 0 0 1 -1.497 -1.32l.083 -.094l.7 -.7a1 1 0 0 1 1.414 0z" stroke-width="0" fill="currentColor" />%0D%0A  <path d="M4 11a1 1 0 0 1 .117 1.993l-.117 .007h-1a1 1 0 0 1 -.117 -1.993l.117 -.007h1z" stroke-width="0" fill="currentColor" />%0D%0A  <path d="M21 11a1 1 0 0 1 .117 1.993l-.117 .007h-1a1 1 0 0 1 -.117 -1.993l.117 -.007h1z" stroke-width="0" fill="currentColor" />%0D%0A  <path d="M6.213 4.81l.094 .083l.7 .7a1 1 0 0 1 -1.32 1.497l-.094 -.083l-.7 -.7a1 1 0 0 1 1.217 -1.567l.102 .07z" stroke-width="0" fill="currentColor" />%0D%0A  <path d="M19.107 4.893a1 1 0 0 1 .083 1.32l-.083 .094l-.7 .7a1 1 0 0 1 -1.497 -1.32l.083 -.094l.7 -.7a1 1 0 0 1 1.414 0z" stroke-width="0" fill="currentColor" />%0D%0A  <path d="M12 2a1 1 0 0 1 .993 .883l.007 .117v1a1 1 0 0 1 -1.993 .117l-.007 -.117v-1a1 1 0 0 1 1 -1z" stroke-width="0" fill="currentColor" />%0D%0A  <path d="M12 7a5 5 0 1 1 -4.995 5.217l-.005 -.217l.005 -.217a5 5 0 0 1 4.995 -4.783z" stroke-width="0" fill="currentColor" />%0D%0A</svg>%0D%0A%0D%0A%0D%0A');
+  --more: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-dots-vertical" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="%23fff" fill="none" stroke-linecap="round" stroke-linejoin="round">%0D%0A  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>%0D%0A  <path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/>%0D%0A  <path d="M12 19m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/>%0D%0A  <path d="M12 5m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/>%0D%0A</svg>%0D%0A%0D%0A%0D%0A');
+}
+.light {
+  --bg-primary: #fafafa;
+  --bg-secondary: #ebecef;
+  --bg-secondary-active: #d1d5da;
+  --nav-button-bg: #d1d5da;
+  --text-primary: #282c34;
+  --text-secondary: #1f2228;
+  --bg-scrollbar: #ebecef;
+  --bg-scrollbar-thumb: #d4d5dc;
+  --bg-scrollbar-thumb-hover: #c3c8ce;
+  --arrow-down: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-caret-down-filled" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">%0D%0A  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>%0D%0A  <path d="M18 9c.852 0 1.297 .986 .783 1.623l-.076 .084l-6 6a1 1 0 0 1 -1.32 .083l-.094 -.083l-6 -6l-.083 -.094l-.054 -.077l-.054 -.096l-.017 -.036l-.027 -.067l-.032 -.108l-.01 -.053l-.01 -.06l-.004 -.057v-.118l.005 -.058l.009 -.06l.01 -.052l.032 -.108l.027 -.067l.07 -.132l.065 -.09l.073 -.081l.094 -.083l.077 -.054l.096 -.054l.036 -.017l.067 -.027l.108 -.032l.053 -.01l.06 -.01l.057 -.004l12.059 -.002z" stroke-width="0" fill="%23000000" />%0D%0A</svg>%0D%0A%0D%0A%0D%0A');
+  --theme: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-moon-filled" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">%0D%0A  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>%0D%0A  <path d="M12 1.992a10 10 0 1 0 9.236 13.838c.341 -.82 -.476 -1.644 -1.298 -1.31a6.5 6.5 0 0 1 -6.864 -10.787l.077 -.08c.551 -.63 .113 -1.653 -.758 -1.653h-.266l-.068 -.006l-.06 -.002z" stroke-width="0" fill="currentColor" />%0D%0A</svg>%0D%0A%0D%0A%0D%0A');
+  --more: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-dots-vertical" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="%23000" fill="none" stroke-linecap="round" stroke-linejoin="round">%0D%0A  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>%0D%0A  <path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/>%0D%0A  <path d="M12 19m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/>%0D%0A  <path d="M12 5m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/>%0D%0A</svg>%0D%0A%0D%0A%0D%0A');
+}
+
+/* assets/css/basic.css */
+@font-face {
+  font-family: "JetBrainsMono";
+  src: url(../JetBrainsMono-VariableFont_wght-6AUNO3O7.ttf);
+}
+@font-face {
+  font-family: "JetBrainsMono";
+  src: url(../JetBrainsMono-Italic-VariableFont_wght-2T4L3I7Z.ttf);
+  font-style: italic;
+}
+html {
+  background-color: var(--bg-primary);
+}
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+::-webkit-scrollbar {
+  background-color: var(--bg-scrollbar);
+  border-radius: 1rem;
+  width: 0.5rem;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--bg-scrollbar-thumb);
+  border-radius: 1rem;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--bg-scrollbar-thumb-hover);
+}
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 0;
+  margin: 0;
+  font-family: "JetBrainsMono", sans-serif;
+  overflow-x: hidden;
+  overflow-y: auto;
+  color: var(--text-primary);
+}
+input[type=text],
+textarea {
+  background-color: var(--bg-secondary);
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  color: var(--text-primary);
+  font-family: inherit;
+  outline: none;
+}
+input[type=text]:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  resize: none;
+  filter: opacity(0.5);
+}
+.icon {
+  display: inline-block;
+  flex-shrink: 0;
+  border: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  background-color: var(--text-primary);
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: 2rem;
+}
+.icon-large {
+  width: 2rem;
+  height: 2rem;
+  mask-size: 2rem;
+}
+.icon-btn {
+  flex-shrink: 0;
+  border: none;
+  border-radius: 1rem;
+  width: 2rem;
+  height: 2rem;
+  background-color: var(--text-primary);
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: 2rem;
+  cursor: pointer;
+  transition: filter 0.2s ease;
+}
+.icon-btn:hover {
+  filter: opacity(0.7);
+}
+.icon-btn:disabled {
+  cursor: not-allowed;
+  filter: opacity(0.2);
+}
+.btn {
+  flex-shrink: 0;
+  border: none;
+  border-radius: 1rem;
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: filter 0.2s ease;
+}
+.btn:hover {
+  filter: opacity(0.7);
+}
+.btn:disabled {
+  cursor: not-allowed;
+  filter: opacity(0.2);
+}
+.btn.primary {
+  color: #ffffff;
+  background-image: radial-gradient(circle at 100% 0%, var(--primary), var(--primary-dark));
+}
+.btn.danger {
+  background-color: var(--danger);
+}
+.btn.warning {
+  background-color: var(--warning);
+}
+.btn.secondary {
+  background-color: var(--bg-secondary);
+}
+input[type=checkbox] {
+  display: none;
+}
+input[type=checkbox] + label {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  cursor: pointer;
+  background-color: var(--checkbox-border);
+  mask: var(--checkbox) no-repeat center;
+  border: none;
+}
+input[type=checkbox]:checked + label {
+  background-color: #ffffff;
+  mask-image: var(--checkbox-box);
+}
+input[type=checkbox]:checked + label::after {
+  content: "";
+  display: inline-block;
+  background-color: var(--primary);
+  mask: var(--checkbox-checked) no-repeat center;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+select {
+  appearance: none;
+  font-family: inherit;
+  user-select: none;
+  padding: 0.5rem 1.5rem 0.5rem 0.5rem;
+  color: var(--text-primary);
+  border: none;
+  border-radius: 1rem;
+  cursor: pointer;
+  background-color: transparent;
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center, left 0.5rem center;
+  background-size: 1rem;
+  transition: filter 0.2s ease;
+}
+select:hover {
+  filter: opacity(0.7);
+}
+select:disabled {
+  cursor: not-allowed;
+  filter: opacity(0.2);
+}
+input[type=text],
+input {
+  background-color: var(--bg-secondary);
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  color: var(--text-primary);
+  font-family: inherit;
+  outline: none;
+}
+input[type=text]:disabled,
+input:disabled {
+  cursor: not-allowed;
+  resize: none;
+  filter: opacity(0.5);
+}
+input[type=text]:focus,
+input:focus {
+  border: 1px solid var(--primary);
+}
+textarea {
+  background-color: var(--bg-secondary);
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  color: var(--text-primary);
+  font-family: inherit;
+  outline: none;
+  resize: vertical;
+  min-height: 4rem;
+}
+textarea:disabled {
+  cursor: not-allowed;
+  resize: none;
+  filter: opacity(0.5);
+}
+textarea:focus {
+  border: 1px solid var(--primary);
+}
+progress {
+  appearance: none;
+  width: 100%;
+  height: 0.5rem;
+  accent-color: var(--bg-primary);
+  border: none;
+  border-radius: 1rem;
+  background-color: var(--bg-secondary);
+}
+progress::-webkit-progress-value,
+progress::-moz-progress-bar {
+  background-color: var(--primary);
+}
+.dropdown ul {
+  display: none;
+  position: absolute;
+  padding: 0;
+  margin: 0;
+  right: 0.5rem;
+  list-style: none;
+  background-color: var(--bg-secondary);
+  border-radius: 0.5rem;
+  box-shadow: 0 0 0.5rem rgba(0, 0, 0, 0.2);
+  z-index: 1;
+}
+.dropdown:disabled {
+  filter: opacity(0.5);
+}
+.dropdown:hover:not(:disabled) ul,
+.dropdown:focus-within:not(:disabled) ul {
+  display: block;
+  background-color: var(--bg-secondary);
+}
+.dropdown ul li:first-child {
+  border-radius: 0.5rem 0.5rem 0 0;
+}
+.dropdown ul li:last-child {
+  border-radius: 0 0 0.5rem 0.5rem;
+}
+.dropdown ul li:hover {
+  background-color: var(--bg-secondary-active);
+}
+.dropdown ul li > * {
+  display: block;
+  padding: 0.5rem;
+}
+.dropdown ul li a {
+  text-decoration: none;
+}
+.dropdown ul li span {
+  cursor: pointer;
+}
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.hidden-div {
+  display: none;
+}
+
+/* assets/css/index.css */
+header {
+  background: var(--bg-secondary);
+  display: flex;
+  justify-content: space-between;
+  height: 4rem;
+  padding: 1rem;
+  position: fixed;
+  width: 100%;
+  top: 0;
+  z-index: 1;
+}
+header > div {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: auto;
+  padding: 0.5rem;
+  margin-top: 4rem;
+}
+#title {
+  padding: 0;
+  font-size: 2rem;
+  font-weight: bold;
+  text-decoration: none;
+  color: var(--text-primary);
+  user-select: none;
+}
+#navigation {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 1rem;
+  padding: 0.5rem 1rem 0.5rem 1rem;
+  border-bottom: 1px solid var(--bg-secondary);
+}
+#navigation-checkbox {
+  display: flex;
+  align-items: center;
+}
+#navigation-path {
+  display: flex;
+  align-items: center;
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: var(--text-primary);
+  flex-grow: 1;
+}
+#navigation-path a {
+  text-decoration: none;
+  text-decoration-thickness: 2px;
+  color: var(--text-primary);
+}
+#navigation-path a:hover {
+  text-decoration: underline;
+}
+.buttons {
+  display: flex;
+  gap: 1rem;
+}
+#files-more button {
+  mask-size: 1.5rem;
+}
+.file-more {
+  mask-image: var(--more);
+}
+#github {
+  mask-image: var(--github);
+  mask-size: 1.5rem;
+}
+#theme + label,
+#theme + label::after {
+  background-color: var(--text-primary);
+  mask-image: var(--theme);
+  mask-size: 1.5rem;
+}
+#upload-files > div {
+  padding: 0.5rem;
+}
+.file-icon {
+  mask-image: var(--file);
+}
+.folder-icon {
+  mask-image: var(--folder);
+}
+.loading {
+  background-image: url(data:image/gif;base64,R0lGODlhgACAAKIHAAoKChERKu3u+GJoxlxf6AAAAFxf6v///yH/C05FVFNDQVBFMi4wAwEAAAAh/wtYTVAgRGF0YVhNUDw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDYuMC1jMDAyIDc5LjE2NDQ2MCwgMjAyMC8wNS8xMi0xNjowNDoxNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIDIxLjIgKFdpbmRvd3MpIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjc3NERDQ0M0NEJBRTExRUI4QTNDRkVGMjhDQ0VEOTZFIiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOjc3NERDQ0M1NEJBRTExRUI4QTNDRkVGMjhDQ0VEOTZFIj4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6Nzc0RENDQzI0QkFFMTFFQjhBM0NGRUYyOENDRUQ5NkUiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6Nzc0RENDQzM0QkFFMTFFQjhBM0NGRUYyOENDRUQ5NkUiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz4B//79/Pv6+fj39vX08/Lx8O/u7ezr6uno5+bl5OPi4eDf3t3c29rZ2NfW1dTT0tHQ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) !important;
+}
+
+/* assets/css/upload.css */
+#form-file-navigation {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--bg-secondary);
+}
+#form-file-navigation > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem;
+}
+.file-upload {
+  display: flex;
+  padding: 0.2rem;
+  border-radius: 1rem;
+  background-color: var(--bg-secondary);
+  transition: background-color 0.2s ease;
+}
+.file-upload.active,
+.file-upload:hover {
+  background-color: var(--bg-secondary-active);
+}
+.file-upload > label {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border: 2px dashed var(--bg-primary);
+  border-radius: 1rem;
+  padding: 1rem;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: bold;
+  user-select: none;
+}
+.upload-file input {
+  background-color: var(--bg-primary);
+}
+.upload-file textarea {
+  background-color: var(--bg-primary);
+}
+#upload-icon {
+  width: 4rem;
+  height: 4rem;
+  padding: 1rem;
+  mask-image: var(--cloud-upload);
+  mask-size: 4rem;
+}
+#upload-files {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+}
+#upload-files > li {
+  margin-bottom: 1rem;
+}
+#upload-files > li:last-child {
+  margin-bottom: 0;
+}
+.upload-file {
+  display: flex;
+  padding: 0.5rem;
+  border-radius: 1rem;
+  background-color: var(--bg-secondary);
+  transition: background-color 0.2s ease;
+}
+.upload-file-icon {
+  padding: 0.5rem;
+}
+.upload-file-content {
+  flex-grow: 1;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.5rem;
+  padding: 0.5rem;
+}
+.icon-remove {
+  mask-image: var(--remove);
+}
+#file-upload-error,
+#file-edit-error,
+#file-move-error {
+  color: var(--text-error);
+}
+@media (max-width: 46rem) {
+  .upload-file-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* assets/css/nav.css */
+#login {
+  color: #ffffff;
+}
+#user-menu {
+  display: none;
+}
+#user-menu + label {
+  display: block;
+  cursor: pointer;
+  user-select: none;
+}
+#user-menu + label > img {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+}
+#user-menu ~ nav {
+  display: none;
+  flex-direction: column;
+  position: absolute;
+  top: 3rem;
+  right: 0.5rem;
+  padding: 0.5rem;
+  background-color: var(--bg-secondary-active);
+  border-radius: 0.5rem;
+}
+#user-menu ~ nav > a {
+  display: block;
+  padding: 0.5rem;
+  color: var(--text-primary);
+  text-decoration: none;
+  border-radius: 0.5rem;
+  transition: background-color 0.2s ease;
+}
+#user-menu ~ nav > a:hover {
+  background-color: var(--bg-primary);
+}
+#user-menu:checked ~ nav {
+  display: flex;
+}
+
+/* assets/css/table-list.css */
+#file-list {
+  grid-template-columns: 2.5rem 2.5rem repeat(5, auto) 3rem;
+}
+#file-list:not(.auth) {
+  grid-template-columns: 2.5rem 2.5rem repeat(4, auto) 3rem;
+}
+.table-list {
+  display: grid;
+  overflow: auto;
+  align-items: stretch;
+  justify-content: stretch;
+  padding: 0.5rem;
+}
+.table-list-header {
+  display: contents;
+  font-size: 1rem;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+}
+.table-list-header > * {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--bg-secondary);
+  background-color: var(--bg-secondary);
+}
+#file-list:not(.auth) > .table-list-header > *:nth-child(7) {
+  display: none;
+}
+.table-list-header > *:first-child {
+  border-radius: 1rem 0 0 1rem;
+}
+.table-list-header > *:last-child {
+  border-radius: 0 1rem 1rem 0;
+}
+.table-list-entry {
+  display: contents;
+  font-size: 1rem;
+}
+.table-list-entry > * {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem;
+  gap: 1rem;
+  border-bottom: 1px solid var(--bg-secondary);
+  transition: background-color 0.2s ease;
+}
+#file-list:not(.auth) > .table-list-entry > *:nth-child(7) {
+  display: none;
+}
+.table-list-entry:hover > * {
+  background-color: var(--bg-secondary);
+}
+.table-list-entry a {
+  color: var(--text-primary);
+}
+@media (max-width: 46rem) {
+  #navigation {
+    padding: 0.5rem;
+  }
+  .table-list {
+    display: flex;
+    flex-direction: column;
+    padding: 0.5rem 0 0.5rem 0;
+  }
+  .table-list-header {
+    display: none;
+  }
+  .table-list-entry {
+    display: grid;
+    grid-template-columns: 2.5rem auto auto 1fr min-content;
+    grid-template-areas: "select name name name more" "select size owner date more";
+    border-bottom: 1px solid var(--bg-secondary);
+  }
+  #file-list:not(.auth) > .table-list-entry {
+    grid-template-columns: 2.5rem auto 1fr min-content;
+    grid-template-areas: "select name name more" "select size date more";
+  }
+  .table-list-entry > * {
+    border: none;
+  }
+  .table-list-entry > *:nth-child(1) {
+    grid-area: select;
+  }
+  .table-list-entry > *:nth-child(1) > input.file:not(:checked) + label {
+    background-color: var(--text-primary);
+    mask: var(--file) no-repeat center;
+    mask-size: 2rem;
+  }
+  .table-list-entry > *:nth-child(1) > input.folder:not(:checked) + label {
+    background-color: var(--text-primary);
+    mask: var(--folder) no-repeat center;
+    mask-size: 2rem;
+  }
+  .table-list-entry > *:nth-child(2),
+  .table-list-entry > *:nth-child(6) {
+    display: none;
+  }
+  .table-list-entry > *:nth-child(3) {
+    grid-area: name;
+  }
+  .table-list-entry > *:nth-child(4) {
+    grid-area: size;
+    font-size: 0.7rem;
+    padding-top: 0;
+    color: var(--text-secondary);
+  }
+  .table-list-entry > *:nth-child(5) {
+    grid-area: date;
+    font-size: 0.7rem;
+    padding-top: 0;
+    color: var(--text-secondary);
+  }
+  #file-list.auth > .table-list-entry > *:nth-child(7) {
+    grid-area: owner;
+    font-size: 0.7rem;
+    padding-top: 0;
+    color: var(--text-secondary);
+  }
+  .table-list-entry > *:nth-child(8) {
+    grid-area: more;
+  }
+}
+
+/* assets/css/main.css */

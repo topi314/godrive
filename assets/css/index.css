@@ -1,0 +1,110 @@
+
+header {
+	background: var(--bg-secondary);
+	display: flex;
+	justify-content: space-between;
+	height: 4rem;
+	padding: 1rem;
+	position: fixed;
+	width: 100%;
+	top: 0;
+	z-index: 1;
+}
+
+header > div {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+}
+
+main {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	overflow: auto;
+	padding: 0.5rem;
+	margin-top: 4rem;
+}
+
+#title {
+	padding: 0;
+	font-size: 2rem;
+	font-weight: bold;
+	text-decoration: none;
+	color: var(--text-primary);
+	user-select: none;
+}
+
+#navigation {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 1rem;
+	padding: 0.5rem 1rem 0.5rem 1rem;
+	border-bottom: 1px solid var(--bg-secondary);
+}
+
+#navigation-checkbox {
+	display: flex;
+	align-items: center;
+}
+
+#navigation-path {
+	display: flex;
+	align-items: center;
+	font-size: 1.5rem;
+	font-weight: bold;
+	color: var(--text-primary);
+	flex-grow: 1;
+}
+
+#navigation-path a {
+	text-decoration: none;
+	text-decoration-thickness: 2px;
+	color: var(--text-primary);
+}
+
+#navigation-path a:hover {
+	text-decoration: underline;
+}
+
+.buttons {
+	display: flex;
+	gap: 1rem;
+}
+
+#files-more button {
+	mask-size: 1.5rem;
+}
+
+.file-more {
+	mask-image: var(--more);
+}
+
+#github {
+	mask-image: var(--github);
+	mask-size: 1.5rem;
+}
+
+#theme + label,
+#theme + label::after{
+	background-color: var(--text-primary);
+	mask-image: var(--theme);
+	mask-size: 1.5rem;
+}
+
+#upload-files > div {
+	padding: 0.5rem;
+}
+
+.file-icon {
+	mask-image: var(--file);
+}
+
+.folder-icon {
+	mask-image: var(--folder);
+}
+
+.loading {
+	background-image: url(../icons/loading.gif) !important;
+}

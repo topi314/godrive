@@ -1,0 +1,106 @@
+#form-file-navigation {
+	display: flex;
+	flex-direction: column;
+	border-bottom: 1px solid var(--bg-secondary);
+}
+
+#form-file-navigation > div {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 0.5rem;
+}
+
+.file-upload {
+	display: flex;
+	padding: 0.2rem;
+	border-radius: 1rem;
+	background-color: var(--bg-secondary);
+	transition: background-color 0.2s ease;
+}
+
+.file-upload.active,
+.file-upload:hover {
+	background-color: var(--bg-secondary-active);
+}
+
+.file-upload > label {
+	flex-grow: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	border: 2px dashed var(--bg-primary);
+	border-radius: 1rem;
+	padding: 1rem;
+	cursor: pointer;
+	font-size: 1rem;
+	font-weight: bold;
+	user-select: none;
+}
+
+.upload-file input {
+	background-color: var(--bg-primary);
+}
+
+.upload-file textarea {
+	background-color: var(--bg-primary);
+}
+
+#upload-icon {
+	width: 4rem;
+	height: 4rem;
+	padding: 1rem;
+	mask-image: var(--cloud-upload);
+	mask-size: 4rem;
+}
+
+#upload-files {
+	list-style-type: none;
+	margin: 0;
+	padding: 0;
+}
+
+#upload-files > li {
+	margin-bottom: 1rem;
+}
+
+#upload-files > li:last-child {
+	margin-bottom: 0;
+}
+
+.upload-file {
+	display: flex;
+	padding: 0.5rem;
+	border-radius: 1rem;
+	background-color: var(--bg-secondary);
+	transition: background-color 0.2s ease;
+}
+
+.upload-file-icon {
+	padding: 0.5rem;
+}
+
+.upload-file-content {
+	flex-grow: 1;
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: 0.5rem;
+	padding: 0.5rem;
+}
+
+.icon-remove {
+	mask-image: var(--remove);
+}
+
+#file-upload-error,
+#file-edit-error,
+#file-move-error {
+	color: var(--text-error);
+}
+
+@media (max-width: 46rem) {
+	.upload-file-content {
+		grid-template-columns: 1fr;
+	}
+}

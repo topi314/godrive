@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"path"
 	"strings"
@@ -15,7 +16,6 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/slices"
-	"golang.org/x/exp/slog"
 	"golang.org/x/oauth2"
 )
 
@@ -51,23 +51,15 @@ type UserInfo struct {
 	Username      string   `json:"preferred_username"`
 }
 
-func (s *Server) ToTemplateUser(info *UserInfo) TemplateUser {
-	return TemplateUser{
-		ID:      info.Subject,
-		Name:    info.Username,
-		Email:   info.Email,
-		Home:    info.Home,
-		IsAdmin: s.isAdmin(info),
-		IsUser:  s.isUser(info),
-		IsGuest: s.isGuest(info),
-	}
-}
-
 func (s *Server) hasFileAccess(info *UserInfo, file File) bool {
 	return info.Subject == file.UserID || s.isAdmin(info)
 }
 
 func (s *Server) hasAccess(info *UserInfo) bool {
+	if s.cfg.Auth == nil {
+		return true
+	}
+
 	if !s.cfg.Auth.Groups.Guest && s.isGuest(info) {
 		return false
 	}
@@ -76,14 +68,23 @@ func (s *Server) hasAccess(info *UserInfo) bool {
 }
 
 func (s *Server) isAdmin(info *UserInfo) bool {
+	if s.cfg.Auth == nil {
+		return true
+	}
 	return slices.Contains(info.Groups, s.cfg.Auth.Groups.Admin)
 }
 
 func (s *Server) isUser(info *UserInfo) bool {
+	if s.cfg.Auth == nil {
+		return false
+	}
 	return slices.Contains(info.Groups, s.cfg.Auth.Groups.User)
 }
 
 func (s *Server) isViewer(info *UserInfo) bool {
+	if s.cfg.Auth == nil {
+		return false
+	}
 	return slices.Contains(info.Groups, s.cfg.Auth.Groups.Viewer)
 }
 
@@ -146,7 +147,7 @@ func (s *Server) Auth(next http.Handler) http.Handler {
 		s.auth.SessionsMu.Unlock()
 		if !ok {
 			span.AddEvent("session not found", trace.WithAttributes(attribute.String("sessionID", sessionID)))
-			slog.Debug("session not found", slog.Any("sessionID", sessionID))
+			slog.DebugContext(r.Context(), "session not found", slog.Any("sessionID", sessionID))
 			s.removeSession(w, sessionID)
 			span.End()
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -170,7 +171,7 @@ func (s *Server) Auth(next http.Handler) http.Handler {
 		token, err := tokenSource.Token()
 		if err != nil {
 			span.RecordError(err)
-			slog.Error("failed to get token", slog.Any("err", err))
+			slog.ErrorContext(ctx, "failed to get token", slog.Any("err", err))
 			s.removeSession(w, sessionID)
 			span.End()
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -193,7 +194,7 @@ func (s *Server) Auth(next http.Handler) http.Handler {
 		idToken, err := s.auth.Verifier.Verify(ctx, session.IDToken)
 		if err != nil {
 			span.RecordError(err)
-			slog.Error("failed to verify ID Token: %w", slog.Any("err", err), slog.Any("rawIDToken", session.IDToken))
+			slog.ErrorContext(ctx, "failed to verify ID Token: %w", slog.Any("err", err), slog.Any("rawIDToken", session.IDToken))
 			s.removeSession(w, sessionID)
 			span.End()
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -204,7 +205,7 @@ func (s *Server) Auth(next http.Handler) http.Handler {
 		var info UserInfo
 		if err = idToken.Claims(&info); err != nil {
 			span.RecordError(err)
-			slog.Error("failed to parse claims: %w", slog.Any("err", err))
+			slog.ErrorContext(ctx, "failed to parse claims: %w", slog.Any("err", err))
 			s.removeSession(w, sessionID)
 			span.End()
 			s.error(w, r, err, http.StatusInternalServerError)
@@ -223,7 +224,7 @@ func (s *Server) Auth(next http.Handler) http.Handler {
 		user, err := s.db.GetUserByName(ctx, info.Username)
 		if err != nil {
 			span.RecordError(err)
-			slog.Error("failed to get user by name: %w", slog.Any("err", err))
+			slog.ErrorContext(ctx, "failed to get user by name: %w", slog.Any("err", err))
 			span.End()
 			s.error(w, r, err, http.StatusInternalServerError)
 			return

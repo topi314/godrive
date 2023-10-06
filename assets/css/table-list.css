@@ -1,156 +1,154 @@
+#file-list {
+	grid-template-columns: 2.5rem 2.5rem repeat(5, auto) 3rem;
+}
+
+#file-list:not(.auth) {
+	grid-template-columns: 2.5rem 2.5rem repeat(4, auto) 3rem;
+}
+
 .table-list {
-    display: grid;
-    overflow: auto;
-    align-items: stretch;
-    justify-content: stretch;
-    padding: 0.5rem;
+	display: grid;
+	overflow: auto;
+	align-items: stretch;
+	justify-content: stretch;
+	padding: 0.5rem;
 }
 
 .table-list-header {
-    display: contents;
-    font-size: 1rem;
-    font-weight: bold;
-    margin-bottom: 0.5rem;
+	display: contents;
+	font-size: 1rem;
+	font-weight: bold;
+	margin-bottom: 0.5rem;
 }
 
 .table-list-header > * {
-    display: flex;
-    align-items: center;
-    padding: 0.5rem;
-    gap: 1rem;
-    margin-bottom: 0.5rem;
-    border-bottom: 1px solid var(--bg-secondary);
-    background-color: var(--bg-secondary);
+	display: flex;
+	align-items: center;
+	padding: 0.5rem;
+	gap: 1rem;
+	margin-bottom: 0.5rem;
+	border-bottom: 1px solid var(--bg-secondary);
+	background-color: var(--bg-secondary);
+}
+
+#file-list:not(.auth) > .table-list-header > *:nth-child(7) {
+	display: none;
 }
 
 .table-list-header > *:first-child {
-    border-radius: 1rem 0 0 1rem;
+	border-radius: 1rem 0 0 1rem;
 }
 
 .table-list-header > *:last-child {
-    border-radius: 0 1rem 1rem 0;
+	border-radius: 0 1rem 1rem 0;
 }
 
 .table-list-entry {
-    display: contents;
-    font-size: 1rem;
+	display: contents;
+	font-size: 1rem;
 }
 
 .table-list-entry > * {
-    display: flex;
-    align-items: center;
-    padding: 0.5rem;
-    gap: 1rem;
-    border-bottom: 1px solid var(--bg-secondary);
-    transition: background-color 0.2s ease;
+	display: flex;
+	align-items: center;
+	padding: 0.5rem;
+	gap: 1rem;
+	border-bottom: 1px solid var(--bg-secondary);
+	transition: background-color 0.2s ease;
 }
 
-.table-list-entry > *:nth-child(9) {
-    display: none;
+#file-list:not(.auth) > .table-list-entry > *:nth-child(7) {
+	display: none;
 }
 
 .table-list-entry:hover > * {
-    background-color: var(--bg-secondary);
+	background-color: var(--bg-secondary);
 }
 
 .table-list-entry a {
-    color: var(--text-primary);
+	color: var(--text-primary);
 }
 
-@media (max-width: 40rem) {
-    #navigation {
-        padding: 0.5rem;
-    }
+@media (max-width: 46rem) {
+	#navigation {
+		padding: 0.5rem;
+	}
 
-    .table-list {
-        display: flex;
-        flex-direction: column;
-        padding: 0.5rem 0 0.5rem 0;
-    }
+	.table-list {
+		display: flex;
+		flex-direction: column;
+		padding: 0.5rem 0 0.5rem 0;
+	}
 
-    .table-list-header {
-        display: none;
-    }
+	.table-list-header {
+		display: none;
+	}
 
-    .table-list-entry {
-        display: grid;
-        grid-template-columns: 2.5rem auto auto 1fr min-content;
-        grid-template-areas: "select name name name more"
+	.table-list-entry {
+		display: grid;
+		grid-template-columns: 2.5rem auto auto 1fr min-content;
+		grid-template-areas: "select name name name more"
         "select size owner date more";
-        border-bottom: 1px solid var(--bg-secondary);
-    }
+		border-bottom: 1px solid var(--bg-secondary);
+	}
 
-    .table-list-entry > * {
-        border: none;
-    }
+	#file-list:not(.auth) > .table-list-entry {
+		grid-template-columns: 2.5rem auto 1fr min-content;
+		grid-template-areas: "select name name more"
+        "select size date more";
+	}
 
-    .table-list-entry > *:nth-child(1) {
-        grid-area: select;
-    }
+	.table-list-entry > * {
+		border: none;
+	}
 
-    .table-list-entry > *:nth-child(1) > input.file:not(:checked) + label {
-        background-image: var(--file);
-        background-repeat: no-repeat;
-        background-position: center;
-        background-size: 1.5rem;
-        border: none;
-    }
+	.table-list-entry > *:nth-child(1) {
+		grid-area: select;
+	}
 
-    .table-list-entry > *:nth-child(1) > input.folder:not(:checked) + label {
-        background-image: var(--folder);
-        background-repeat: no-repeat;
-        background-position: center;
-        background-size: 1.5rem;
-        border: none;
-    }
+	.table-list-entry > *:nth-child(1) > input.file:not(:checked) + label {
+		background-color: var(--text-primary);
+		mask: var(--file) no-repeat center;
+		mask-size: 2rem;
+	}
 
-    .table-list-entry > *:nth-child(2),
-    .table-list-entry > *:nth-child(6),
-    .table-list-entry > *:nth-child(8) {
-        display: none;
-    }
+	.table-list-entry > *:nth-child(1) > input.folder:not(:checked) + label {
+		background-color: var(--text-primary);
+		mask: var(--folder) no-repeat center;
+		mask-size: 2rem;
+	}
 
-    .table-list-entry > *:nth-child(3) {
-        grid-area: name;
-    }
+	.table-list-entry > *:nth-child(2),
+	.table-list-entry > *:nth-child(6) {
+		display: none;
+	}
 
-    .table-list-entry > *:nth-child(4) {
-        grid-area: size;
-        font-size: 0.7rem;
-        padding-top: 0;
-        color: var(--text-secondary);
-    }
+	.table-list-entry > *:nth-child(3) {
+		grid-area: name;
+	}
 
-    .table-list-entry > *:nth-child(5) {
-        grid-area: date;
-        font-size: 0.7rem;
-        padding-top: 0;
-        color: var(--text-secondary);
-    }
+	.table-list-entry > *:nth-child(4) {
+		grid-area: size;
+		font-size: 0.7rem;
+		padding-top: 0;
+		color: var(--text-secondary);
+	}
 
-    .table-list-entry > *:nth-child(7) {
-        grid-area: owner;
-        font-size: 0.7rem;
-        padding-top: 0;
-        color: var(--text-secondary);
-    }
+	.table-list-entry > *:nth-child(5) {
+		grid-area: date;
+		font-size: 0.7rem;
+		padding-top: 0;
+		color: var(--text-secondary);
+	}
 
-    .table-list-entry > *:nth-child(9) {
-        display: flex;
-        grid-area: more;
-    }
+	#file-list.auth > .table-list-entry > *:nth-child(7) {
+		grid-area: owner;
+		font-size: 0.7rem;
+		padding-top: 0;
+		color: var(--text-secondary);
+	}
 
-    .table-list-entry > *:nth-child(9) > select {
-        width: 1rem;
-        height: 2rem;
-        padding: 0;
-        background-image: var(--more);
-        background-repeat: no-repeat;
-        background-position: center;
-        background-size: 1.5rem;
-    }
-
-    dialog {
-        width: 100%;
-    }
+	.table-list-entry > *:nth-child(8) {
+		grid-area: more;
+	}
 }

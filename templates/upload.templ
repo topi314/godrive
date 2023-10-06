@@ -1,0 +1,35 @@
+package templates
+
+templ UploadFile(path string) {
+	<form id="file-upload"
+		hx-post={ path }
+		hx-encoding="multipart/form-data"
+		hx-push-url="true"
+		hx-target="main" hx-swap="outerHTML"
+		hx-error-target="#file-upload-error" hx-error-swap="innerHTML"
+		hx-ext="upload-files,accept-html"
+		hx-on:reset="window.onFilesReset(event)"
+		hx-on:htmx:xhr:progress="window.updateUploadProgress(event)"
+	>
+		<div id="form-file-navigation">
+			<progress id="upload-progress" value="0" max="100"></progress>
+			<div>
+				<input name="dir" value={ path }/>
+				<div class="buttons">
+					<button id="upload-button" type="submit" class="btn primary" disabled>Upload</button>
+					<button type="button" hx-get={ path + "?action=files"} hx-target="#content" class="btn secondary">Cancel</button>
+				</div>
+			</div>
+		</div>
+		<div id="file-upload-error"></div>
+
+		<ul id="upload-files"></ul>
+		<div class="file-upload">
+			<input type="file" id="files" name="files" multiple hidden hx-on:change="window.onFilesChange(event)"/>
+			<label for="files">
+				<div id="upload-icon" class="icon"></div>
+				Choose files or drop here.
+			</label>
+		</div>
+    </form>
+}

@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -18,7 +19,6 @@ import (
 	"github.com/jmoiron/sqlx"
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.18.0"
-	"golang.org/x/exp/slog"
 	"modernc.org/sqlite"
 	_ "modernc.org/sqlite"
 )
@@ -27,6 +27,7 @@ var (
 	ErrFileNotFound      = errors.New("file not found")
 	ErrFileAlreadyExists = errors.New("file already exists")
 	ErrUserNotFound      = errors.New("user not found")
+	ErrUnauthorized      = errors.New("unauthorized")
 )
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
@@ -79,7 +80,7 @@ func NewDB(ctx context.Context, cfg DatabaseConfig, schema string) (*DB, error) 
 					for k, v := range data {
 						args = append(args, slog.Any(k, v))
 					}
-					slog.DebugCtx(ctx, msg, slog.Group("data", args...))
+					slog.DebugContext(ctx, msg, slog.Group("data", args...))
 				}),
 				LogLevel: tracelog.LogLevelDebug,
 			}
@@ -164,7 +165,12 @@ func (d *DB) GetFile(ctx context.Context, path string) (*File, error) {
 	return file, nil
 }
 
-func (d *DB) CreateFile(ctx context.Context, path string, size uint64, contentType string, description string, userID string) (*File, error) {
+func (d *DB) CreateFile(ctx context.Context, path string, size uint64, contentType string, description string, userID string) (*File, *sqlx.Tx, error) {
+	tx, err := d.dbx.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error creating file: %w", err)
+	}
+
 	file := &File{
 		Path:        path,
 		Size:        size,
@@ -173,7 +179,7 @@ func (d *DB) CreateFile(ctx context.Context, path string, size uint64, contentTy
 		UserID:      userID,
 		CreatedAt:   time.Now(),
 	}
-	_, err := d.dbx.NamedExecContext(ctx, "INSERT INTO files (path, size, content_type, description, user_id, created_at, updated_at) VALUES (:path, :size, :content_type, :description, :user_id, :created_at, :updated_at)", file)
+	_, err = tx.NamedExecContext(ctx, "INSERT INTO files (path, size, content_type, description, user_id, created_at, updated_at) VALUES (:path, :size, :content_type, :description, :user_id, :created_at, :updated_at)", file)
 	if err != nil {
 		var (
 			sqliteErr *sqlite.Error
@@ -184,13 +190,47 @@ func (d *DB) CreateFile(ctx context.Context, path string, size uint64, contentTy
 				err = ErrFileAlreadyExists
 			}
 		}
-		return nil, fmt.Errorf("error creating file: %w", err)
+		if txErr := tx.Rollback(); txErr != nil {
+			slog.ErrorContext(ctx, "error rolling back transaction", slog.Any("err", txErr))
+		}
+		return nil, nil, fmt.Errorf("error creating file: %w", err)
 	}
 
-	return file, nil
+	return file, tx, nil
 }
 
-func (d *DB) UpdateFile(ctx context.Context, path string, newPath string, size uint64, contentType string, description string) error {
+func (d *DB) CreateOrUpdateFile(ctx context.Context, path string, size uint64, contentType string, description string, userID string) (*File, *sqlx.Tx, error) {
+	tx, err := d.dbx.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error creating file: %w", err)
+	}
+
+	file := &File{
+		Path:        path,
+		Size:        size,
+		ContentType: contentType,
+		Description: description,
+		UserID:      userID,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	_, err = tx.NamedExecContext(ctx, "INSERT INTO files (path, size, content_type, description, user_id, created_at, updated_at) VALUES (:path, :size, :content_type, :description, :user_id, :created_at, :updated_at) ON CONFLICT (path) DO UPDATE SET size = :size, content_type = :content_type, description = :description, user_id = :user_id, updated_at = :updated_at", file)
+	if err != nil {
+		if txErr := tx.Rollback(); txErr != nil {
+			slog.ErrorContext(ctx, "error rolling back transaction", slog.Any("err", txErr))
+		}
+		return nil, nil, fmt.Errorf("error creating file: %w", err)
+	}
+
+	return file, tx, nil
+}
+
+func (d *DB) UpdateFile(ctx context.Context, path string, newPath string, size uint64, contentType string, description string) (*sqlx.Tx, error) {
+	tx, err := d.dbx.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error updating file: %w", err)
+	}
+
 	file := &UpdateFile{
 		Path:        path,
 		NewPath:     newPath,
@@ -206,24 +246,41 @@ func (d *DB) UpdateFile(ctx context.Context, path string, newPath string, size u
 
 	res, err := d.dbx.NamedExecContext(ctx, query, file)
 	if err != nil {
-		return fmt.Errorf("error updating file: %w", err)
+		if txErr := tx.Rollback(); txErr != nil {
+			slog.ErrorContext(ctx, "error rolling back transaction", slog.Any("err", txErr))
+		}
+		return nil, fmt.Errorf("error updating file: %w", err)
 	}
 	if rows, _ := res.RowsAffected(); rows == 0 {
-		return ErrFileNotFound
+		if txErr := tx.Rollback(); txErr != nil {
+			slog.ErrorContext(ctx, "error rolling back transaction", slog.Any("err", txErr))
+		}
+		return nil, ErrFileNotFound
 	}
-	return nil
+	return tx, nil
 }
 
-func (d *DB) DeleteFile(ctx context.Context, path string) error {
-	res, err := d.dbx.ExecContext(ctx, "DELETE FROM files WHERE path = $1", path)
+func (d *DB) DeleteFile(ctx context.Context, path string) (*sql.Tx, error) {
+	tx, err := d.dbx.BeginTxx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("error deleting file: %w", err)
-	}
-	if rows, _ := res.RowsAffected(); rows == 0 {
-		return ErrFileNotFound
+		return nil, fmt.Errorf("error deleting file: %w", err)
 	}
 
-	return nil
+	res, err := tx.ExecContext(ctx, "DELETE FROM files WHERE path = $1", path)
+	if err != nil {
+		if txErr := tx.Rollback(); txErr != nil {
+			slog.ErrorContext(ctx, "error rolling back transaction", slog.Any("err", txErr))
+		}
+		return nil, fmt.Errorf("error deleting file: %w", err)
+	}
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		if txErr := tx.Rollback(); txErr != nil {
+			slog.ErrorContext(ctx, "error rolling back transaction", slog.Any("err", txErr))
+		}
+		return nil, ErrFileNotFound
+	}
+
+	return tx.Tx, nil
 }
 
 func (d *DB) UpsertUser(ctx context.Context, id string, username string, email string, home string) error {
