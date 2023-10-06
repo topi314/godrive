@@ -257,22 +257,33 @@ progress::-moz-progress-bar {
 	z-index: 1;
 }
 
-.dropdown:disabled {
-	filter: opacity(0.5);
+.dropdown > div {
+	cursor: pointer;
 }
 
-.dropdown:hover:not(:disabled) ul,
-.dropdown:focus-within:not(:disabled) ul {
+.dropdown.disabled > div {
+	filter: opacity(0.5);
+	cursor: not-allowed;
+}
+
+.dropdown:hover:not(.disabled) ul,
+.dropdown:focus-within:not(.disabled) ul {
 	display: block;
 	background-color: var(--bg-secondary);
 }
 
+.dropdown:hover:not(.disabled) > div {
+	filter: opacity(0.7);
+}
+
 .dropdown ul li:first-child {
-	border-radius: 0.5rem 0.5rem 0 0;
+	border-top-left-radius: 0.5rem;
+	border-top-right-radius: 0.5rem;
 }
 
 .dropdown ul li:last-child {
-	border-radius: 0 0 0.5rem 0.5rem;
+	border-bottom-left-radius: 0.5rem;
+	border-bottom-right-radius: 0.5rem;
 }
 
 .dropdown ul li:hover {

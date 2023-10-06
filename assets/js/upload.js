@@ -14,7 +14,7 @@ export function onFilesChange(e) {
 		<div class="upload-file-content">
 			<label>Name:</label><input name="name-${i}" value="${file.name}"/>
 			<label>Description:</label><textarea  name="description-${i}"></textarea>
-			<label>Overwrite:</label><span><input id="overwrite-${i}" class="checkbox" type="checkbox" name="overwrite-${i}" value="true" checked/><label for="overwrite-${i}"></label></span>
+			<label>Overwrite:</label><span><input id="overwrite-${i}" class="checkbox" type="checkbox" name="overwrite-${i}" value="true" checked/><label for="overwrite-${i}" class="icon"></label></span>
 		</div>
 		<div class="upload-file-icon">
 			<div class="icon-btn icon-remove" role="button" onclick="window.onUploadFileDelete(${i})"></div>

@@ -58,6 +58,7 @@
   function getSelectedFiles() {
     const files = selectedFiles.slice();
     selectedFiles.splice(0, selectedFiles.length);
+    document.querySelector("#files-more").classList.toggle("disabled", true);
     return files;
   }
   function onFilesSelect(e) {
@@ -76,7 +77,7 @@
       fileSelect.checked = true;
       selectedFiles.push(fileSelect.dataset.name);
     }
-    document.querySelector("#files-more").disabled = selectedFiles.length === 0;
+    document.querySelector("#files-more").classList.toggle("disabled", selectedFiles.length === 0);
   }
   function onFileSelect(e) {
     if (e.target.checked) {
@@ -88,7 +89,7 @@
       selectedFiles.splice(selectedFiles.indexOf(e.target.dataset.name), 1);
       document.querySelector("#files-select").checked = false;
     }
-    document.querySelector("#files-more").disabled = selectedFiles.length === 0;
+    document.querySelector("#files-more").classList.toggle("disabled", selectedFiles.length === 0);
   }
   function onDownloadFiles(e) {
     const path = e.target.dataset.file;
@@ -121,7 +122,7 @@
 		<div class="upload-file-content">
 			<label>Name:</label><input name="name-${i}" value="${file.name}"/>
 			<label>Description:</label><textarea  name="description-${i}"></textarea>
-			<label>Overwrite:</label><span><input id="overwrite-${i}" class="checkbox" type="checkbox" name="overwrite-${i}" value="true" checked/><label for="overwrite-${i}"></label></span>
+			<label>Overwrite:</label><span><input id="overwrite-${i}" class="checkbox" type="checkbox" name="overwrite-${i}" value="true" checked/><label for="overwrite-${i}" class="icon"></label></span>
 		</div>
 		<div class="upload-file-icon">
 			<div class="icon-btn icon-remove" role="button" onclick="window.onUploadFileDelete(${i})"></div>

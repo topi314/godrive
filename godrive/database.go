@@ -3,6 +3,7 @@ package godrive
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -27,6 +28,7 @@ var (
 	ErrFileNotFound      = errors.New("file not found")
 	ErrFileAlreadyExists = errors.New("file already exists")
 	ErrUserNotFound      = errors.New("user not found")
+	ErrSessionNotFound   = errors.New("session not found")
 	ErrUnauthorized      = errors.New("unauthorized")
 )
 
@@ -55,8 +57,32 @@ type UpdateFile struct {
 type User struct {
 	ID       string `db:"id"`
 	Username string `db:"username"`
+	Groups   Groups `db:"groups"`
 	Email    string `db:"email"`
 	Home     string `db:"home"`
+}
+
+type Session struct {
+	ID           string    `db:"id"`
+	AccessToken  string    `db:"access_token"`
+	Expiry       time.Time `db:"expiry"`
+	RefreshToken string    `db:"refresh_token"`
+	IDToken      string    `db:"id_token"`
+}
+
+type Groups []string
+
+func (g *Groups) Scan(src any) error {
+	if v, ok := src.(string); ok {
+		*g = strings.Split(v, ",")
+		return nil
+	}
+	return errors.New("invalid type for groups")
+
+}
+
+func (g Groups) Value() (driver.Value, error) {
+	return strings.Join(g, ","), nil
 }
 
 func NewDB(ctx context.Context, cfg DatabaseConfig, schema string) (*DB, error) {
@@ -283,14 +309,15 @@ func (d *DB) DeleteFile(ctx context.Context, path string) (*sql.Tx, error) {
 	return tx.Tx, nil
 }
 
-func (d *DB) UpsertUser(ctx context.Context, id string, username string, email string, home string) error {
+func (d *DB) UpsertUser(ctx context.Context, id string, username string, groups []string, email string, home string) error {
 	user := &User{
 		ID:       id,
 		Username: username,
+		Groups:   groups,
 		Email:    email,
 		Home:     home,
 	}
-	_, err := d.dbx.NamedExecContext(ctx, "INSERT INTO users (id, username, email, home) VALUES (:id, :username, :email, :home) ON CONFLICT (id) DO UPDATE SET username = :username, email = :email", user)
+	_, err := d.dbx.NamedExecContext(ctx, "INSERT INTO users (id, username, groups, email, home) VALUES (:id, :username, :groups, :email, :home) ON CONFLICT (id) DO UPDATE SET username = :username, groups = :groups, email = :email", user)
 	if err != nil {
 		return fmt.Errorf("error upserting user: %w", err)
 	}
@@ -345,4 +372,30 @@ func (d *DB) GetAllUsers(ctx context.Context) ([]User, error) {
 	}
 
 	return users, nil
+}
+
+func (d *DB) CreateSession(ctx context.Context, session Session) error {
+	if _, err := d.dbx.NamedExecContext(ctx, "INSERT INTO sessions (id, access_token, expiry, refresh_token, id_token) VALUES (:id, :access_token, :expiry, :refresh_token, :id_token) ", session); err != nil {
+		return fmt.Errorf("error creating session: %w", err)
+	}
+	return nil
+}
+
+func (d *DB) DeleteSession(ctx context.Context, id string) error {
+	if _, err := d.dbx.ExecContext(ctx, "DELETE FROM sessions WHERE id = $1", id); err != nil {
+		return fmt.Errorf("error deleting session: %w", err)
+	}
+	return nil
+}
+
+func (d *DB) GetSession(ctx context.Context, id string) (*Session, error) {
+	var session Session
+	if err := d.dbx.GetContext(ctx, &session, "SELECT * FROM sessions WHERE id = $1", id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			err = ErrSessionNotFound
+		}
+		return nil, fmt.Errorf("error getting session: %w", err)
+	}
+
+	return &session, nil
 }

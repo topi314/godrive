@@ -87,6 +87,10 @@ main {
 	gap: 1rem;
 }
 
+#files-more > div {
+	margin-top: 0.05rem;
+}
+
 #theme {
 	display: none;
 }
@@ -107,5 +111,5 @@ main {
 }
 
 .loading {
-	background-image: url(../icons/loading.gif) !important;
+	background-image: url(../images/loading.gif) !important;
 }

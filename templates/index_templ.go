@@ -174,7 +174,7 @@ func Main(vars IndexVars) templ.Component {
 		if err != nil {
 			return err
 		}
-		_, err = templBuffer.WriteString("</button><div id=\"files-more\" class=\"dropdown\"><div class=\"icon-btn icon-more\" role=\"button\"></div><ul><li><span role=\"button\" hx-on=\"click: window.onDownloadFiles(event)\">")
+		_, err = templBuffer.WriteString("</button><div id=\"files-more\" class=\"dropdown disabled\"><div class=\"icon-more\" role=\"button\"></div><ul><li><span role=\"button\" hx-on=\"click: window.onDownloadFiles(event)\">")
 		if err != nil {
 			return err
 		}
@@ -183,61 +183,71 @@ func Main(vars IndexVars) templ.Component {
 		if err != nil {
 			return err
 		}
-		_, err = templBuffer.WriteString("</span></li><li")
+		_, err = templBuffer.WriteString("</span></li>")
 		if err != nil {
 			return err
 		}
-		if vars.User.Name == "guest" {
-			_, err = templBuffer.WriteString(" disabled")
+		if !vars.Auth || vars.User.Name != "guest" {
+			_, err = templBuffer.WriteString("<li")
+			if err != nil {
+				return err
+			}
+			if vars.User.Name == "guest" {
+				_, err = templBuffer.WriteString(" disabled")
+				if err != nil {
+					return err
+				}
+			}
+			_, err = templBuffer.WriteString("><span hx-patch=\"")
+			if err != nil {
+				return err
+			}
+			_, err = templBuffer.WriteString(templ.EscapeString(vars.Path + "?action=move"))
+			if err != nil {
+				return err
+			}
+			_, err = templBuffer.WriteString("\" hx-target=\"main\" hx-swap=\"innerHTML\" hx-ext=\"move-files,accept-html\" role=\"button\">")
+			if err != nil {
+				return err
+			}
+			var_10 := `Move`
+			_, err = templBuffer.WriteString(var_10)
+			if err != nil {
+				return err
+			}
+			_, err = templBuffer.WriteString("</span></li> <li")
+			if err != nil {
+				return err
+			}
+			if vars.User.Name == "guest" {
+				_, err = templBuffer.WriteString(" disabled")
+				if err != nil {
+					return err
+				}
+			}
+			_, err = templBuffer.WriteString("><span hx-delete=\"")
+			if err != nil {
+				return err
+			}
+			_, err = templBuffer.WriteString(templ.EscapeString(vars.Path))
+			if err != nil {
+				return err
+			}
+			_, err = templBuffer.WriteString("\" hx-target=\"main\" hx-swap=\"outerHTML\" hx-confirm=\"Are you sure you want to delete the selected files?\" hx-ext=\"delete-files,accept-html\" role=\"button\">")
+			if err != nil {
+				return err
+			}
+			var_11 := `Delete`
+			_, err = templBuffer.WriteString(var_11)
+			if err != nil {
+				return err
+			}
+			_, err = templBuffer.WriteString("</span></li>")
 			if err != nil {
 				return err
 			}
 		}
-		_, err = templBuffer.WriteString("><span hx-patch=\"")
-		if err != nil {
-			return err
-		}
-		_, err = templBuffer.WriteString(templ.EscapeString(vars.Path + "?action=move"))
-		if err != nil {
-			return err
-		}
-		_, err = templBuffer.WriteString("\" hx-target=\"main\" hx-swap=\"innerHTML\" hx-ext=\"move-files,accept-html\" role=\"button\">")
-		if err != nil {
-			return err
-		}
-		var_10 := `Move`
-		_, err = templBuffer.WriteString(var_10)
-		if err != nil {
-			return err
-		}
-		_, err = templBuffer.WriteString("</span></li><li")
-		if err != nil {
-			return err
-		}
-		if vars.User.Name == "guest" {
-			_, err = templBuffer.WriteString(" disabled")
-			if err != nil {
-				return err
-			}
-		}
-		_, err = templBuffer.WriteString("><span hx-delete=\"")
-		if err != nil {
-			return err
-		}
-		_, err = templBuffer.WriteString(templ.EscapeString(vars.Path))
-		if err != nil {
-			return err
-		}
-		_, err = templBuffer.WriteString("\" hx-target=\"main\" hx-swap=\"outerHTML\" hx-confirm=\"Are you sure you want to delete the selected files?\" hx-ext=\"delete-files,accept-html\" role=\"button\">")
-		if err != nil {
-			return err
-		}
-		var_11 := `Delete`
-		_, err = templBuffer.WriteString(var_11)
-		if err != nil {
-			return err
-		}
-		_, err = templBuffer.WriteString("</span></li></ul></div></div></div>")
+		_, err = templBuffer.WriteString("</ul></div></div></div>")
 		if err != nil {
 			return err
 		}
@@ -489,7 +499,7 @@ func FileEntry(auth bool, i int, file File) templ.Component {
 		if err != nil {
 			return err
 		}
-		_, err = templBuffer.WriteString("</div><div><div class=\"dropdown\"><div class=\"icon-btn icon-more\" role=\"button\"></div><ul><li><a href=\"")
+		_, err = templBuffer.WriteString("</div><div><div class=\"dropdown\"><div class=\"icon-more\" role=\"button\"></div><ul><li><a href=\"")
 		if err != nil {
 			return err
 		}

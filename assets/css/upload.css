@@ -47,10 +47,10 @@
 	background-color: var(--bg-primary);
 }
 
-#upload-icon:after {
+#upload-icon:before {
 	content: '\f0ee';
-	width: 4rem;
-	height: 4rem;
+	font-size: 400%;
+	width: 7rem;
 	padding: 1rem;
 }
 

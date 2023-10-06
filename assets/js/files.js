@@ -3,6 +3,7 @@ const selectedFiles = [];
 export function getSelectedFiles() {
 	const files = selectedFiles.slice();
 	selectedFiles.splice(0, selectedFiles.length);
+	document.querySelector("#files-more").classList.toggle("disabled", true);
 	return files;
 }
 
@@ -22,7 +23,7 @@ export function onFilesSelect(e) {
 		fileSelect.checked = true;
 		selectedFiles.push(fileSelect.dataset.name);
 	}
-	document.querySelector("#files-more").disabled = selectedFiles.length === 0
+	document.querySelector("#files-more").classList.toggle("disabled", selectedFiles.length === 0);
 }
 
 export function onFileSelect(e) {
@@ -35,7 +36,7 @@ export function onFileSelect(e) {
 		selectedFiles.splice(selectedFiles.indexOf(e.target.dataset.name), 1);
 		document.querySelector("#files-select").checked = false;
 	}
-	document.querySelector("#files-more").disabled = selectedFiles.length === 0
+	document.querySelector("#files-more").classList.toggle("disabled", selectedFiles.length === 0);
 }
 
 export function onDownloadFiles(e) {

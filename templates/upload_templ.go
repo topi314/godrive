@@ -64,7 +64,7 @@ func UploadFile(path string) templ.Component {
 		if err != nil {
 			return err
 		}
-		_, err = templBuffer.WriteString("</button></div></div></div><div id=\"file-upload-error\"></div><ul id=\"upload-files\"></ul><div class=\"file-upload\"><input type=\"file\" id=\"files\" name=\"files\" multiple hidden hx-on:change=\"window.onFilesChange(event)\"><label for=\"files\"><div id=\"upload-icon\" class=\"icon\"></div> ")
+		_, err = templBuffer.WriteString("</button></div></div></div><div id=\"file-upload-error\"></div><ul id=\"upload-files\"></ul><div class=\"file-upload\"><input type=\"file\" id=\"files\" name=\"files\" multiple hidden hx-on:change=\"window.onFilesChange(event)\"><label for=\"files\"><div id=\"upload-icon\" class=\"icon-upload\"></div> ")
 		if err != nil {
 			return err
 		}
