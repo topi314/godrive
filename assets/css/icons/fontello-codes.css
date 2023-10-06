@@ -1,0 +1,13 @@
+
+.icon-folder:before { content: '\e800'; } /* '' */
+.icon-remove:before { content: '\e801'; } /* '' */
+.icon-user:before { content: '\e802'; } /* '' */
+.icon-check-empty:before { content: '\f096'; } /* '' */
+.icon-github:before { content: '\f09b'; } /* '' */
+.icon-upload-cloud:before { content: '\f0ee'; } /* '' */
+.icon-more:before { content: '\f142'; } /* '' */
+.icon-check:before { content: '\f14a'; } /* '' */
+.icon-file:before { content: '\f15b'; } /* '' */
+.icon-light:before { content: '\f185'; } /* '' */
+.icon-dark:before { content: '\f186'; } /* '' */
+.icon-share:before { content: '\f1e0'; } /* '' */

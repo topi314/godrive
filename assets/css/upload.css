@@ -47,12 +47,11 @@
 	background-color: var(--bg-primary);
 }
 
-#upload-icon {
+#upload-icon:after {
+	content: '\f0ee';
 	width: 4rem;
 	height: 4rem;
 	padding: 1rem;
-	mask-image: var(--cloud-upload);
-	mask-size: 4rem;
 }
 
 #upload-files {
@@ -89,9 +88,6 @@
 	padding: 0.5rem;
 }
 
-.icon-remove {
-	mask-image: var(--remove);
-}
 
 #file-upload-error,
 #file-edit-error,

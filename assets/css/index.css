@@ -17,6 +17,16 @@ header > div {
 	gap: 1rem;
 }
 
+#login {
+	color: #ffffff;
+}
+
+#user-menu img {
+	width: 2rem;
+	height: 2rem;
+	border-radius: 50%;
+}
+
 main {
 	display: flex;
 	flex-direction: column;
@@ -68,41 +78,32 @@ main {
 	text-decoration: underline;
 }
 
+#navigation .icon-more::before {
+	font-size: 200%;
+}
+
 .buttons {
 	display: flex;
 	gap: 1rem;
 }
 
-#files-more button {
-	mask-size: 1.5rem;
+#theme {
+	display: none;
 }
 
-.file-more {
-	mask-image: var(--more);
-}
-
-#github {
-	mask-image: var(--github);
-	mask-size: 1.5rem;
-}
-
-#theme + label,
-#theme + label::after{
-	background-color: var(--text-primary);
-	mask-image: var(--theme);
-	mask-size: 1.5rem;
+#theme + label::before {
+	color: var(--text-primary);
+	content: var(--theme-icon);
 }
 
 #upload-files > div {
 	padding: 0.5rem;
 }
 
-.file-icon {
-	mask-image: var(--file);
-}
-
-.folder-icon {
-	mask-image: var(--folder);
+.icon-folder:before,
+.icon-file:before,
+.icon-more:before {
+	font-size: 150%;
 }
 
 .loading {

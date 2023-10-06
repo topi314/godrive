@@ -106,16 +106,12 @@
 		grid-area: select;
 	}
 
-	.table-list-entry > *:nth-child(1) > input.file:not(:checked) + label {
-		background-color: var(--text-primary);
-		mask: var(--file) no-repeat center;
-		mask-size: 2rem;
+	.table-list-entry > *:nth-child(1) > .checkbox.file:not(:checked) + label:before {
+		content: '\f15b'
 	}
 
-	.table-list-entry > *:nth-child(1) > input.folder:not(:checked) + label {
-		background-color: var(--text-primary);
-		mask: var(--folder) no-repeat center;
-		mask-size: 2rem;
+	.table-list-entry > *:nth-child(1) > .checkbox.folder:not(:checked) + label:before {
+		content: '\e800'
 	}
 
 	.table-list-entry > *:nth-child(2),

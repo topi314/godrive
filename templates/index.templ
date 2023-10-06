@@ -44,7 +44,7 @@ templ Main(vars IndexVars) {
 		<div id="navigation">
 			<div id="navigation-checkbox">
 				<input type="checkbox" id="files-select" class="checkbox" data-file={ vars.Path } autocomplete="off" hx-on:click="window.onFilesSelect(event)"/>
-				<label for="files-select"></label>
+				<label for="files-select" class="icon"></label>
 			</div>
 			<div id="navigation-path">
 				<a href="/">/</a>
@@ -62,7 +62,7 @@ templ Main(vars IndexVars) {
 			<div class="buttons">
 				<button class="btn primary" disabled?={ vars.Auth && vars.User.Name == "guest" } hx-post={ vars.Path + "?action=upload" } hx-target="main" hx-swap="innerhtml">Upload</button>
 				<div id="files-more" class="dropdown">
-					<button class="icon-btn file-more"></button>
+					<div class="icon-btn icon-more" role="button"></div>
 					<ul>
 						<li><span role="button" hx-on="click: window.onDownloadFiles(event)">Download</span></li>
 						<li disabled?={ vars.User.Name == "guest" }><span hx-patch={ vars.Path + "?action=move" } hx-target="main" hx-swap="innerHTML" hx-ext="move-files,accept-html" role="button">Move</span></li>
@@ -97,10 +97,10 @@ templ FileEntry(auth bool, i int, file File) {
 	<div class="table-list-entry">
 		<div>
 			<input type="checkbox" id={ "file-select-" + strconv.Itoa(i) } class={ "file-select", "checkbox", templ.KV("folder", file.IsDir), templ.KV("file", !file.IsDir) } data-name={ file.Name } autocomplete="off" hx-on:click="window.onFileSelect(event)"/>
-			<label for={ "file-select-" + strconv.Itoa(i) }></label>
+			<label for={ "file-select-" + strconv.Itoa(i) } class="icon"></label>
 		</div>
 		<div>
-			<span class={ "icon", templ.KV("folder-icon", file.IsDir), templ.KV("file-icon", !file.IsDir) }></span>
+			<span class={ "icon", templ.KV("icon-folder", file.IsDir), templ.KV("icon-file", !file.IsDir) }></span>
 		</div>
 		<div hx-boost={ strconv.FormatBool(file.IsDir) }>
 			<a href={ templ.URL(file.Path) }>{ file.Name }</a>
@@ -111,7 +111,7 @@ templ FileEntry(auth bool, i int, file File) {
 		<div>{ file.Owner }</div>
 		<div>
 			<div class="dropdown">
-				<button class="icon-btn file-more"></button>
+				<div class="icon-btn icon-more" role="button"></div>
 				<ul>
 					<li><a href={ templ.URL(file.Path + "?dl=1") } target="_blank">Download</a></li>
 					if file.IsOwner {

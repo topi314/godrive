@@ -102,7 +102,7 @@ func Main(vars IndexVars) templ.Component {
 		if err != nil {
 			return err
 		}
-		_, err = templBuffer.WriteString("\" autocomplete=\"off\" hx-on:click=\"window.onFilesSelect(event)\"><label for=\"files-select\"></label></div><div id=\"navigation-path\"><a href=\"/\">")
+		_, err = templBuffer.WriteString("\" autocomplete=\"off\" hx-on:click=\"window.onFilesSelect(event)\"><label for=\"files-select\" class=\"icon\"></label></div><div id=\"navigation-path\"><a href=\"/\">")
 		if err != nil {
 			return err
 		}
@@ -174,7 +174,7 @@ func Main(vars IndexVars) templ.Component {
 		if err != nil {
 			return err
 		}
-		_, err = templBuffer.WriteString("</button><div id=\"files-more\" class=\"dropdown\"><button class=\"icon-btn file-more\"></button><ul><li><span role=\"button\" hx-on=\"click: window.onDownloadFiles(event)\">")
+		_, err = templBuffer.WriteString("</button><div id=\"files-more\" class=\"dropdown\"><div class=\"icon-btn icon-more\" role=\"button\"></div><ul><li><span role=\"button\" hx-on=\"click: window.onDownloadFiles(event)\">")
 		if err != nil {
 			return err
 		}
@@ -402,11 +402,11 @@ func FileEntry(auth bool, i int, file File) templ.Component {
 		if err != nil {
 			return err
 		}
-		_, err = templBuffer.WriteString("\"></label></div><div>")
+		_, err = templBuffer.WriteString("\" class=\"icon\"></label></div><div>")
 		if err != nil {
 			return err
 		}
-		var var_21 = []any{"icon", templ.KV("folder-icon", file.IsDir), templ.KV("file-icon", !file.IsDir)}
+		var var_21 = []any{"icon", templ.KV("icon-folder", file.IsDir), templ.KV("icon-file", !file.IsDir)}
 		err = templ.RenderCSSItems(ctx, templBuffer, var_21...)
 		if err != nil {
 			return err
@@ -489,7 +489,7 @@ func FileEntry(auth bool, i int, file File) templ.Component {
 		if err != nil {
 			return err
 		}
-		_, err = templBuffer.WriteString("</div><div><div class=\"dropdown\"><button class=\"icon-btn file-more\"></button><ul><li><a href=\"")
+		_, err = templBuffer.WriteString("</div><div><div class=\"dropdown\"><div class=\"icon-btn icon-more\" role=\"button\"></div><ul><li><a href=\"")
 		if err != nil {
 			return err
 		}

@@ -64,36 +64,21 @@ textarea:disabled {
 	filter: opacity(0.5);
 }
 
-.icon {
-	display: inline-block;
-	flex-shrink: 0;
-	border: none;
-	width: 1.5rem;
-	height: 1.5rem;
-	background-color: var(--text-primary);
-	mask-repeat: no-repeat;
-	mask-position: center;
-	mask-size: 2rem;
+[class^="icon-"]:before, [class*=" icon-"]:before {
+	color: var(--text-primary);
 }
 
 .icon-large {
 	width: 2rem;
 	height: 2rem;
-	mask-size: 2rem;
 }
 
 .icon-btn {
 	flex-shrink: 0;
-	border: none;
-	border-radius: 1rem;
-	width: 2rem;
-	height: 2rem;
-	background-color: var(--text-primary);
-	mask-repeat: no-repeat;
-	mask-position: center;
-	mask-size: 2rem;
+	color: var(--text-primary);
 	cursor: pointer;
 	transition: filter 0.2s ease;
+	text-decoration: none;
 }
 
 .icon-btn:hover {
@@ -144,35 +129,31 @@ textarea:disabled {
 	background-color: var(--bg-secondary);
 }
 
-input[type="checkbox"] {
+.checkbox {
 	display: none;
 }
 
-input[type="checkbox"] + label {
+.checkbox + label {
 	display: inline-block;
 	vertical-align: middle;
 	flex-shrink: 0;
 	width: 1.5rem;
 	height: 1.5rem;
 	cursor: pointer;
-
-	background-color: var(--checkbox-border);
-	mask: var(--checkbox) no-repeat center;
-	border: none;
 }
 
-input[type="checkbox"]:checked + label {
-	background-color: #ffffff;
-	mask-image: var(--checkbox-box);
-}
-
-input[type="checkbox"]:checked + label::after {
-	content: "";
+.checkbox + label::before {
+	content: '\f096';
 	display: inline-block;
-	background-color: var(--primary);
-	mask: var(--checkbox-checked) no-repeat center;
 	width: 1.5rem;
 	height: 1.5rem;
+	font-size: 150%;
+	color: var(--checkbox-border);
+}
+
+.checkbox:checked + label::before {
+	content: '\f14a';
+	color: var(--primary);
 }
 
 select {
@@ -305,6 +286,7 @@ progress::-moz-progress-bar {
 
 .dropdown ul li a {
 	text-decoration: none;
+	color: var(--text-primary);
 }
 
 .dropdown ul li span {

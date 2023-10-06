@@ -121,10 +121,10 @@
 		<div class="upload-file-content">
 			<label>Name:</label><input name="name-${i}" value="${file.name}"/>
 			<label>Description:</label><textarea  name="description-${i}"></textarea>
-			<label>Overwrite:</label><span><input id="overwrite-${i}" type="checkbox" name="overwrite-${i}" value="true" checked/><label for="overwrite-${i}"></label></span>
+			<label>Overwrite:</label><span><input id="overwrite-${i}" class="checkbox" type="checkbox" name="overwrite-${i}" value="true" checked/><label for="overwrite-${i}"></label></span>
 		</div>
 		<div class="upload-file-icon">
-			<button type="button" class="icon-btn icon-remove" onclick="window.onUploadFileDelete(${i})"></button>
+			<div class="icon-btn icon-remove" role="button" onclick="window.onUploadFileDelete(${i})"></div>
 		</div>
 	</div>
 </li>`;

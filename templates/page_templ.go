@@ -131,21 +131,13 @@ func Header(auth bool, user User) templ.Component {
 		if err != nil {
 			return err
 		}
-		_, err = templBuffer.WriteString("</a><a title=\"GitHub\" id=\"github\" class=\"icon-btn\" href=\"https://github.com/topi314/godrive\" target=\"_blank\"></a><input id=\"theme\" class=\"toggle\" type=\"checkbox\"><label title=\"Theme\" class=\"icon-btn\" for=\"theme\"></label></div><div>")
+		_, err = templBuffer.WriteString("</a><a title=\"GitHub\" class=\"icon-btn icon-github\" href=\"https://github.com/topi314/godrive\" target=\"_blank\"></a><input id=\"theme\" class=\"toggle\" type=\"checkbox\"><label title=\"Theme\" class=\"icon-btn\" for=\"theme\"></label></div><div>")
 		if err != nil {
 			return err
 		}
 		if auth {
 			if user.Name != "guest" {
-				_, err = templBuffer.WriteString("<input id=\"user-menu\" type=\"checkbox\" autocomplete=\"off\"> <label title=\"")
-				if err != nil {
-					return err
-				}
-				_, err = templBuffer.WriteString(templ.EscapeString(user.Name))
-				if err != nil {
-					return err
-				}
-				_, err = templBuffer.WriteString("\" for=\"user-menu\"><img src=\"")
+				_, err = templBuffer.WriteString("<div id=\"user-menu\" class=\"dropdown\"><img src=\"")
 				if err != nil {
 					return err
 				}
@@ -161,12 +153,12 @@ func Header(auth bool, user User) templ.Component {
 				if err != nil {
 					return err
 				}
-				_, err = templBuffer.WriteString("\"></label> <nav>")
+				_, err = templBuffer.WriteString("\" role=\"button\"><ul>")
 				if err != nil {
 					return err
 				}
 				if user.IsAdmin {
-					_, err = templBuffer.WriteString("<a href=\"/settings\">")
+					_, err = templBuffer.WriteString("<li><a href=\"/settings\">")
 					if err != nil {
 						return err
 					}
@@ -175,12 +167,12 @@ func Header(auth bool, user User) templ.Component {
 					if err != nil {
 						return err
 					}
-					_, err = templBuffer.WriteString("</a>")
+					_, err = templBuffer.WriteString("</a></li>")
 					if err != nil {
 						return err
 					}
 				}
-				_, err = templBuffer.WriteString("<a href=\"/logout\">")
+				_, err = templBuffer.WriteString("<li><a href=\"/logout\">")
 				if err != nil {
 					return err
 				}
@@ -189,7 +181,7 @@ func Header(auth bool, user User) templ.Component {
 				if err != nil {
 					return err
 				}
-				_, err = templBuffer.WriteString("</a></nav>")
+				_, err = templBuffer.WriteString("</a></li></ul></div>")
 				if err != nil {
 					return err
 				}
