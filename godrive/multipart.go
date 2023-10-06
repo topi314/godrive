@@ -65,7 +65,7 @@ func (s *Server) parseMultiparts(r *http.Request) ([]MultipartFilePart, error) {
 					return nil, fmt.Errorf("expected file-%d field, got %s", i, part.FormName())
 				}
 
-				contentType := part.Header.Get("Reader-Type")
+				contentType := part.Header.Get("Content-Type")
 				if contentType == "" {
 					contentType = "application/octet-stream"
 				}
@@ -125,7 +125,7 @@ func (s *Server) parseMultipart(r *http.Request) (*MultipartFilePart, error) {
 				return nil, fmt.Errorf("expected file field, got %s", part.FormName())
 			}
 
-			contentType := part.Header.Get("Reader-Type")
+			contentType := part.Header.Get("Content-Type")
 			if contentType == "" {
 				contentType = "application/octet-stream"
 			}
