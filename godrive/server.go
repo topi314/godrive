@@ -75,6 +75,10 @@ func (s *Server) Close() {
 	}
 }
 
+func (s *Server) CurrentPublicURL(r *http.Request) string {
+	return fmt.Sprintf("%s%s", s.cfg.PublicURL, r.URL.String())
+}
+
 func (s *Server) newTemplateUser(info *UserInfo) templates.User {
 	return templates.User{
 		ID:      info.Subject,
@@ -151,7 +155,7 @@ func (s *Server) handleWriter(wf WriterFunc, mediaType string) http.Handler {
 }
 
 func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
-	if err := templates.NotFound("dark", false, templates.User{}).Render(r.Context(), w); err != nil {
+	if err := templates.NotFound("dark", false, s.CurrentPublicURL(r), templates.User{}).Render(r.Context(), w); err != nil {
 		s.error(w, r, err, http.StatusInternalServerError)
 	}
 }
@@ -200,7 +204,7 @@ func (s *Server) prettyError(w http.ResponseWriter, r *http.Request, err error, 
 		RequestID: middleware.GetReqID(r.Context()),
 	}
 
-	if tmplErr := templates.Error("dark", false, templates.User{}, vars); tmplErr != nil {
+	if tmplErr := templates.Error("dark", false, s.CurrentPublicURL(r), templates.User{}, vars); tmplErr != nil {
 		slog.ErrorContext(r.Context(), "failed to execute error template", slog.Any("err", tmplErr))
 	}
 }

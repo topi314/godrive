@@ -186,12 +186,13 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vars := templates.IndexVars{
-		Theme:     "dark",
-		Auth:      s.cfg.Auth != nil,
-		User:      s.newTemplateUser(userInfo),
-		Path:      r.URL.Path,
-		PathParts: strings.FieldsFunc(r.URL.Path, func(r rune) bool { return r == '/' }),
-		Files:     templateFiles,
+		Theme:      "dark",
+		Auth:       s.cfg.Auth != nil,
+		CurrentURL: s.CurrentPublicURL(r),
+		User:       s.newTemplateUser(userInfo),
+		Path:       r.URL.Path,
+		PathParts:  strings.FieldsFunc(r.URL.Path, func(r rune) bool { return r == '/' }),
+		Files:      templateFiles,
 	}
 
 	if action == "main" {

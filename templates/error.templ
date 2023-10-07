@@ -11,8 +11,8 @@ type ErrorVars struct {
 	RequestID string
 }
 
-templ Error(theme string, auth bool, user User, vars ErrorVars) {
-	@Page(theme, auth, user) {
+templ Error(theme string, auth bool, currentURL string, user User, vars ErrorVars) {
+	@Page(theme, auth, currentURL, user) {
 		<style>
 			main {
 				background-color: var(--background);
@@ -39,8 +39,8 @@ templ Error(theme string, auth bool, user User, vars ErrorVars) {
 	}
 }
 
-templ NotFound(theme string, auth bool, user User) {
-	@Page(theme, auth, user) {
+templ NotFound(theme string, auth bool, currentURL string, user User) {
+	@Page(theme, auth, currentURL, user) {
 		<main>
 			<div>
 				<h1>404</h1>

@@ -28,8 +28,13 @@ type Auth struct {
 	Provider *oidc.Provider
 
 	// state <-> nonce
-	States   map[string]string
+	States   map[string]LoginState
 	StatesMu sync.Mutex
+}
+
+type LoginState struct {
+	Nonce       string
+	RedirectURL string
 }
 
 type UserInfo struct {
@@ -259,7 +264,11 @@ func GetUserInfo(r *http.Request) *UserInfo {
 func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	state := s.newID(16)
 	nonce := s.newID(16)
-	s.auth.States[state] = nonce
+	s.auth.States[state] = LoginState{
+		Nonce:       nonce,
+		RedirectURL: r.URL.Query().Get("rd"),
+	}
+
 	http.Redirect(w, r, s.auth.Config.AuthCodeURL(state, oidc.Nonce(nonce)), http.StatusFound)
 }
 
@@ -268,15 +277,20 @@ func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		_ = s.removeSession(r.Context(), w, sessionID.Value)
 	}
-	http.Redirect(w, r, s.cfg.Auth.LogoutURL, http.StatusFound)
+	logoutURL := s.cfg.Auth.LogoutURL
+	if redirectURL := r.URL.Query().Get("rd"); redirectURL != "" {
+		logoutURL += "?rd=" + redirectURL
+	}
+	http.Redirect(w, r, logoutURL, http.StatusFound)
 }
 
 func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
+	fmt.Printf("Callback: %s\n", r.URL.String())
 	ctx, span := s.tracer.Start(r.Context(), "callback")
 	defer span.End()
 
 	state := r.URL.Query().Get("state")
-	nonce, ok := s.auth.States[state]
+	loginState, ok := s.auth.States[state]
 	if !ok {
 		span.SetStatus(codes.Error, "invalid state")
 		span.AddEvent("invalid state", trace.WithAttributes(attribute.String("state", state)))
@@ -313,7 +327,7 @@ func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if idToken.Nonce != nonce {
+	if idToken.Nonce != loginState.Nonce {
 		span.SetStatus(codes.Error, "invalid nonce")
 		span.AddEvent("invalid nonce", trace.WithAttributes(attribute.String("nonce", idToken.Nonce)))
 		s.prettyError(w, r, errors.New("invalid nonce"), http.StatusBadRequest)
@@ -351,5 +365,5 @@ func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
 		span.SetStatus(codes.Error, "failed to set session")
 	}
 
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, loginState.RedirectURL, http.StatusFound)
 }

@@ -25,7 +25,7 @@ type User struct {
 	IsGuest bool
 }
 
-func Page(theme string, auth bool, user User) templ.Component {
+func Page(theme string, auth bool, currentURL string, user User) templ.Component {
 	return templ.ComponentFunc(func(ctx context.Context, w io.Writer) (err error) {
 		templBuffer, templIsBuffer := w.(*bytes.Buffer)
 		if !templIsBuffer {
@@ -68,7 +68,7 @@ func Page(theme string, auth bool, user User) templ.Component {
 		if err != nil {
 			return err
 		}
-		err = Header(auth, user).Render(ctx, templBuffer)
+		err = Header(auth, currentURL, user).Render(ctx, templBuffer)
 		if err != nil {
 			return err
 		}
@@ -109,7 +109,7 @@ func gravatarURL(email string) string {
 	return fmt.Sprintf("https://www.gravatar.com/avatar/%x?s=%d&d=retro", md5.Sum([]byte(strings.ToLower(email))), 80)
 }
 
-func Header(auth bool, user User) templ.Component {
+func Header(auth bool, currentURL string, user User) templ.Component {
 	return templ.ComponentFunc(func(ctx context.Context, w io.Writer) (err error) {
 		templBuffer, templIsBuffer := w.(*bytes.Buffer)
 		if !templIsBuffer {
@@ -172,12 +172,21 @@ func Header(auth bool, user User) templ.Component {
 						return err
 					}
 				}
-				_, err = templBuffer.WriteString("<li><a href=\"/logout\">")
+				_, err = templBuffer.WriteString("<li><a href=\"")
 				if err != nil {
 					return err
 				}
-				var_9 := `Logout`
-				_, err = templBuffer.WriteString(var_9)
+				var var_9 templ.SafeURL = templ.SafeURL("/logout?rd=" + currentURL)
+				_, err = templBuffer.WriteString(templ.EscapeString(string(var_9)))
+				if err != nil {
+					return err
+				}
+				_, err = templBuffer.WriteString("\">")
+				if err != nil {
+					return err
+				}
+				var_10 := `Logout`
+				_, err = templBuffer.WriteString(var_10)
 				if err != nil {
 					return err
 				}
@@ -186,12 +195,21 @@ func Header(auth bool, user User) templ.Component {
 					return err
 				}
 			} else {
-				_, err = templBuffer.WriteString("<a id=\"login\" class=\"btn primary\" href=\"/login\">")
+				_, err = templBuffer.WriteString("<a id=\"login\" class=\"btn primary\" href=\"")
 				if err != nil {
 					return err
 				}
-				var_10 := `Login`
-				_, err = templBuffer.WriteString(var_10)
+				var var_11 templ.SafeURL = templ.SafeURL("/login?rd=" + currentURL)
+				_, err = templBuffer.WriteString(templ.EscapeString(string(var_11)))
+				if err != nil {
+					return err
+				}
+				_, err = templBuffer.WriteString("\">")
+				if err != nil {
+					return err
+				}
+				var_12 := `Login`
+				_, err = templBuffer.WriteString(var_12)
 				if err != nil {
 					return err
 				}

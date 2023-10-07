@@ -34,12 +34,13 @@ type File struct {
 }
 
 type IndexVars struct {
-	Theme     string
-	Auth      bool
-	User      User
-	PathParts []string
-	Files     []File
-	Path      string
+	Theme      string
+	Auth       bool
+	CurrentURL string
+	User       User
+	PathParts  []string
+	Files      []File
+	Path       string
 }
 
 func Index(vars IndexVars) templ.Component {
@@ -70,7 +71,7 @@ func Index(vars IndexVars) templ.Component {
 			}
 			return err
 		})
-		err = Page(vars.Theme, vars.Auth, vars.User).Render(templ.WithChildren(ctx, var_2), templBuffer)
+		err = Page(vars.Theme, vars.Auth, vars.CurrentURL, vars.User).Render(templ.WithChildren(ctx, var_2), templBuffer)
 		if err != nil {
 			return err
 		}

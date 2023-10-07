@@ -16,7 +16,7 @@ type User struct {
 	IsGuest bool
 }
 
-templ Page(theme string, auth bool, user User) {
+templ Page(theme string, auth bool, currentURL string, user User) {
 	<!DOCTYPE html>
 	<html lang="en" class={ theme }>
 		<head>
@@ -30,7 +30,7 @@ templ Page(theme string, auth bool, user User) {
 			<meta name="theme-color" content="#1f2228"/>
 		</head>
 		<body>
-			@Header(auth, user)
+			@Header(auth, currentURL, user)
 			{ children... }
 			<script src="/assets/js/htmx.min.js"></script>
 			<script src="/assets/js/main.js"></script>
@@ -42,7 +42,7 @@ func gravatarURL(email string) string {
 	return fmt.Sprintf("https://www.gravatar.com/avatar/%x?s=%d&d=retro", md5.Sum([]byte(strings.ToLower(email))), 80)
 }
 
-templ Header(auth bool, user User) {
+templ Header(auth bool, currentURL string, user User) {
 	<header>
 		<div>
 			<a title="godrive" id="title" href="/">godrive</a>
@@ -60,11 +60,11 @@ templ Header(auth bool, user User) {
 							if user.IsAdmin {
 								<li><a href="/settings">Settings</a></li>
 							}
-							<li><a href="/logout">Logout</a></li>
+							<li><a href={ templ.SafeURL("/logout?rd=" + currentURL) }>Logout</a></li>
 						</ul>
 					</div>
 				} else {
-					<a id="login" class="btn primary" href="/login">Login</a>
+					<a id="login" class="btn primary" href={ templ.SafeURL("/login?rd=" + currentURL) }>Login</a>
 				}
 			}
 		</div>

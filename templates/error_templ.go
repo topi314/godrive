@@ -20,7 +20,7 @@ type ErrorVars struct {
 	RequestID string
 }
 
-func Error(theme string, auth bool, user User, vars ErrorVars) templ.Component {
+func Error(theme string, auth bool, currentURL string, user User, vars ErrorVars) templ.Component {
 	return templ.ComponentFunc(func(ctx context.Context, w io.Writer) (err error) {
 		templBuffer, templIsBuffer := w.(*bytes.Buffer)
 		if !templIsBuffer {
@@ -163,7 +163,7 @@ func Error(theme string, auth bool, user User, vars ErrorVars) templ.Component {
 			}
 			return err
 		})
-		err = Page(theme, auth, user).Render(templ.WithChildren(ctx, var_2), templBuffer)
+		err = Page(theme, auth, currentURL, user).Render(templ.WithChildren(ctx, var_2), templBuffer)
 		if err != nil {
 			return err
 		}
@@ -174,7 +174,7 @@ func Error(theme string, auth bool, user User, vars ErrorVars) templ.Component {
 	})
 }
 
-func NotFound(theme string, auth bool, user User) templ.Component {
+func NotFound(theme string, auth bool, currentURL string, user User) templ.Component {
 	return templ.ComponentFunc(func(ctx context.Context, w io.Writer) (err error) {
 		templBuffer, templIsBuffer := w.(*bytes.Buffer)
 		if !templIsBuffer {
@@ -220,7 +220,7 @@ func NotFound(theme string, auth bool, user User) templ.Component {
 			}
 			return err
 		})
-		err = Page(theme, auth, user).Render(templ.WithChildren(ctx, var_18), templBuffer)
+		err = Page(theme, auth, currentURL, user).Render(templ.WithChildren(ctx, var_18), templBuffer)
 		if err != nil {
 			return err
 		}

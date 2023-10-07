@@ -12,6 +12,7 @@ type Config struct {
 	DevMode    bool           `cfg:"dev_mode"`
 	Debug      bool           `cfg:"debug"`
 	ListenAddr string         `cfg:"listen_addr"`
+	PublicURL  string         `cfg:"public_url"`
 	Database   DatabaseConfig `cfg:"database"`
 	Storage    StorageConfig  `cfg:"storage"`
 	Auth       *AuthConfig    `cfg:"auth"`
@@ -19,11 +20,12 @@ type Config struct {
 }
 
 func (c Config) String() string {
-	return fmt.Sprintf("\n Log: %s\n DevMode: %t\n Debug: %t\n ListenAddr: %s\n Database: %s\n Storage: %s\n Auth: %s\n Otel: %s\n",
+	return fmt.Sprintf("\n Log: %s\n DevMode: %t\n Debug: %t\n ListenAddr: %s\n PublicURL: %s\n Database: %s\n Storage: %s\n Auth: %s\n Otel: %s\n",
 		c.Log,
 		c.DevMode,
 		c.Debug,
 		c.ListenAddr,
+		c.PublicURL,
 		c.Database,
 		c.Storage,
 		c.Auth,

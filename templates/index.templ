@@ -27,6 +27,7 @@ type File struct {
 type IndexVars struct {
     Theme     string
     Auth      bool
+	CurrentURL string
     User      User
     PathParts []string
     Files     []File
@@ -34,7 +35,7 @@ type IndexVars struct {
 }
 
 templ Index(vars IndexVars) {
-    @Page(vars.Theme, vars.Auth, vars.User) {
+    @Page(vars.Theme, vars.Auth, vars.CurrentURL, vars.User) {
         @Main(vars)
     }
 }
