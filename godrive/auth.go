@@ -268,7 +268,7 @@ func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		_ = s.removeSession(r.Context(), w, sessionID.Value)
 	}
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, s.cfg.Auth.LogoutURL, http.StatusFound)
 }
 
 func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
