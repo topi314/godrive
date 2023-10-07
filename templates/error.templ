@@ -1,0 +1,55 @@
+package templates
+
+import (
+	"strconv"
+)
+
+type ErrorVars struct {
+	Error     error
+	Status    int
+	Path      string
+	RequestID string
+}
+
+templ Error(theme string, auth bool, currentURL string, user User, vars ErrorVars) {
+	@Page(theme, auth, currentURL, user) {
+		<style>
+			main {
+				background-color: var(--background);
+				color: var(--text-primary);
+			}
+		</style>
+		<main>
+			<div class="error">
+				<h1>Oops!</h1>
+				<h2>Something went wrong:</h2>
+				<div class="error-details">
+					<p>Message: { vars.Error.Error() }</p>
+					<p>Status: { strconv.Itoa(vars.Status) }</p>
+					<p>Path: { vars.Path }</p>
+					<p>Request ID: { vars.RequestID }</p>
+				</div>
+				<h3>
+					Try again later.
+					<br/>
+					Or create an issue on <a href="https://github.com/topi314/gobin/issues/new">GitHub</a>
+				</h3>
+			</div>
+		</main>
+	}
+}
+
+templ NotFound(theme string, auth bool, currentURL string, user User) {
+	@Page(theme, auth, currentURL, user) {
+		<main>
+			<div>
+				<h1>404</h1>
+				<p>Page not found</p>
+			</div>
+		</main>
+	}
+}
+
+templ ErrorRs(errr error) {
+	<span>{ errr.Error() }</span>
+}

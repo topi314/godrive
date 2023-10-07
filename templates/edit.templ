@@ -1,0 +1,44 @@
+package templates
+
+templ EditFile(file File) {
+	<form
+		id="file-edit"
+		hx-patch={ file.Path }
+		hx-encoding="multipart/form-data"
+		hx-target="main" hx-swap="outerHTML"
+		hx-error-target="#file-edit-error" hx-error-swap="innerHTML"
+		hx-ext="edit-file,accept-html"
+		hx-on:reset="window.onFilesReset(event)"
+		hx-on:htmx:xhr:progress="window.updateUploadProgress(event)"
+	>
+		<div id="form-file-navigation">
+			<progress id="upload-progress" value="0" max="100"></progress>
+			<div>
+				<input name="dir" value={ file.Dir }/>
+				<div class="buttons">
+					<button id="upload-button" type="submit" class="btn primary">Edit</button>
+					<button type="button" hx-get={ file.Dir + "?action=files"} hx-target="#content" class="btn secondary">Cancel</button>
+				</div>
+			</div>
+		</div>
+		<div id="file-edit-error"></div>
+
+		<div class="upload-file">
+			<div class="upload-file-icon">
+				<span class="icon icon-large file-icon"></span>
+			</div>
+			<div class="upload-file-content">
+				<label>Name:</label><input name="name" value={ file.Name }/>
+				<label>Description:</label><textarea  name="description">{ file.Description }</textarea>
+			</div>
+		</div>
+
+		<div class="file-upload">
+			<input type="file" id="files" name="files" hidden hx-on:change="window.onFilesChange(event)"/>
+			<label for="files">
+				<div id="upload-icon" class="icon"></div>
+				Choose file or drop here.
+			</label>
+		</div>
+	</form>
+}

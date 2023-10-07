@@ -1,0 +1,22 @@
+package templates
+
+templ MoveFile(path string, files string) {
+	<form
+		id="file-move"
+		hx-patch={ path + files }
+		hx-target="main" hx-swap="outerHTML"
+		hx-error-target="#file-move-error" hx-error-swap="innerHTML"
+		hx-ext="destination-header,accept-html"
+	>
+		<div id="form-file-navigation">
+			<div>
+				<input name="dir" value={ path }/>
+				<div class="buttons">
+					<button id="move-button" type="submit" class="btn primary">Move</button>
+					<button type="button" hx-get={ path + "?action=files" } hx-target="#content" class="btn secondary">Cancel</button>
+				</div>
+			</div>
+		</div>
+		<div id="file-move-error"></div>
+	</form>
+}

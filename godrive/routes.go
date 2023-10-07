@@ -1,9 +1,6 @@
 package godrive
 
 import (
-	"encoding/json"
-	"errors"
-	"io"
 	"net/http"
 	"strings"
 
@@ -11,7 +8,37 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/riandyrn/otelchi"
 	"github.com/topi314/godrive/internal/log"
-	"golang.org/x/exp/slog"
+	"github.com/topi314/godrive/templates"
+)
+
+type (
+	FileCreateRequest struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Overwrite   bool   `json:"overwrite"`
+		Size        int64  `json:"size"`
+	}
+
+	FileUpdateRequest struct {
+		Dir         string `json:"dir"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Size        int64  `json:"size"`
+	}
+
+	ErrorResponse struct {
+		Message   string `json:"message"`
+		Status    int    `json:"status"`
+		Path      string `json:"path"`
+		RequestID string `json:"request_id"`
+	}
+
+	WarningResponse struct {
+		Message   string `json:"message"`
+		Status    int    `json:"status"`
+		Path      string `json:"path"`
+		RequestID string `json:"request_id"`
+	}
 )
 
 func (s *Server) Routes() http.Handler {
@@ -36,15 +63,15 @@ func (s *Server) Routes() http.Handler {
 		r.Mount("/debug", middleware.Profiler())
 	}
 
-	r.Route("/assets", func(r chi.Router) {
-		r.Handle("/script.js", s.handleWriter(s.js, "application/javascript"))
-		r.Handle("/style.css", s.handleWriter(s.css, "text/css"))
-		r.Mount("/", http.FileServer(s.assets))
-	})
-	r.Handle("/favicon.ico", s.file("/assets/favicon.png"))
-	r.Handle("/favicon.png", s.file("/assets/favicon.png"))
-	r.Handle("/favicon-light.png", s.file("/assets/favicon-light.png"))
-	r.Handle("/robots.txt", s.file("/assets/robots.txt"))
+	if s.cfg.DevMode {
+		r.Mount("/assets", http.StripPrefix("/assets", http.FileServer(s.assets)))
+	} else {
+		r.Mount("/assets", ReplacePrefix("/assets", "/public", http.FileServer(s.assets)))
+	}
+	r.Handle("/favicon.ico", s.serveAsset("/assets/favicon.png"))
+	r.Handle("/favicon.png", s.serveAsset("/assets/favicon.png"))
+	r.Handle("/favicon-light.png", s.serveAsset("/assets/favicon-light.png"))
+	r.Handle("/robots.txt", s.serveAsset("/assets/robots.txt"))
 
 	r.Get("/version", s.GetVersion)
 
@@ -79,7 +106,6 @@ func (s *Server) Routes() http.Handler {
 			r.Head("/*", s.GetFiles)
 			r.Post("/*", s.PostFile)
 			r.Patch("/*", s.PatchFile)
-			r.Put("/*", s.MoveFiles)
 			r.Delete("/*", s.DeleteFiles)
 		})
 	})
@@ -101,9 +127,9 @@ func (s *Server) GetSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	templateUsers := make([]TemplateUser, len(users))
+	templateUsers := make([]templates.User, len(users))
 	for i, user := range users {
-		templateUsers[i] = TemplateUser{
+		templateUsers[i] = templates.User{
 			ID:    user.ID,
 			Name:  user.Username,
 			Email: user.Email,
@@ -111,104 +137,9 @@ func (s *Server) GetSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	vars := SettingsVariables{
-		BaseVariables: BaseVariables{
-			Theme: "dark",
-			Auth:  s.cfg.Auth != nil,
-			User:  s.ToTemplateUser(userInfo),
-		},
-		Users: templateUsers,
-	}
-	if err = s.tmpl(w, "settings.gohtml", vars); err != nil {
-		slog.ErrorCtx(r.Context(), "error rendering template", slog.Any("err", err))
-	}
+	w.Write([]byte("TODO"))
 }
 
 func (s *Server) GetVersion(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte(s.version))
-}
-
-func (s *Server) handleWriter(wf WriterFunc, mediaType string) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", mediaType)
-		if err := wf(w); err != nil {
-			slog.ErrorCtx(r.Context(), "error writing response", slog.Any("err", err))
-		}
-	})
-}
-
-func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
-	if err := s.tmpl(w, "404.gohtml", nil); err != nil {
-		s.error(w, r, err, http.StatusInternalServerError)
-	}
-}
-
-func (s *Server) error(w http.ResponseWriter, r *http.Request, err error, status int) {
-	if errors.Is(err, http.ErrHandlerTimeout) {
-		return
-	}
-	if status == http.StatusInternalServerError {
-		slog.ErrorCtx(r.Context(), "internal server error", slog.Any("err", err))
-	}
-	s.json(w, r, ErrorResponse{
-		Message:   err.Error(),
-		Status:    status,
-		Path:      r.URL.Path,
-		RequestID: middleware.GetReqID(r.Context()),
-	}, status)
-}
-
-func (s *Server) warn(w http.ResponseWriter, r *http.Request, message string, status int) {
-	s.json(w, r, WarningResponse{
-		Message:   message,
-		Status:    status,
-		Path:      r.URL.Path,
-		RequestID: middleware.GetReqID(r.Context()),
-	}, status)
-}
-
-func (s *Server) prettyError(w http.ResponseWriter, r *http.Request, err error, status int) {
-	if status == http.StatusInternalServerError {
-		slog.ErrorCtx(r.Context(), "internal server error", slog.Any("err", err))
-	}
-	w.WriteHeader(status)
-
-	vars := map[string]any{
-		"Error":     err.Error(),
-		"Status":    status,
-		"RequestID": middleware.GetReqID(r.Context()),
-		"Path":      r.URL.Path,
-		"Theme":     "dark",
-	}
-	if tmplErr := s.tmpl(w, "error.gohtml", vars); tmplErr != nil {
-		slog.ErrorCtx(r.Context(), "failed to execute error template", slog.Any("err", tmplErr))
-	}
-}
-
-func (s *Server) ok(w http.ResponseWriter, r *http.Request, v any) {
-	s.json(w, r, v, http.StatusOK)
-}
-
-func (s *Server) json(w http.ResponseWriter, r *http.Request, v any, status int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if r.Method == http.MethodHead {
-		return
-	}
-
-	if err := json.NewEncoder(w).Encode(v); err != nil && err != http.ErrHandlerTimeout {
-		slog.ErrorCtx(r.Context(), "failed to encode json", slog.Any("err", err))
-	}
-}
-
-func (s *Server) file(path string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		file, err := s.assets.Open(path)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer file.Close()
-		_, _ = io.Copy(w, file)
-	}
 }

@@ -1,0 +1,132 @@
+package templates
+
+import (
+    "strings"
+    "time"
+    "strconv"
+
+    "github.com/dustin/go-humanize"
+)
+
+func assemblePath(paths []string, i int) string {
+	return strings.Join(paths[:i+1], "/")
+}
+
+type File struct {
+    IsDir       bool
+    Path        string
+    Dir         string
+    Name        string
+    Size        int64
+    Description string
+    Date        time.Time
+    Owner       string
+    IsOwner     bool
+}
+
+type IndexVars struct {
+    Theme     string
+    Auth      bool
+	CurrentURL string
+    User      User
+    PathParts []string
+    Files     []File
+    Path      string
+}
+
+templ Index(vars IndexVars) {
+    @Page(vars.Theme, vars.Auth, vars.CurrentURL, vars.User) {
+        @Main(vars)
+    }
+}
+
+templ Main(vars IndexVars) {
+	<main>
+		<div id="navigation">
+			<div id="navigation-checkbox">
+				<input type="checkbox" id="files-select" class="checkbox" data-file={ vars.Path } autocomplete="off" hx-on:click="window.onFilesSelect(event)"/>
+				<label for="files-select" class="icon"></label>
+			</div>
+			<div id="navigation-path">
+				<a href="/">/</a>
+				for i, path := range vars.PathParts {
+					<a href={ templ.URL(assemblePath(vars.PathParts, i)) }>
+						if i < len(vars.PathParts) - 1 {
+							{ path + "/" }
+						} else {
+							{ path }
+						}
+					</a>
+
+				}
+			</div>
+			<div class="buttons">
+				<button class="btn primary" disabled?={ vars.Auth && vars.User.Name == "guest" } hx-post={ vars.Path + "?action=upload" } hx-target="main" hx-swap="innerhtml">Upload</button>
+				<div id="files-more" class="dropdown disabled">
+					<div class="icon-more" role="button"></div>
+					<ul>
+						<li><span role="button" hx-on="click: window.onDownloadFiles(event)">Download</span></li>
+						if !vars.Auth || vars.User.Name != "guest" {
+							<li disabled?={ vars.User.Name == "guest" }><span hx-patch={ vars.Path + "?action=move" } hx-target="main" hx-swap="innerHTML" hx-ext="move-files,accept-html" role="button">Move</span></li>
+							<li disabled?={ vars.User.Name == "guest" }><span hx-delete={ vars.Path } hx-target="main" hx-swap="outerHTML" hx-confirm="Are you sure you want to delete the selected files?" hx-ext="delete-files,accept-html" role="button">Delete</span></li>
+						}
+					</ul>
+				</div>
+			</div>
+		</div>
+		@FileList(vars.Auth, vars.Files)
+	</main>
+}
+
+templ FileList(auth bool, files []File) {
+	<div id="file-list" class={"table-list",templ.KV("auth", auth)}>
+		<div class="table-list-header">
+			<div></div>
+			<div></div>
+			<div>Name</div>
+			<div>Size</div>
+			<div>Last Edited</div>
+			<div>Description</div>
+			<div>Owner</div>
+			<div></div>
+		</div>
+		for i, file := range files {
+			@FileEntry(auth, i, file)
+		}
+	</div>
+}
+
+templ FileEntry(auth bool, i int, file File) {
+	<div class="table-list-entry">
+		<div>
+			<input type="checkbox" id={ "file-select-" + strconv.Itoa(i) } class={ "file-select", "checkbox", templ.KV("folder", file.IsDir), templ.KV("file", !file.IsDir) } data-name={ file.Name } autocomplete="off" hx-on:click="window.onFileSelect(event)"/>
+			<label for={ "file-select-" + strconv.Itoa(i) } class="icon"></label>
+		</div>
+		<div>
+			<span class={ "icon", templ.KV("icon-folder", file.IsDir), templ.KV("icon-file", !file.IsDir) }></span>
+		</div>
+		<div hx-boost={ strconv.FormatBool(file.IsDir) }>
+			<a href={ templ.URL(file.Path) }>{ file.Name }</a>
+		</div>
+		<div>{ humanize.IBytes(uint64(file.Size)) }</div>
+		<div title={ file.Date.Format(time.DateTime) }>{ humanize.Time(file.Date) }</div>
+		<div>{ file.Description }</div>
+		<div>{ file.Owner }</div>
+		<div>
+			<div class="dropdown">
+				<div class="icon-more" role="button"></div>
+				<ul>
+					<li><a href={ templ.URL(file.Path + "?dl=1") } target="_blank">Download</a></li>
+					if file.IsOwner {
+					    if file.IsDir {
+					        <li><span hx-patch={ file.Path + "?action=move" } hx-target="main" hx-swap="innerHTML" role="button">Move</span></li>
+					    } else {
+					    	<li><span hx-patch={ file.Path + "?action=edit" } hx-target="main" hx-swap="innerHTML" role="button">Edit</span></li>
+					    }
+						<li><span hx-delete={ file.Path } hx-target="main" hx-swap="outerHTML" hx-confirm={ "Are you sure you want to delete " + file.Name + "?" } hx-ext="accept-html" role="button">Delete</span></li>
+					}
+				</ul>
+			</div>
+		</div>
+	</div>
+}
