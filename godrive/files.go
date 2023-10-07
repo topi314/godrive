@@ -15,10 +15,13 @@ import (
 	"strings"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/topi314/godrive/godrive/database"
 	"github.com/topi314/godrive/internal/http_range"
 	"github.com/topi314/godrive/templates"
 	"golang.org/x/exp/slices"
 )
+
+var ErrUnauthorized = errors.New("unauthorized")
 
 func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
@@ -239,7 +242,7 @@ func (s *Server) PostFile(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err != nil {
-			if errors.Is(err, ErrFileAlreadyExists) {
+			if errors.Is(err, database.ErrFileAlreadyExists) {
 				s.error(w, r, err, http.StatusBadRequest)
 				return
 			}
@@ -311,7 +314,7 @@ func (s *Server) PatchFile(w http.ResponseWriter, r *http.Request) {
 
 		tx, err := s.db.UpdateFile(r.Context(), r.URL.Path, file.Path(), file.Size, filePart.ContentType, file.Description)
 		if err != nil {
-			if errors.Is(err, ErrFileNotFound) {
+			if errors.Is(err, database.ErrFileNotFound) {
 				s.error(w, r, err, http.StatusNotFound)
 				return
 			}

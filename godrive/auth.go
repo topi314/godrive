@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/topi314/godrive/godrive/database"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -45,7 +46,7 @@ type UserInfo struct {
 	Username string   `json:"preferred_username"`
 }
 
-func (s *Server) hasFileAccess(info *UserInfo, file File) bool {
+func (s *Server) hasFileAccess(info *UserInfo, file database.File) bool {
 	return info.Subject == file.UserID || s.isAdmin(info)
 }
 
@@ -88,7 +89,7 @@ func (s *Server) isGuest(info *UserInfo) bool {
 
 const SessionCookieName = "X-Session-ID"
 
-func (s *Server) setSession(ctx context.Context, w http.ResponseWriter, session Session) error {
+func (s *Server) setSession(ctx context.Context, w http.ResponseWriter, session database.Session) error {
 	http.SetCookie(w, &http.Cookie{
 		Name:     SessionCookieName,
 		Value:    session.ID,
@@ -354,7 +355,7 @@ func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sessionID := s.newID(32)
-	if err = s.setSession(ctx, w, Session{
+	if err = s.setSession(ctx, w, database.Session{
 		ID:           sessionID,
 		AccessToken:  token.AccessToken,
 		RefreshToken: token.RefreshToken,

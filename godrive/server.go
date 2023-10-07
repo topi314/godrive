@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/topi314/godrive/godrive/database"
+	"github.com/topi314/godrive/godrive/storage"
 	"github.com/topi314/godrive/templates"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
@@ -25,7 +27,9 @@ type (
 	WriterFunc          func(w io.Writer) error
 )
 
-func NewServer(version string, cfg Config, db *DB, auth *Auth, storage Storage, tracer trace.Tracer, meter metric.Meter, assets http.FileSystem) *Server {
+var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func NewServer(version string, cfg Config, db *database.DB, auth *Auth, storage storage.Storage, tracer trace.Tracer, meter metric.Meter, assets http.FileSystem) *Server {
 	s := &Server{
 		version: version,
 		cfg:     cfg,
@@ -49,10 +53,10 @@ func NewServer(version string, cfg Config, db *DB, auth *Auth, storage Storage, 
 type Server struct {
 	version string
 	cfg     Config
-	db      *DB
+	db      *database.DB
 	server  *http.Server
 	auth    *Auth
-	storage Storage
+	storage storage.Storage
 	tracer  trace.Tracer
 	meter   metric.Meter
 	assets  http.FileSystem
@@ -91,7 +95,7 @@ func (s *Server) newTemplateUser(info *UserInfo) templates.User {
 	}
 }
 
-func (s *Server) newTemplateFile(userInfo *UserInfo, file File) templates.File {
+func (s *Server) newTemplateFile(userInfo *UserInfo, file database.File) templates.File {
 	owner := "Unknown"
 	if file.Username != nil {
 		owner = *file.Username

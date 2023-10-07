@@ -18,6 +18,8 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
 	"github.com/topi314/godrive/godrive"
+	"github.com/topi314/godrive/godrive/database"
+	"github.com/topi314/godrive/godrive/storage"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/oauth2"
@@ -136,14 +138,14 @@ func main() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	db, err := godrive.NewDB(ctx, cfg.Database, Schema)
+	db, err := database.New(ctx, cfg.Database, Schema)
 	if err != nil {
 		slog.Error("Error while connecting to database", slog.Any("err", err))
 		os.Exit(-1)
 	}
 	defer db.Close()
 
-	storage, err := godrive.NewStorage(context.Background(), cfg.Storage, tracer)
+	str, err := storage.New(context.Background(), cfg.Storage, tracer)
 	if err != nil {
 		slog.Error("Error while creating storage", slog.Any("err", err))
 		os.Exit(-1)
@@ -161,7 +163,7 @@ func main() {
 		assets = http.FS(Public)
 	}
 
-	s := godrive.NewServer(godrive.FormatBuildVersion(Version, Commit, buildTime), cfg, db, auth, storage, tracer, meter, assets)
+	s := godrive.NewServer(godrive.FormatBuildVersion(Version, Commit, buildTime), cfg, db, auth, str, tracer, meter, assets)
 	slog.Info("godrive listening", slog.String("listen_addr", cfg.ListenAddr))
 	go s.Start()
 	defer s.Close()
