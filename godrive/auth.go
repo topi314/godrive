@@ -285,7 +285,6 @@ func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
-	fmt.Printf("Callback: %s\n", r.URL.String())
 	ctx, span := s.tracer.Start(r.Context(), "callback")
 	defer span.End()
 

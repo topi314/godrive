@@ -10,6 +10,7 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/topi314/godrive/internal/http_range"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -27,9 +28,9 @@ func NewStorage(ctx context.Context, config StorageConfig, tracer trace.Tracer) 
 }
 
 type Storage interface {
-	GetObject(ctx context.Context, filePath string, start *int64, end *int64) (io.ReadCloser, error)
+	GetObject(ctx context.Context, filePath string, ra *http_range.Range) (io.ReadCloser, error)
 	MoveObject(ctx context.Context, from string, to string) error
-	PutObject(ctx context.Context, filePath string, size uint64, reader io.Reader, contentType string) error
+	PutObject(ctx context.Context, filePath string, size int64, reader io.Reader, contentType string) error
 	DeleteObject(ctx context.Context, filePath string) error
 }
 
@@ -54,15 +55,15 @@ type localStorage struct {
 	tracer trace.Tracer
 }
 
-func (l *localStorage) GetObject(ctx context.Context, filePath string, start *int64, end *int64) (io.ReadCloser, error) {
+func (l *localStorage) GetObject(ctx context.Context, filePath string, ra *http_range.Range) (io.ReadCloser, error) {
 	attrs := []attribute.KeyValue{
-		attribute.String("filePath", filePath),
+		attribute.String("file_path", filePath),
 	}
-	if start != nil {
-		attrs = append(attrs, attribute.Int64("start", *start))
-	}
-	if end != nil {
-		attrs = append(attrs, attribute.Int64("end", *end))
+	if ra != nil {
+		attrs = append(attrs,
+			attribute.Int64("start", ra.Start),
+			attribute.Int64("end", ra.End),
+		)
 	}
 	ctx, span := l.tracer.Start(ctx, "localStorage.GetObject", trace.WithAttributes(attrs...))
 	defer span.End()
@@ -73,20 +74,27 @@ func (l *localStorage) GetObject(ctx context.Context, filePath string, start *in
 		return nil, err
 	}
 
-	if start != nil && end != nil {
-		if _, err = file.Seek(*start, io.SeekStart); err != nil {
-			return nil, err
-		}
-
-		return &limitedReader{
-			Reader: io.LimitReader(file, *end-*start),
-			closeFunc: func() error {
-				return file.Close()
-			},
-		}, nil
+	if ra == nil {
+		return file, nil
 	}
 
-	return file, nil
+	if ra.Start > 0 {
+		if _, err = file.Seek(ra.Start, io.SeekStart); err != nil {
+			return nil, err
+		}
+	}
+
+	limit := ra.Limit()
+	if limit == 0 {
+		return file, nil
+	}
+
+	return &limitedReader{
+		Reader: io.LimitReader(file, limit),
+		closeFunc: func() error {
+			return file.Close()
+		},
+	}, nil
 }
 
 type limitedReader struct {
@@ -101,11 +109,11 @@ func (l *limitedReader) Close() error {
 	return nil
 }
 
-func (l *localStorage) PutObject(ctx context.Context, filePath string, size uint64, reader io.Reader, contentType string) error {
+func (l *localStorage) PutObject(ctx context.Context, filePath string, size int64, reader io.Reader, contentType string) error {
 	ctx, span := l.tracer.Start(ctx, "localStorage.PutObject", trace.WithAttributes(
-		attribute.String("filePath", filePath),
-		attribute.Int64("size", int64(size)),
-		attribute.String("contentType", contentType),
+		attribute.String("file_path", filePath),
+		attribute.Int64("size", size),
+		attribute.String("content_type", contentType),
 	))
 	defer span.End()
 
@@ -151,7 +159,7 @@ func (l *localStorage) MoveObject(ctx context.Context, from string, to string) e
 
 func (l *localStorage) DeleteObject(ctx context.Context, filePath string) error {
 	ctx, span := l.tracer.Start(ctx, "localStorage.DeleteObject", trace.WithAttributes(
-		attribute.String("filePath", filePath),
+		attribute.String("file_path", filePath),
 	))
 	defer span.End()
 	if err := os.Remove(l.path + filePath); err != nil {
@@ -202,32 +210,35 @@ type s3Storage struct {
 	tracer trace.Tracer
 }
 
-func (s *s3Storage) GetObject(ctx context.Context, filePath string, start *int64, end *int64) (io.ReadCloser, error) {
+func (s *s3Storage) GetObject(ctx context.Context, filePath string, ra *http_range.Range) (io.ReadCloser, error) {
 	attrs := []attribute.KeyValue{
-		attribute.String("filePath", filePath),
+		attribute.String("file_path", filePath),
 	}
-	if start != nil {
-		attrs = append(attrs, attribute.Int64("start", *start))
-	}
-	if end != nil {
-		attrs = append(attrs, attribute.Int64("end", *end))
+	if ra != nil {
+		attrs = append(attrs,
+			attribute.Int64("start", ra.Start),
+			attribute.Int64("end", ra.End),
+		)
 	}
 	ctx, span := s.tracer.Start(ctx, "s3Storage.GetObject", trace.WithAttributes(attrs...))
 	defer span.End()
 	opts := minio.GetObjectOptions{}
-	if start != nil && end != nil {
-		if err := opts.SetRange(*start, *end); err != nil {
+	if ra != nil {
+		if err := opts.SetRange(ra.Start, ra.End); err != nil {
 			span.SetStatus(codes.Error, "failed to set range")
 			span.RecordError(err)
-			return nil, fmt.Errorf("failed to set range: %w", err)
+			return nil, err
 		}
+
 	}
 	r, err := s.client.GetObject(ctx, s.bucket, filePath, opts)
 	if err != nil {
 		span.SetStatus(codes.Error, "failed to get object")
 		span.RecordError(err)
+		return nil, err
 	}
-	return r, err
+
+	return r, nil
 }
 
 func (s *s3Storage) MoveObject(ctx context.Context, from string, to string) error {
@@ -256,14 +267,14 @@ func (s *s3Storage) MoveObject(ctx context.Context, from string, to string) erro
 	return err
 }
 
-func (s *s3Storage) PutObject(ctx context.Context, filePath string, size uint64, reader io.Reader, contentType string) error {
+func (s *s3Storage) PutObject(ctx context.Context, filePath string, size int64, reader io.Reader, contentType string) error {
 	ctx, span := s.tracer.Start(ctx, "s3Storage.PutObject", trace.WithAttributes(
-		attribute.String("filePath", filePath),
-		attribute.Int64("size", int64(size)),
-		attribute.String("contentType", contentType),
+		attribute.String("file_path", filePath),
+		attribute.Int64("size", size),
+		attribute.String("content_type", contentType),
 	))
 	defer span.End()
-	_, err := s.client.PutObject(ctx, s.bucket, filePath, reader, int64(size), minio.PutObjectOptions{
+	_, err := s.client.PutObject(ctx, s.bucket, filePath, reader, size, minio.PutObjectOptions{
 		ContentType: contentType,
 	})
 	if err != nil {

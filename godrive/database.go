@@ -36,7 +36,7 @@ var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 type File struct {
 	Path        string    `db:"path"`
-	Size        uint64    `db:"size"`
+	Size        int64     `db:"size"`
 	ContentType string    `db:"content_type"`
 	Description string    `db:"description"`
 	UserID      string    `db:"user_id"`
@@ -48,7 +48,7 @@ type File struct {
 type UpdateFile struct {
 	Path        string    `db:"path"`
 	NewPath     string    `db:"new_path"`
-	Size        uint64    `db:"size"`
+	Size        int64     `db:"size"`
 	ContentType string    `db:"content_type"`
 	Description string    `db:"description"`
 	UpdatedAt   time.Time `db:"updated_at"`
@@ -191,7 +191,7 @@ func (d *DB) GetFile(ctx context.Context, path string) (*File, error) {
 	return file, nil
 }
 
-func (d *DB) CreateFile(ctx context.Context, path string, size uint64, contentType string, description string, userID string) (*File, *sqlx.Tx, error) {
+func (d *DB) CreateFile(ctx context.Context, path string, size int64, contentType string, description string, userID string) (*File, *sqlx.Tx, error) {
 	tx, err := d.dbx.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error creating file: %w", err)
@@ -225,7 +225,7 @@ func (d *DB) CreateFile(ctx context.Context, path string, size uint64, contentTy
 	return file, tx, nil
 }
 
-func (d *DB) CreateOrUpdateFile(ctx context.Context, path string, size uint64, contentType string, description string, userID string) (*File, *sqlx.Tx, error) {
+func (d *DB) CreateOrUpdateFile(ctx context.Context, path string, size int64, contentType string, description string, userID string) (*File, *sqlx.Tx, error) {
 	tx, err := d.dbx.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error creating file: %w", err)
@@ -251,7 +251,7 @@ func (d *DB) CreateOrUpdateFile(ctx context.Context, path string, size uint64, c
 	return file, tx, nil
 }
 
-func (d *DB) UpdateFile(ctx context.Context, path string, newPath string, size uint64, contentType string, description string) (*sqlx.Tx, error) {
+func (d *DB) UpdateFile(ctx context.Context, path string, newPath string, size int64, contentType string, description string) (*sqlx.Tx, error) {
 	tx, err := d.dbx.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error updating file: %w", err)

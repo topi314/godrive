@@ -17,7 +17,7 @@ type File struct {
     Path        string
     Dir         string
     Name        string
-    Size        uint64
+    Size        int64
     Description string
     Date        time.Time
     Owner       string
@@ -108,7 +108,7 @@ templ FileEntry(auth bool, i int, file File) {
 		<div hx-boost={ strconv.FormatBool(file.IsDir) }>
 			<a href={ templ.URL(file.Path) }>{ file.Name }</a>
 		</div>
-		<div>{ humanize.IBytes(file.Size) }</div>
+		<div>{ humanize.IBytes(uint64(file.Size)) }</div>
 		<div title={ file.Date.Format(time.DateTime) }>{ humanize.Time(file.Date) }</div>
 		<div>{ file.Description }</div>
 		<div>{ file.Owner }</div>

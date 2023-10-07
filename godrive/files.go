@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/topi314/godrive/internal/http_range"
 	"github.com/topi314/godrive/templates"
 	"golang.org/x/exp/slices"
 )
@@ -49,29 +50,29 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 
 	userInfo := GetUserInfo(r)
 	if len(files) == 1 && files[0].Path == r.URL.Path {
-		start, end, err := parseRange(r.Header.Get("Range"))
+		file := files[0]
+		ra, err := http_range.ParseRange(r.Header.Get("Range"), file.Size)
 		if err != nil {
 			s.error(w, r, err, http.StatusRequestedRangeNotSatisfiable)
 			return
 		}
-		file := files[0]
 		if download {
 			w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{
 				"filename": path.Base(file.Path),
 			}))
 		}
 		w.Header().Set("Content-Type", file.ContentType)
-		w.Header().Set("Content-Length", strconv.FormatUint(file.Size, 10))
+		w.Header().Set("Content-Length", strconv.FormatInt(file.Size, 10))
 		w.Header().Set("Accept-Ranges", "bytes")
-		if start != nil || end != nil {
-			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, file.Size))
+		if ra != nil {
+			w.Header().Set("Content-Range", ra.String())
 			w.WriteHeader(http.StatusPartialContent)
 		}
 		if r.Method == http.MethodHead {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if err = s.writeFile(r.Context(), w, file.Path, start, end); err != nil {
+		if err = s.writeFile(r.Context(), w, file.Path, ra); err != nil {
 			slog.ErrorContext(r.Context(), "Failed to write file", slog.Any("err", err))
 		}
 		return
@@ -102,7 +103,7 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 			}
 			fw, err := zw.CreateHeader(&zip.FileHeader{
 				Name:               strings.TrimPrefix(file.Path, "/"),
-				UncompressedSize64: file.Size,
+				UncompressedSize64: uint64(file.Size),
 				Modified:           file.UpdatedAt,
 				Comment:            file.Description,
 				Method:             zip.Deflate,
@@ -112,7 +113,7 @@ func (s *Server) GetFiles(w http.ResponseWriter, r *http.Request) {
 				s.error(w, r, err, http.StatusInternalServerError)
 				return
 			}
-			if err = s.writeFile(r.Context(), fw, file.Path, nil, nil); err != nil {
+			if err = s.writeFile(r.Context(), fw, file.Path, nil); err != nil {
 				s.error(w, r, err, http.StatusInternalServerError)
 				return
 			}
@@ -518,40 +519,15 @@ func (s *Server) DeleteFiles(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) writeFile(ctx context.Context, w io.Writer, fullPath string, start *int64, end *int64) error {
-	obj, err := s.storage.GetObject(ctx, fullPath, start, end)
+func (s *Server) writeFile(ctx context.Context, w io.Writer, fullPath string, ra *http_range.Range) error {
+	obj, err := s.storage.GetObject(ctx, fullPath, ra)
 	if err != nil {
 		return err
 	}
 	defer obj.Close()
+
 	if _, err = io.Copy(w, obj); err != nil {
 		return err
 	}
 	return nil
-}
-
-func parseRange(rangeHeader string) (*int64, *int64, error) {
-	if rangeHeader == "" {
-		return nil, nil, nil
-	}
-
-	if !strings.HasPrefix(rangeHeader, "bytes=") {
-		return nil, nil, errors.New("invalid range header, must start with 'bytes='")
-	}
-
-	var (
-		start int64
-		end   int64
-	)
-	if _, err := fmt.Sscanf(rangeHeader, "bytes=%d-%d", &start, &end); err == nil {
-		return &start, &end, nil
-	}
-	if _, err := fmt.Sscanf(rangeHeader, "bytes=-%d", &end); err == nil {
-		return nil, &end, nil
-	}
-	if _, err := fmt.Sscanf(rangeHeader, "bytes=%d-", &start); err == nil {
-		return &start, nil, nil
-	}
-
-	return nil, nil, fmt.Errorf("invalid range header: %s", rangeHeader)
 }

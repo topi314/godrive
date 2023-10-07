@@ -26,7 +26,7 @@ type File struct {
 	Path        string
 	Dir         string
 	Name        string
-	Size        uint64
+	Size        int64
 	Description string
 	Date        time.Time
 	Owner       string
@@ -460,7 +460,7 @@ func FileEntry(auth bool, i int, file File) templ.Component {
 		if err != nil {
 			return err
 		}
-		var var_24 string = humanize.IBytes(file.Size)
+		var var_24 string = humanize.IBytes(uint64(file.Size))
 		_, err = templBuffer.WriteString(templ.EscapeString(var_24))
 		if err != nil {
 			return err

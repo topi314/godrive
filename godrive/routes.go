@@ -16,14 +16,14 @@ type (
 		Name        string `json:"name"`
 		Description string `json:"description"`
 		Overwrite   bool   `json:"overwrite"`
-		Size        uint64 `json:"size"`
+		Size        int64  `json:"size"`
 	}
 
 	FileUpdateRequest struct {
 		Dir         string `json:"dir"`
 		Name        string `json:"name"`
 		Description string `json:"description"`
-		Size        uint64 `json:"size"`
+		Size        int64  `json:"size"`
 	}
 
 	ErrorResponse struct {

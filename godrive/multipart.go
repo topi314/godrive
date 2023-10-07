@@ -14,7 +14,7 @@ type MultipartFilePart struct {
 	Name        string
 	Description string
 	Overwrite   bool
-	Size        uint64
+	Size        int64
 	Content     func() (*FilePart, error)
 }
 
