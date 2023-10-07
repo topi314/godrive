@@ -54,6 +54,7 @@ type UpdateFile struct {
 type User struct {
 	ID       string `db:"id"`
 	Username string `db:"username"`
+	Groups   string `db:"groups"`
 	Email    string `db:"email"`
 	Home     string `db:"home"`
 }
