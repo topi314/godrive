@@ -78,17 +78,13 @@ main {
 	text-decoration: underline;
 }
 
-#navigation .icon-more::before {
-	font-size: 200%;
-}
-
 .buttons {
 	display: flex;
 	gap: 1rem;
 }
 
 #files-more > div {
-	margin-top: 0.05rem;
+	margin-top: 0.35rem;
 }
 
 #theme {
