@@ -1,13 +1,13 @@
 /* assets/css/icons/fontello.css */
 @font-face {
   font-family: "fontello";
-  src: url(../fontello-5ZXBNVBY.eot?53794168);
+  src: url(../fontello-ZT3AP3BI.eot?27555855);
   src:
-    url(../fontello-5ZXBNVBY.eot?53794168#iefix) format("embedded-opentype"),
-    url(../fontello-BLCDBZKD.woff2?53794168) format("woff2"),
-    url(../fontello-G4FDNGHR.woff?53794168) format("woff"),
-    url(../fontello-V5GWB3ZU.ttf?53794168) format("truetype"),
-    url('data:image/svg+xml,<?xml version="1.0" standalone="no"?>%0D%0A<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">%0D%0A<svg xmlns="http://www.w3.org/2000/svg">%0D%0A<metadata>Copyright (C) 2023 by original authors @ fontello.com</metadata>%0D%0A<defs>%0D%0A<font id="fontello" horiz-adv-x="1000" >%0D%0A<font-face font-family="fontello" font-weight="400" font-stretch="normal" units-per-em="1000" ascent="850" descent="-150" />%0D%0A<missing-glyph horiz-adv-x="1000" />%0D%0A<glyph glyph-name="folder" unicode="&%23xe800;" d="M929 511v-393q0-51-37-88t-88-37h-679q-51 0-88 37t-37 88v536q0 51 37 88t88 37h179q51 0 88-37t37-88v-18h375q51 0 88-37t37-88z" horiz-adv-x="928.6" />%0D%0A%0D%0A<glyph glyph-name="remove" unicode="&%23xe801;" d="M724 112q0-22-15-38l-76-76q-16-15-38-15t-38 15l-164 165-164-165q-16-15-38-15t-38 15l-76 76q-16 16-16 38t16 38l164 164-164 164q-16 16-16 38t16 38l76 76q16 16 38 16t38-16l164-164 164 164q16 16 38 16t38-16l76-76q15-15 15-38t-15-38l-164-164 164-164q15-15 15-38z" horiz-adv-x="785.7" />%0D%0A%0D%0A<glyph glyph-name="user" unicode="&%23xe802;" d="M714 69q0-60-35-104t-84-44h-476q-49 0-84 44t-35 104q0 48 5 90t17 85 33 73 52 50 76 19q73-72 174-72t175 72q42 0 75-19t52-50 33-73 18-85 4-90z m-143 495q0-88-62-151t-152-63-151 63-63 151 63 152 151 63 152-63 62-152z" horiz-adv-x="714.3" />%0D%0A%0D%0A<glyph glyph-name="check-empty" unicode="&%23xf096;" d="M625 707h-464q-37 0-63-26t-27-63v-464q0-37 27-63t63-27h464q37 0 63 27t26 63v464q0 37-26 63t-63 26z m161-89v-464q0-67-47-114t-114-47h-464q-67 0-114 47t-47 114v464q0 66 47 113t114 48h464q66 0 114-48t47-113z" horiz-adv-x="785.7" />%0D%0A%0D%0A<glyph glyph-name="github" unicode="&%23xf09b;" d="M429 779q116 0 215-58t156-156 57-215q0-140-82-252t-211-155q-15-3-22 4t-7 17q0 1 0 43t0 75q0 54-29 79 32 3 57 10t53 22 45 37 30 58 11 84q0 67-44 115 21 51-4 114-16 5-46-6t-51-25l-21-13q-52 15-107 15t-108-15q-8 6-23 15t-47 22-47 7q-25-63-5-114-44-48-44-115 0-47 12-83t29-59 45-37 52-22 57-10q-21-20-27-58-12-5-25-8t-32-3-36 12-31 35q-11 18-27 29t-28 14l-11 1q-12 0-16-2t-3-7 5-8 7-6l4-3q12-6 24-21t18-29l6-13q7-21 24-34t37-17 39-3 31 1l13 3q0-22 0-50t1-30q0-10-8-17t-22-4q-129 43-211 155t-82 252q0 117 58 215t155 156 216 58z m-267-616q2 4-3 7-6 1-8-1-1-4 4-7 5-3 7 1z m18-19q4 3-1 9-6 5-9 2-4-3 1-9 5-6 9-2z m16-25q6 4 0 11-4 7-9 3-5-3 0-10t9-4z m24-23q4 4-2 10-7 7-11 2-5-5 2-11 6-6 11-1z m32-14q1 6-8 9-8 2-10-4t7-9q8-3 11 4z m35-3q0 7-10 6-9 0-9-6 0-7 10-6 9 0 9 6z m32 5q-1 7-10 5-9-1-8-8t10-4 8 7z" horiz-adv-x="857.1" />%0D%0A%0D%0A<glyph glyph-name="upload-cloud" unicode="&%23xf0ee;" d="M714 368q0 8-5 13l-196 196q-5 5-13 5t-13-5l-196-196q-5-6-5-13 0-8 5-13t13-5h125v-196q0-8 5-13t12-5h108q7 0 12 5t5 13v196h125q8 0 13 5t5 13z m357-161q0-89-62-151t-152-63h-607q-103 0-177 73t-73 177q0 72 39 134t105 92q-1 17-1 24 0 118 84 202t202 84q87 0 159-49t105-129q40 35 93 35 59 0 101-42t42-101q0-43-23-77 72-17 119-76t46-133z" horiz-adv-x="1071.4" />%0D%0A%0D%0A<glyph glyph-name="more" unicode="&%23xf142;" d="M214 154v-108q0-22-15-37t-38-16h-107q-23 0-38 16t-16 37v108q0 22 16 38t38 15h107q22 0 38-15t15-38z m0 285v-107q0-22-15-38t-38-15h-107q-23 0-38 15t-16 38v107q0 23 16 38t38 16h107q22 0 38-16t15-38z m0 286v-107q0-22-15-38t-38-16h-107q-23 0-38 16t-16 38v107q0 22 16 38t38 16h107q22 0 38-16t15-38z" horiz-adv-x="214.3" />%0D%0A%0D%0A<glyph glyph-name="check" unicode="&%23xf14a;" d="M382 125l343 343q11 10 11 25t-11 25l-57 57q-11 11-25 11t-25-11l-261-261-118 118q-10 11-25 11t-25-11l-57-57q-10-10-10-25t10-25l200-200q11-10 25-10t25 10z m475 493v-536q0-66-47-113t-114-48h-535q-67 0-114 48t-47 113v536q0 66 47 113t114 48h535q67 0 114-48t47-113z" horiz-adv-x="857.1" />%0D%0A%0D%0A<glyph glyph-name="file" unicode="&%23xf15b;" d="M571 564v264q13-8 21-16l227-228q8-7 16-20h-264z m-71-18q0-22 16-37t38-16h303v-589q0-23-15-38t-38-16h-750q-23 0-38 16t-16 38v892q0 23 16 38t38 16h446v-304z" horiz-adv-x="857.1" />%0D%0A%0D%0A<glyph glyph-name="light" unicode="&%23xf185;" d="M821 350q0 65-25 125t-69 102-102 69-125 25-125-25-102-69-69-102-25-125 25-125 69-102 102-69 125-25 125 25 102 69 69 102 25 125z m154-155q-2-8-11-11l-163-53v-171q0-9-7-15-8-5-16-2l-163 53-100-139q-6-7-15-7t-14 7l-101 139-163-53q-8-3-16 2-7 6-7 15v171l-163 53q-9 3-11 11-3 10 2 17l100 138-100 138q-5 8-2 17 2 8 11 11l163 53v171q0 9 7 15 8 5 16 2l163-53 101 139q5 6 14 6t15-6l100-139 163 53q8 3 16-2 7-6 7-15v-171l163-53q9-3 11-11 3-9-2-17l-100-138 100-138q5-7 2-17z" horiz-adv-x="1000" />%0D%0A%0D%0A<glyph glyph-name="dark" unicode="&%23xf186;" d="M704 123q-30-5-61-5-102 0-188 50t-137 137-50 188q0 107 58 199-112-33-183-128t-72-214q0-72 29-139t76-113 114-77 139-28q80 0 152 34t123 96z m114 47q-53-113-159-181t-230-68q-87 0-167 34t-136 92-92 137-34 166q0 85 32 163t87 135 132 92 161 38q25 1 34-22 11-23-8-40-48-43-73-101t-26-122q0-83 41-152t111-111 152-41q66 0 127 29 23 10 40-7 8-8 10-19t-2-22z" horiz-adv-x="857.1" />%0D%0A%0D%0A<glyph glyph-name="share" unicode="&%23xf1e0;" d="M679 279q74 0 126-53t52-126-52-126-126-53-127 53-52 126q0 7 1 19l-201 100q-51-48-121-48-75 0-127 53t-52 126 52 126 127 53q70 0 121-48l201 100q-1 12-1 19 0 74 52 126t127 53 126-53 52-126-52-126-126-53q-71 0-122 48l-201-100q1-12 1-19t-1-19l201-100q51 48 122 48z" horiz-adv-x="857.1" />%0D%0A</font>%0D%0A</defs>%0D%0A</svg>%0D%0A') format("svg");
+    url(../fontello-ZT3AP3BI.eot?27555855#iefix) format("embedded-opentype"),
+    url(../fontello-LIMTE3X4.woff2?27555855) format("woff2"),
+    url(../fontello-LZDM2UU5.woff?27555855) format("woff"),
+    url(../fontello-S5RG3334.ttf?27555855) format("truetype"),
+    url('data:image/svg+xml,<?xml version="1.0" standalone="no"?>%0A<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">%0A<svg xmlns="http://www.w3.org/2000/svg">%0A<metadata>Copyright (C) 2023 by original authors @ fontello.com</metadata>%0A<defs>%0A<font id="fontello" horiz-adv-x="1000" >%0A<font-face font-family="fontello" font-weight="400" font-stretch="normal" units-per-em="1000" ascent="850" descent="-150" />%0A<missing-glyph horiz-adv-x="1000" />%0A<glyph glyph-name="folder" unicode="&%23xe800;" d="M929 511v-393q0-51-37-88t-88-37h-679q-51 0-88 37t-37 88v536q0 51 37 88t88 37h179q51 0 88-37t37-88v-18h375q51 0 88-37t37-88z" horiz-adv-x="928.6" />%0A%0A<glyph glyph-name="x" unicode="&%23xe801;" d="M724 112q0-22-15-38l-76-76q-16-15-38-15t-38 15l-164 165-164-165q-16-15-38-15t-38 15l-76 76q-16 16-16 38t16 38l164 164-164 164q-16 16-16 38t16 38l76 76q16 16 38 16t38-16l164-164 164 164q16 16 38 16t38-16l76-76q15-15 15-38t-15-38l-164-164 164-164q15-15 15-38z" horiz-adv-x="785.7" />%0A%0A<glyph glyph-name="user" unicode="&%23xe802;" d="M714 69q0-60-35-104t-84-44h-476q-49 0-84 44t-35 104q0 48 5 90t17 85 33 73 52 50 76 19q73-72 174-72t175 72q42 0 75-19t52-50 33-73 18-85 4-90z m-143 495q0-88-62-151t-152-63-151 63-63 151 63 152 151 63 152-63 62-152z" horiz-adv-x="714.3" />%0A%0A<glyph glyph-name="users" unicode="&%23xe803;" d="M331 350q-90-3-148-71h-75q-45 0-77 22t-31 66q0 197 69 197 4 0 25-11t54-24 66-12q38 0 75 13-3-21-3-37 0-78 45-143z m598-356q0-66-41-105t-108-39h-488q-68 0-108 39t-41 105q0 30 2 58t8 61 14 61 24 54 35 45 48 30 62 11q6 0 24-12t41-26 59-27 76-12 75 12 60 27 41 26 24 12q34 0 62-11t47-30 35-45 24-54 15-61 8-61 2-58z m-572 713q0-59-42-101t-101-42-101 42-42 101 42 101 101 42 101-42 42-101z m393-214q0-89-63-152t-151-62-152 62-63 152 63 151 152 63 151-63 63-151z m321-126q0-43-31-66t-77-22h-75q-57 68-147 71 45 65 45 143 0 16-3 37 37-13 74-13 33 0 67 12t54 24 24 11q69 0 69-197z m-71 340q0-59-42-101t-101-42-101 42-42 101 42 101 101 42 101-42 42-101z" horiz-adv-x="1071.4" />%0A%0A<glyph glyph-name="ok" unicode="&%23xe804;" d="M933 534q0-22-16-38l-404-404-76-76q-16-15-38-15t-38 15l-76 76-202 202q-15 16-15 38t15 38l76 76q16 16 38 16t38-16l164-165 366 367q16 16 38 16t38-16l76-76q16-15 16-38z" horiz-adv-x="1000" />%0A%0A<glyph glyph-name="minus" unicode="&%23xe805;" d="M786 439v-107q0-22-16-38t-38-15h-678q-23 0-38 15t-16 38v107q0 23 16 38t38 16h678q23 0 38-16t16-38z" horiz-adv-x="785.7" />%0A%0A<glyph glyph-name="checkbox-empty" unicode="&%23xf096;" d="M625 707h-464q-37 0-63-26t-27-63v-464q0-37 27-63t63-27h464q37 0 63 27t26 63v464q0 37-26 63t-63 26z m161-89v-464q0-67-47-114t-114-47h-464q-67 0-114 47t-47 114v464q0 66 47 113t114 48h464q66 0 114-48t47-113z" horiz-adv-x="785.7" />%0A%0A<glyph glyph-name="github" unicode="&%23xf09b;" d="M429 779q116 0 215-58t156-156 57-215q0-140-82-252t-211-155q-15-3-22 4t-7 17q0 1 0 43t0 75q0 54-29 79 32 3 57 10t53 22 45 37 30 58 11 84q0 67-44 115 21 51-4 114-16 5-46-6t-51-25l-21-13q-52 15-107 15t-108-15q-8 6-23 15t-47 22-47 7q-25-63-5-114-44-48-44-115 0-47 12-83t29-59 45-37 52-22 57-10q-21-20-27-58-12-5-25-8t-32-3-36 12-31 35q-11 18-27 29t-28 14l-11 1q-12 0-16-2t-3-7 5-8 7-6l4-3q12-6 24-21t18-29l6-13q7-21 24-34t37-17 39-3 31 1l13 3q0-22 0-50t1-30q0-10-8-17t-22-4q-129 43-211 155t-82 252q0 117 58 215t155 156 216 58z m-267-616q2 4-3 7-6 1-8-1-1-4 4-7 5-3 7 1z m18-19q4 3-1 9-6 5-9 2-4-3 1-9 5-6 9-2z m16-25q6 4 0 11-4 7-9 3-5-3 0-10t9-4z m24-23q4 4-2 10-7 7-11 2-5-5 2-11 6-6 11-1z m32-14q1 6-8 9-8 2-10-4t7-9q8-3 11 4z m35-3q0 7-10 6-9 0-9-6 0-7 10-6 9 0 9 6z m32 5q-1 7-10 5-9-1-8-8t10-4 8 7z" horiz-adv-x="857.1" />%0A%0A<glyph glyph-name="upload-cloud" unicode="&%23xf0ee;" d="M714 368q0 8-5 13l-196 196q-5 5-13 5t-13-5l-196-196q-5-6-5-13 0-8 5-13t13-5h125v-196q0-8 5-13t12-5h108q7 0 12 5t5 13v196h125q8 0 13 5t5 13z m357-161q0-89-62-151t-152-63h-607q-103 0-177 73t-73 177q0 72 39 134t105 92q-1 17-1 24 0 118 84 202t202 84q87 0 159-49t105-129q40 35 93 35 59 0 101-42t42-101q0-43-23-77 72-17 119-76t46-133z" horiz-adv-x="1071.4" />%0A%0A<glyph glyph-name="dots" unicode="&%23xf142;" d="M214 154v-108q0-22-15-37t-38-16h-107q-23 0-38 16t-16 37v108q0 22 16 38t38 15h107q22 0 38-15t15-38z m0 285v-107q0-22-15-38t-38-15h-107q-23 0-38 15t-16 38v107q0 23 16 38t38 16h107q22 0 38-16t15-38z m0 286v-107q0-22-15-38t-38-16h-107q-23 0-38 16t-16 38v107q0 22 16 38t38 16h107q22 0 38-16t15-38z" horiz-adv-x="214.3" />%0A%0A<glyph glyph-name="checkbox" unicode="&%23xf14a;" d="M382 125l343 343q11 10 11 25t-11 25l-57 57q-11 11-25 11t-25-11l-261-261-118 118q-10 11-25 11t-25-11l-57-57q-10-10-10-25t10-25l200-200q11-10 25-10t25 10z m475 493v-536q0-66-47-113t-114-48h-535q-67 0-114 48t-47 113v536q0 66 47 113t114 48h535q67 0 114-48t47-113z" horiz-adv-x="857.1" />%0A%0A<glyph glyph-name="file" unicode="&%23xf15b;" d="M571 564v264q13-8 21-16l227-228q8-7 16-20h-264z m-71-18q0-22 16-37t38-16h303v-589q0-23-15-38t-38-16h-750q-23 0-38 16t-16 38v892q0 23 16 38t38 16h446v-304z" horiz-adv-x="857.1" />%0A%0A<glyph glyph-name="sun" unicode="&%23xf185;" d="M821 350q0 65-25 125t-69 102-102 69-125 25-125-25-102-69-69-102-25-125 25-125 69-102 102-69 125-25 125 25 102 69 69 102 25 125z m154-155q-2-8-11-11l-163-53v-171q0-9-7-15-8-5-16-2l-163 53-100-139q-6-7-15-7t-14 7l-101 139-163-53q-8-3-16 2-7 6-7 15v171l-163 53q-9 3-11 11-3 10 2 17l100 138-100 138q-5 8-2 17 2 8 11 11l163 53v171q0 9 7 15 8 5 16 2l163-53 101 139q5 6 14 6t15-6l100-139 163 53q8 3 16-2 7-6 7-15v-171l163-53q9-3 11-11 3-9-2-17l-100-138 100-138q5-7 2-17z" horiz-adv-x="1000" />%0A%0A<glyph glyph-name="moon" unicode="&%23xf186;" d="M704 123q-30-5-61-5-102 0-188 50t-137 137-50 188q0 107 58 199-112-33-183-128t-72-214q0-72 29-139t76-113 114-77 139-28q80 0 152 34t123 96z m114 47q-53-113-159-181t-230-68q-87 0-167 34t-136 92-92 137-34 166q0 85 32 163t87 135 132 92 161 38q25 1 34-22 11-23-8-40-48-43-73-101t-26-122q0-83 41-152t111-111 152-41q66 0 127 29 23 10 40-7 8-8 10-19t-2-22z" horiz-adv-x="857.1" />%0A%0A<glyph glyph-name="share" unicode="&%23xf1e0;" d="M679 279q74 0 126-53t52-126-52-126-126-53-127 53-52 126q0 7 1 19l-201 100q-51-48-121-48-75 0-127 53t-52 126 52 126 127 53q70 0 121-48l201 100q-1 12-1 19 0 74 52 126t127 53 126-53 52-126-52-126-126-53q-71 0-122 48l-201-100q1-12 1-19t-1-19l201-100q51 48 122 48z" horiz-adv-x="857.1" />%0A%0A<glyph glyph-name="trash" unicode="&%23xf1f8;" d="M286 82v393q0 8-5 13t-13 5h-36q-8 0-13-5t-5-13v-393q0-8 5-13t13-5h36q8 0 13 5t5 13z m143 0v393q0 8-5 13t-13 5h-36q-8 0-13-5t-5-13v-393q0-8 5-13t13-5h36q8 0 13 5t5 13z m142 0v393q0 8-5 13t-12 5h-36q-8 0-13-5t-5-13v-393q0-8 5-13t13-5h36q7 0 12 5t5 13z m-303 554h250l-27 65q-4 5-9 6h-177q-6-1-10-6z m518-18v-36q0-8-5-13t-13-5h-54v-529q0-46-26-80t-63-34h-464q-37 0-63 33t-27 79v531h-53q-8 0-13 5t-5 13v36q0 8 5 13t13 5h172l39 93q9 21 31 35t44 15h178q23 0 44-15t30-35l39-93h173q8 0 13-5t5-13z" horiz-adv-x="785.7" />%0A%0A<glyph glyph-name="admin" unicode="&%23xf21b;" d="M321-7l54 250-54 71-71 36z m143 0l72 357-72-36-53-71z m90 564q-1 2-3 3-5 4-53 4-39 0-93-10-4-1-12-1t-12 1q-54 10-93 10-48 0-54-4-1-1-2-3 1-11 2-16 2-1 5-3t4-6q1-2 4-11t4-12 4-9 5-10 5-8 7-7 7-6 10-4 12-2 13-1q20 0 33 7t18 16 8 20 7 16 10 7h6q6 0 10-7t6-16 9-20 18-16 33-7q7 0 13 1t12 2 9 4 8 6 7 7 5 8 5 10 4 9 4 12 4 11q1 4 4 6t4 3q2 5 3 16z m232-491q0-68-41-106t-108-39h-488q-67 0-108 39t-41 106q0 34 3 66t10 70 21 69 36 58 52 41l-51 123h120q-12 36-12 71 0 7 1 18-109 23-109 54 0 32 118 55 9 35 28 75t40 63q18 21 42 21 17 0 47-17t47-18 47 18 47 17q24 0 42-21 20-23 39-63t29-75q117-23 117-55 0-31-108-54 4-45-11-89h119l-45-126q35-18 60-54t36-80 16-84 5-83z" horiz-adv-x="857.1" />%0A%0A<glyph glyph-name="guest" unicode="&%23xf2c0;" d="M670 413q26-8 50-22t50-40 44-65 31-96 12-132q0-86-56-147t-134-61h-477q-78 0-134 61t-56 147q0 73 12 132t31 96 44 65 50 40 50 22q-44 69-44 151 0 58 23 111t61 91 91 61 111 23 110-23 92-61 61-91 22-111q0-82-44-151z m-241 366q-89 0-152-63t-63-152 63-151 152-63 151 63 63 151-63 152-151 63z m238-858q49 0 84 40t35 97q0 134-44 211t-126 80q-81-70-187-70t-188 70q-82-3-126-80t-44-211q0-57 35-97t84-40h477z" horiz-adv-x="857.1" />%0A</font>%0A</defs>%0A</svg>%0A') format("svg");
   font-weight: normal;
   font-style: normal;
 }
@@ -33,13 +33,22 @@
 .icon-folder:before {
   content: "\e800";
 }
-.icon-remove:before {
+.icon-x:before {
   content: "\e801";
 }
 .icon-user:before {
   content: "\e802";
 }
-.icon-check-empty:before {
+.icon-users:before {
+  content: "\e803";
+}
+.icon-ok:before {
+  content: "\e804";
+}
+.icon-minus:before {
+  content: "\e805";
+}
+.icon-checkbox-empty:before {
   content: "\f096";
 }
 .icon-github:before {
@@ -48,23 +57,32 @@
 .icon-upload-cloud:before {
   content: "\f0ee";
 }
-.icon-more:before {
+.icon-dots:before {
   content: "\f142";
 }
-.icon-check:before {
+.icon-checkbox:before {
   content: "\f14a";
 }
 .icon-file:before {
   content: "\f15b";
 }
-.icon-light:before {
+.icon-sun:before {
   content: "\f185";
 }
-.icon-dark:before {
+.icon-moon:before {
   content: "\f186";
 }
 .icon-share:before {
   content: "\f1e0";
+}
+.icon-trash:before {
+  content: "\f1f8";
+}
+.icon-admin:before {
+  content: "\f21b";
+}
+.icon-guest:before {
+  content: "\f2c0";
 }
 
 /* assets/css/variables.css */
@@ -363,8 +381,58 @@ form {
   flex-direction: column;
   gap: 1rem;
 }
-.hidden-div {
+.three-way-toggle {
+  display: flex;
+  flex-direction: row;
+  border: 1px solid var(--bg-primary);
+  border-radius: 0.5rem;
+}
+.three-way-toggle input {
   display: none;
+}
+.three-way-toggle label:nth-child(2) {
+  border-top-left-radius: 0.5rem;
+  border-bottom-left-radius: 0.5rem;
+}
+.three-way-toggle label:nth-child(6) {
+  border-top-right-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
+}
+.three-way-toggle label {
+  display: inline-block;
+  font-size: 40%;
+  flex-grow: 1;
+  text-align: center;
+  padding: 0.5rem;
+  cursor: pointer;
+  transition: filter 0.2s ease;
+}
+.three-way-toggle > label:hover {
+  filter: opacity(0.7);
+}
+.three-way-toggle .icon-ok::before {
+  color: var(--primary);
+}
+.three-way-toggle input:checked + .icon-ok {
+  background-color: var(--primary);
+}
+.three-way-toggle input:checked + .icon-ok::before {
+  color: #ffffff;
+}
+.three-way-toggle .icon-minus::before {
+  color: var(--text-primary);
+}
+.three-way-toggle input:checked + .icon-minus {
+  background-color: var(--bg-secondary-active);
+}
+.three-way-toggle .icon-x::before {
+  color: var(--text-error);
+}
+.three-way-toggle input:checked + .icon-x {
+  background-color: var(--text-error);
+}
+.three-way-toggle input:checked + .icon-x::before {
+  color: #ffffff;
 }
 
 /* assets/css/index.css */
@@ -502,6 +570,9 @@ main {
 .upload-file input {
   background-color: var(--bg-primary);
 }
+.upload-file select {
+  background-color: var(--bg-primary);
+}
 .upload-file textarea {
   background-color: var(--bg-primary);
 }
@@ -544,6 +615,11 @@ main {
 #file-move-error {
   color: var(--text-error);
 }
+#file-upload-error:empty,
+#file-edit-error:empty,
+#folder-edit-error:empty {
+  display: none;
+}
 @media (max-width: 46rem) {
   .upload-file-content {
     grid-template-columns: 1fr;
@@ -556,6 +632,12 @@ main {
 }
 #file-list:not(.auth) {
   grid-template-columns: 2.5rem 2.5rem repeat(4, auto) 3rem;
+}
+#user-list {
+  grid-template-columns: 2.5rem repeat(4, auto);
+}
+#permission-list {
+  grid-template-columns: 2.5rem repeat(4, auto);
 }
 .table-list {
   display: grid;
@@ -613,64 +695,135 @@ main {
   #navigation {
     padding: 0.5rem;
   }
-  .table-list {
+  #file-list.table-list {
     display: flex;
     flex-direction: column;
     padding: 0.5rem 0 0.5rem 0;
   }
-  .table-list-header {
+  #file-list .table-list-header {
     display: none;
   }
-  .table-list-entry {
+  #file-list .table-list-entry {
     display: grid;
     grid-template-columns: 2.5rem auto auto 1fr min-content;
     grid-template-areas: "select name name name more" "select size owner date more";
     border-bottom: 1px solid var(--bg-secondary);
   }
-  #file-list:not(.auth) > .table-list-entry {
+  #file-list:not(.auth) .table-list-entry {
     grid-template-columns: 2.5rem auto 1fr min-content;
     grid-template-areas: "select name name more" "select size date more";
   }
-  .table-list-entry > * {
+  #file-list .table-list-entry > * {
     border: none;
   }
-  .table-list-entry > *:nth-child(1) {
+  #file-list .table-list-entry > *:nth-child(1) {
     grid-area: select;
   }
-  .table-list-entry > *:nth-child(1) > .checkbox.file:not(:checked) + label:before {
+  #file-list .table-list-entry > *:nth-child(1) > .checkbox.file:not(:checked) + label:before {
     content: "\f15b";
   }
-  .table-list-entry > *:nth-child(1) > .checkbox.folder:not(:checked) + label:before {
+  #file-list .table-list-entry > *:nth-child(1) > .checkbox.folder:not(:checked) + label:before {
     content: "\e800";
   }
-  .table-list-entry > *:nth-child(2),
-  .table-list-entry > *:nth-child(6) {
+  #file-list .table-list-entry > *:nth-child(2),
+  #file-list .table-list-entry > *:nth-child(6) {
     display: none;
   }
-  .table-list-entry > *:nth-child(3) {
+  #file-list .table-list-entry > *:nth-child(3) {
     grid-area: name;
   }
-  .table-list-entry > *:nth-child(4) {
+  #file-list .table-list-entry > *:nth-child(4) {
     grid-area: size;
     font-size: 0.7rem;
     padding-top: 0;
     color: var(--text-secondary);
   }
-  .table-list-entry > *:nth-child(5) {
+  #file-list .table-list-entry > *:nth-child(5) {
     grid-area: date;
     font-size: 0.7rem;
     padding-top: 0;
     color: var(--text-secondary);
   }
-  #file-list.auth > .table-list-entry > *:nth-child(7) {
+  #file-list.auth .table-list-entry > *:nth-child(7) {
     grid-area: owner;
     font-size: 0.7rem;
     padding-top: 0;
     color: var(--text-secondary);
   }
-  .table-list-entry > *:nth-child(8) {
+  #file-list .table-list-entry > *:nth-child(8) {
     grid-area: more;
   }
+}
+
+/* assets/css/permissions.css */
+.permissions {
+  display: flex;
+  flex-direction: column;
+}
+.permissions .permission {
+  display: flex;
+  flex-direction: column;
+}
+.permissions .permission:not(:last-child) {
+  border-bottom: 1px solid var(--bg-primary);
+}
+.permission .permission__title {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--bg-primary);
+  font-weight: bold;
+}
+.permission .permission__title *::before {
+  font-size: 1.5rem;
+}
+.permission .permission__title .icon-trash {
+  margin-left: auto;
+}
+.permission .permission__content {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  padding: 0.5rem;
+  gap: 0.5rem;
+  align-items: center;
+}
+.permission__form {
+  display: flex;
+  flex-direction: column;
+}
+.permission__error {
+  color: var(--text-error);
+  font-size: 80%;
+}
+.permission__content {
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rem;
+}
+
+/* assets/css/share.css */
+.share {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  margin: 0 auto;
+  background-color: var(--bg-primary);
+  border-radius: 0.5rem;
+}
+.share h1 {
+  margin: 0;
+}
+#share-link {
+  width: 23em;
+}
+.share__buttons {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
 }
 
 /* assets/css/main.css */

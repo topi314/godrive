@@ -6,19 +6,16 @@ import (
 	"crypto/md5"
 )
 
-type User struct {
-	ID      string
-	Name    string
-	Email   string
-	Home    string
-	IsAdmin bool
-	IsUser  bool
-	IsGuest bool
+type PageVars struct {
+	Theme 	 string
+	HashAuth bool
+	URL 	 string
+	User 	 User
 }
 
-templ Page(theme string, auth bool, currentURL string, user User) {
+templ Page(vars PageVars) {
 	<!DOCTYPE html>
-	<html lang="en" class={ theme }>
+	<html lang="en" class={ vars.Theme }>
 		<head>
 			<meta charset="utf-8"/>
 			<title>godrive</title>
@@ -30,8 +27,10 @@ templ Page(theme string, auth bool, currentURL string, user User) {
 			<meta name="theme-color" content="#1f2228"/>
 		</head>
 		<body>
-			@Header(auth, currentURL, user)
-			{ children... }
+			@Header(vars)
+			<main>
+				{ children... }
+			</main>
 			<script src="/assets/js/htmx.min.js"></script>
 			<script src="/assets/js/main.js"></script>
 		</body>
@@ -42,7 +41,7 @@ func gravatarURL(email string) string {
 	return fmt.Sprintf("https://www.gravatar.com/avatar/%x?s=%d&d=retro", md5.Sum([]byte(strings.ToLower(email))), 80)
 }
 
-templ Header(auth bool, currentURL string, user User) {
+templ Header(vars PageVars) {
 	<header>
 		<div>
 			<a title="godrive" id="title" href="/">godrive</a>
@@ -52,19 +51,19 @@ templ Header(auth bool, currentURL string, user User) {
 			<label title="Theme" class="icon-btn" for="theme"></label>
 		</div>
 		<div>
-			if auth {
-				if user.Name != "guest" {
+			if vars.HashAuth {
+				if vars.User.Name != "guest" {
 					<div id="user-menu" class="dropdown">
-						<img src={ gravatarURL(user.Email) } alt={ user.Name + "image" } role="button"/>
+						<img src={ gravatarURL(vars.User.Email) } alt={ vars.User.Name + "image" } role="button"/>
 						<ul>
-							if user.IsAdmin {
-								<li><a href="/settings">Settings</a></li>
+							if vars.User.Type == UserTypeAdmin {
+								<li><a href="/api/settings">Settings</a></li>
 							}
-							<li><a href={ templ.SafeURL("/logout?rd=" + currentURL) }>Logout</a></li>
+							<li><a href={ templ.SafeURL("/api/logout?rd=" + vars.URL) }>Logout</a></li>
 						</ul>
 					</div>
 				} else {
-					<a id="login" class="btn primary" href={ templ.SafeURL("/login?rd=" + currentURL) }>Login</a>
+					<a id="login" class="btn primary" href={ templ.SafeURL("/api/login?rd=" + vars.URL) }>Login</a>
 				}
 			}
 		</div>

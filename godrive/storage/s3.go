@@ -125,7 +125,7 @@ func (s *s3Storage) PutObject(ctx context.Context, filePath string, size int64, 
 
 func (s *s3Storage) DeleteObject(ctx context.Context, filePath string) error {
 	ctx, span := s.tracer.Start(ctx, "s3Storage.DeleteObject", trace.WithAttributes(
-		attribute.String("filePath", filePath),
+		attribute.String("file_path", filePath),
 	))
 	defer span.End()
 	err := s.client.RemoveObject(ctx, s.bucket, filePath, minio.RemoveObjectOptions{})

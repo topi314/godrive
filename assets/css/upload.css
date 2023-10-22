@@ -43,6 +43,10 @@
 	background-color: var(--bg-primary);
 }
 
+.upload-file select {
+	background-color: var(--bg-primary);
+}
+
 .upload-file textarea {
 	background-color: var(--bg-primary);
 }
@@ -93,6 +97,12 @@
 #file-edit-error,
 #file-move-error {
 	color: var(--text-error);
+}
+
+#file-upload-error:empty,
+#file-edit-error:empty,
+#folder-edit-error:empty {
+	display: none;
 }
 
 @media (max-width: 46rem) {

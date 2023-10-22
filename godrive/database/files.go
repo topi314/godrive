@@ -73,20 +73,28 @@ func (d *DB) GetFile(ctx context.Context, path string) (*File, error) {
 	return file, nil
 }
 
-func (d *DB) CreateFile(ctx context.Context, path string, size int64, contentType string, description string, userID string) (*File, *sqlx.Tx, error) {
-	tx, err := d.dbx.BeginTxx(ctx, nil)
+func (d *DB) GetFiles(ctx context.Context, paths []string) ([]File, error) {
+	query, args, err := sqlx.In("SELECT files.*, users.username FROM files LEFT JOIN users ON files.user_id = users.id WHERE files.path IN (?)", paths)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error creating file: %w", err)
+		return nil, fmt.Errorf("error getting files: %w", err)
 	}
 
-	file := &File{
-		Path:        path,
-		Size:        size,
-		ContentType: contentType,
-		Description: description,
-		UserID:      userID,
-		CreatedAt:   time.Now(),
+	var files []File
+	if err = d.dbx.SelectContext(ctx, &files, query, args...); err != nil {
+		return nil, fmt.Errorf("error getting files: %w", err)
 	}
+
+	return files, nil
+}
+
+func (d *DB) CreateFile(ctx context.Context, file File, perms []Permissions) (*sqlx.Tx, error) {
+	tx, err := d.dbx.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating file: %w", err)
+	}
+
+	file.CreatedAt = time.Now()
+
 	_, err = tx.NamedExecContext(ctx, "INSERT INTO files (path, size, content_type, description, user_id, created_at, updated_at) VALUES (:path, :size, :content_type, :description, :user_id, :created_at, :updated_at)", file)
 	if err != nil {
 		var (
@@ -101,54 +109,65 @@ func (d *DB) CreateFile(ctx context.Context, path string, size int64, contentTyp
 		if txErr := tx.Rollback(); txErr != nil {
 			slog.ErrorContext(ctx, "error rolling back transaction", slog.Any("err", txErr))
 		}
-		return nil, nil, fmt.Errorf("error creating file: %w", err)
+		return nil, fmt.Errorf("error creating file: %w", err)
 	}
 
-	return file, tx, nil
+	if len(perms) > 0 {
+		_, err = tx.NamedExecContext(ctx, "INSERT INTO permissions (path, allow, deny, object_type, object) VALUES (:path, :allow, :deny, :object_type, :object)", perms)
+		if err != nil {
+			if txErr := tx.Rollback(); txErr != nil {
+				slog.ErrorContext(ctx, "error rolling back transaction", slog.Any("err", txErr))
+			}
+			return nil, fmt.Errorf("error creating file perms: %w", err)
+		}
+	}
+
+	return tx, nil
 }
 
-func (d *DB) CreateOrUpdateFile(ctx context.Context, path string, size int64, contentType string, description string, userID string) (*File, *sqlx.Tx, error) {
+func (d *DB) UpsertFile(ctx context.Context, file File, perms []Permissions) (*sqlx.Tx, error) {
 	tx, err := d.dbx.BeginTxx(ctx, nil)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error creating file: %w", err)
+		return nil, fmt.Errorf("error upserting file: %w", err)
 	}
 
-	file := &File{
-		Path:        path,
-		Size:        size,
-		ContentType: contentType,
-		Description: description,
-		UserID:      userID,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}
-	_, err = tx.NamedExecContext(ctx, "INSERT INTO files (path, size, content_type, description, user_id, created_at, updated_at) VALUES (:path, :size, :content_type, :description, :user_id, :created_at, :updated_at) ON CONFLICT (path) DO UPDATE SET size = :size, content_type = :content_type, description = :description, user_id = :user_id, updated_at = :updated_at", file)
+	_, err = tx.NamedExecContext(ctx, "INSERT INTO files (path, size, content_type, description, user_id, created_at) VALUES (:path, :size, :content_type, :description, :user_id, :created_at) ON CONFLICT (path) DO UPDATE SET size = :size, content_type = :content_type, description = :description, user_id = :user_id, updated_at = :updated_at", file)
 	if err != nil {
 		if txErr := tx.Rollback(); txErr != nil {
 			slog.ErrorContext(ctx, "error rolling back transaction", slog.Any("err", txErr))
 		}
-		return nil, nil, fmt.Errorf("error creating file: %w", err)
+		return nil, fmt.Errorf("error upserting file: %w", err)
 	}
 
-	return file, tx, nil
+	_, err = tx.NamedExecContext(ctx, "DELETE FROM permissions WHERE path = :path", file)
+	if err != nil {
+		if txErr := tx.Rollback(); txErr != nil {
+			slog.ErrorContext(ctx, "error rolling back transaction", slog.Any("err", txErr))
+		}
+		return nil, fmt.Errorf("error deleting file perms: %w", err)
+	}
+
+	if len(perms) > 0 {
+		_, err = tx.NamedExecContext(ctx, "INSERT INTO permissions (path, allow, deny, object_type, object) VALUES (:path, :allow, :deny, :object_type, :object)", perms)
+		if err != nil {
+			if txErr := tx.Rollback(); txErr != nil {
+				slog.ErrorContext(ctx, "error rolling back transaction", slog.Any("err", txErr))
+			}
+			return nil, fmt.Errorf("error upserting file perms: %w", err)
+		}
+	}
+
+	return tx, nil
 }
 
-func (d *DB) UpdateFile(ctx context.Context, path string, newPath string, size int64, contentType string, description string) (*sqlx.Tx, error) {
+func (d *DB) UpdateFile(ctx context.Context, file UpdateFile, perms []Permissions) (*sqlx.Tx, error) {
 	tx, err := d.dbx.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error updating file: %w", err)
 	}
 
-	file := &UpdateFile{
-		Path:        path,
-		NewPath:     newPath,
-		Size:        size,
-		ContentType: contentType,
-		Description: description,
-		UpdatedAt:   time.Now(),
-	}
 	query := "UPDATE files SET path = :new_path, description = :description, updated_at = :updated_at WHERE path = :path"
-	if size > 0 {
+	if file.Size > 0 {
 		query = "UPDATE files SET path = :new_path, size = :size, content_type = :content_type, description = :description, updated_at = :updated_at WHERE path = :path"
 	}
 
@@ -165,7 +184,59 @@ func (d *DB) UpdateFile(ctx context.Context, path string, newPath string, size i
 		}
 		return nil, ErrFileNotFound
 	}
+
+	_, err = tx.NamedExecContext(ctx, "DELETE FROM permissions WHERE path = :path", file)
+	if err != nil {
+		if txErr := tx.Rollback(); txErr != nil {
+			slog.ErrorContext(ctx, "error rolling back transaction", slog.Any("err", txErr))
+		}
+		return nil, fmt.Errorf("error deleting file perms: %w", err)
+	}
+
+	if len(perms) > 0 {
+		_, err = tx.NamedExecContext(ctx, "INSERT INTO permissions (path, allow, deny, object_type, object) VALUES (:path, :allow, :deny, :object_type, :object)", perms)
+		if err != nil {
+			if txErr := tx.Rollback(); txErr != nil {
+				slog.ErrorContext(ctx, "error rolling back transaction", slog.Any("err", txErr))
+			}
+			return nil, fmt.Errorf("error updating file perms: %w", err)
+		}
+	}
+
 	return tx, nil
+}
+
+func (d *DB) MoveFile(ctx context.Context, path string, newPath string) (*sqlx.Tx, error) {
+	tx, err := d.dbx.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error moving file: %w", err)
+	}
+
+	res, err := tx.ExecContext(ctx, "UPDATE files SET path = $1 WHERE path = $2", newPath, path)
+	if err != nil {
+		if txErr := tx.Rollback(); txErr != nil {
+			slog.ErrorContext(ctx, "error rolling back transaction", slog.Any("err", err))
+		}
+		return nil, fmt.Errorf("error moving file: %w", err)
+	}
+
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		if txErr := tx.Rollback(); txErr != nil {
+			slog.ErrorContext(ctx, "error rolling back transaction", slog.Any("err", txErr))
+		}
+		return nil, ErrFileNotFound
+	}
+
+	_, err = tx.ExecContext(ctx, "UPDATE permissions SET path = $1 WHERE path = $2", newPath, path)
+	if err != nil {
+		if txErr := tx.Rollback(); txErr != nil {
+			slog.ErrorContext(ctx, "error rolling back transaction", slog.Any("err", err))
+		}
+		return nil, fmt.Errorf("error moving permissions: %w", err)
+	}
+
+	return tx, nil
+
 }
 
 func (d *DB) DeleteFile(ctx context.Context, path string) (*sql.Tx, error) {
@@ -186,6 +257,14 @@ func (d *DB) DeleteFile(ctx context.Context, path string) (*sql.Tx, error) {
 			slog.ErrorContext(ctx, "error rolling back transaction", slog.Any("err", txErr))
 		}
 		return nil, ErrFileNotFound
+	}
+
+	_, err = tx.ExecContext(ctx, "DELETE FROM permissions WHERE path = $1", path)
+	if err != nil {
+		if txErr := tx.Rollback(); txErr != nil {
+			slog.ErrorContext(ctx, "error rolling back transaction", slog.Any("err", txErr))
+		}
+		return nil, fmt.Errorf("error deleting file perms: %w", err)
 	}
 
 	return tx.Tx, nil

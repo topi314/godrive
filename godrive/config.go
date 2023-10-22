@@ -3,9 +3,8 @@ package godrive
 import (
 	"fmt"
 	"log/slog"
-	"strings"
-	"time"
 
+	"github.com/topi314/godrive/godrive/auth"
 	"github.com/topi314/godrive/godrive/database"
 	"github.com/topi314/godrive/godrive/storage"
 )
@@ -18,7 +17,7 @@ type Config struct {
 	PublicURL  string          `cfg:"public_url"`
 	Database   database.Config `cfg:"database"`
 	Storage    storage.Config  `cfg:"storage"`
-	Auth       *AuthConfig     `cfg:"auth"`
+	Auth       *auth.Config    `cfg:"auth"`
 	Otel       *OtelConfig     `cfg:"otel"`
 }
 
@@ -47,48 +46,6 @@ func (c LogConfig) String() string {
 		c.Level,
 		c.Format,
 		c.AddSource,
-	)
-}
-
-type AuthConfig struct {
-	Secure               bool          `cfg:"secure"`
-	Issuer               string        `cfg:"issuer"`
-	ClientID             string        `cfg:"client_id"`
-	ClientSecret         string        `cfg:"client_secret"`
-	RedirectURL          string        `cfg:"redirect_url"`
-	LogoutURL            string        `cfg:"logout_url"`
-	RefreshTokenLifespan time.Duration `cfg:"refresh_token_lifespan"`
-	DefaultHome          string        `cfg:"default_home"`
-	Groups               AuthGroups    `cfg:"groups"`
-}
-
-func (c AuthConfig) String() string {
-	return fmt.Sprintf("\n  Secure: %t\n  Issuer: %s\n  ClientID: %s\n  ClientSecret: %s\n  RedirectURL: %s\n  LogoutURL: %s\n  RefreshTokenLifespan: %s\n  DefaultHome: %s\n  Groups: %s",
-		c.Secure,
-		c.Issuer,
-		c.ClientID,
-		strings.Repeat("*", len(c.ClientSecret)),
-		c.RedirectURL,
-		c.LogoutURL,
-		c.RefreshTokenLifespan,
-		c.DefaultHome,
-		c.Groups,
-	)
-}
-
-type AuthGroups struct {
-	Admin  string `cfg:"admin"`
-	User   string `cfg:"user"`
-	Viewer string `cfg:"viewer"`
-	Guest  bool   `cfg:"guest"`
-}
-
-func (c AuthGroups) String() string {
-	return fmt.Sprintf("\n    Admin: %s\n    User: %s\n    Viewer: %s\n    Guest: %t",
-		c.Admin,
-		c.User,
-		c.Viewer,
-		c.Guest,
 	)
 }
 

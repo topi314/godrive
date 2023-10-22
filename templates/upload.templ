@@ -1,11 +1,14 @@
 package templates
 
-templ UploadFile(path string) {
+import (
+	"fmt"
+)
+
+templ FileUpload(path string) {
 	<form id="file-upload"
 		hx-post={ path }
 		hx-encoding="multipart/form-data"
-		hx-push-url="true"
-		hx-target="main" hx-swap="outerHTML"
+		hx-target="main" hx-swap="innerHTML"
 		hx-error-target="#file-upload-error" hx-error-swap="innerHTML"
 		hx-ext="upload-files,accept-html"
 		hx-on:reset="window.onFilesReset(event)"
@@ -15,21 +18,49 @@ templ UploadFile(path string) {
 			<progress id="upload-progress" value="0" max="100"></progress>
 			<div>
 				<input name="dir" value={ path }/>
-				<div class="buttons">
-					<button id="upload-button" type="submit" class="btn primary" disabled>Upload</button>
-					<button type="button" hx-get={ path + "?action=files"} hx-target="#content" class="btn secondary">Cancel</button>
-				</div>
+				<button id="upload-button" type="submit" class="btn primary" disabled>Upload</button>
 			</div>
 		</div>
 		<div id="file-upload-error"></div>
 
 		<ul id="upload-files"></ul>
 		<div class="file-upload">
-			<input type="file" id="files" name="files" multiple hidden hx-on:change="window.onFilesChange(event)"/>
+			<input type="file" id="files" name="files" multiple hidden hx-post="/" hx-target="#upload-files" hx-swap="innerHTML" hx-ext="new-files,accept-html" hx-on:change="window.onFilesChange(event)" hx-on:htmx:xhr:progress="window.stopBubble(event)"/>
 			<label for="files">
-				<div id="upload-icon" class="icon-upload"></div>
+				<div id="upload-icon" class="icon-upload-cloud"></div>
 				Choose files or drop here.
 			</label>
 		</div>
     </form>
+}
+
+templ UploadFiles(files []File) {
+	for i, file := range files {
+		<li>
+			@UploadFile(true, i, file)
+		</li>
+	}
+}
+
+templ UploadFile(upload bool, i int, file File) {
+	<div class="upload-file">
+		<div class="upload-file-icon">
+			<span class="icon-large icon-file"></span>
+		</div>
+		<div class="upload-file-content">
+			<label>Name:</label>
+			<input name={ fmt.Sprintf("name-%d", i) } value={ file.Name }/>
+
+			<label>Description:</label>
+			<textarea name={ fmt.Sprintf("description-%d", i) }>{ file.Description }</textarea>
+
+			if upload {
+				<label>Overwrite:</label>
+				<span><input id={ fmt.Sprintf("overwrite-%d", i) } class="checkbox" type="checkbox" name={ fmt.Sprintf("overwrite-%d", i) } value="true" checked/><label for={ fmt.Sprintf("overwrite-%d", i) } class="icon"></label></span>
+			}
+
+			<label>Permissions:</label>
+			@PermissionList(i, file.Path, file.FilePermissions)
+		</div>
+	</div>
 }

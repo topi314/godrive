@@ -7,15 +7,85 @@ import (
 	"io"
 	"net/http"
 	"path"
+
+	"github.com/topi314/godrive/godrive/auth"
+	"github.com/topi314/godrive/godrive/database"
+	"github.com/topi314/godrive/templates"
 )
 
-type MultipartFilePart struct {
-	Dir         string
-	Name        string
-	Description string
-	Overwrite   bool
-	Size        int64
-	Content     func() (*FilePart, error)
+type (
+	FileCreateRequest struct {
+		Name        string      `json:"name"`
+		Description string      `json:"description"`
+		Overwrite   bool        `json:"overwrite"`
+		Size        int64       `json:"size"`
+		Permissions Permissions `json:"permissions"`
+	}
+
+	FileUpdateRequest struct {
+		Dir         string      `json:"dir"`
+		Name        string      `json:"name"`
+		Description string      `json:"description"`
+		Size        int64       `json:"size"`
+		Permissions Permissions `json:"permissions"`
+	}
+
+	Permissions []Permission
+
+	Permission struct {
+		ObjectType  int                              `json:"object_type"`
+		Object      string                           `json:"object"`
+		Permissions map[string]templates.ToggleState `json:"permissions"`
+	}
+
+	MultipartFilePart struct {
+		Dir         string
+		Name        string
+		Description string
+		Overwrite   bool
+		Size        int64
+		Permissions Permissions
+		Content     func() (*FilePart, error)
+	}
+)
+
+func (p Permission) calculate() (auth.Permissions, auth.Permissions) {
+	var (
+		allow auth.Permissions
+		deny  auth.Permissions
+	)
+
+	for perm, state := range p.Permissions {
+		for permBit, action := range auth.AllPermissions {
+			if perm != action {
+				continue
+			}
+
+			switch state {
+			case templates.ToggleStateOn:
+				allow = allow.Add(permBit)
+			case templates.ToggleStateOff:
+				deny = deny.Add(permBit)
+			}
+		}
+	}
+
+	return allow, deny
+}
+
+func (p Permissions) ToDatabase(path string) []database.Permissions {
+	perms := make([]database.Permissions, len(p))
+	for i, perm := range p {
+		allow, deny := perm.calculate()
+		perms[i] = database.Permissions{
+			Path:       path,
+			Allow:      int64(allow),
+			Deny:       int64(deny),
+			ObjectType: perm.ObjectType,
+			Object:     perm.Object,
+		}
+	}
+	return perms
 }
 
 func (p MultipartFilePart) Path() string {
@@ -27,7 +97,7 @@ type FilePart struct {
 	ContentType string
 }
 
-func (s *Server) parseMultiparts(r *http.Request) ([]MultipartFilePart, error) {
+func ParseMultiparts(r *http.Request) ([]MultipartFilePart, error) {
 	mr, err := r.MultipartReader()
 	if err != nil {
 		return nil, err
@@ -56,6 +126,7 @@ func (s *Server) parseMultiparts(r *http.Request) ([]MultipartFilePart, error) {
 			Description: file.Description,
 			Overwrite:   file.Overwrite,
 			Size:        file.Size,
+			Permissions: file.Permissions,
 			Content: func() (*FilePart, error) {
 				part, err = mr.NextPart()
 				if err != nil {
@@ -81,7 +152,7 @@ func (s *Server) parseMultiparts(r *http.Request) ([]MultipartFilePart, error) {
 	return parsedFiles, nil
 }
 
-func (s *Server) parseMultipart(r *http.Request) (*MultipartFilePart, error) {
+func ParseMultipart(r *http.Request) (*MultipartFilePart, error) {
 	mr, err := r.MultipartReader()
 	if errors.Is(err, io.EOF) {
 		return nil, nil
@@ -113,6 +184,7 @@ func (s *Server) parseMultipart(r *http.Request) (*MultipartFilePart, error) {
 		Name:        file.Name,
 		Description: file.Description,
 		Size:        file.Size,
+		Permissions: file.Permissions,
 		Content: func() (*FilePart, error) {
 			part, err = mr.NextPart()
 			if errors.Is(err, io.EOF) {

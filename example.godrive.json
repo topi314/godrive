@@ -2,6 +2,7 @@
 	"dev_mode": false,
 	"debug": false,
 	"listen_addr": ":80",
+	"public_url": "http://localhost:80",
 	"jwt_secret": "...",
 	"database": {
 		// type can be "sqlite" or "postgres"
@@ -30,6 +31,21 @@
 		"bucket": "godrive",
 		"region": "",
 		"secure": false
+	},
+	"auth": {
+		"secure": true,
+		"issuer": "https://auth.example.com",
+		"client_id": "godrive",
+		"client_secret": "...",
+		"redirect_url": "http://localhost:1234/api/callback",
+		"logout_url": "https://auth.example.com/api/logout",
+		"default_home": "/",
+		"groups": {
+			"admin": "admin",
+			"user": "user",
+			"guest": "guest",
+			"allow_guests": true
+		}
 	},
 	"otel": {
 		"instance_id": "godrive-dev",

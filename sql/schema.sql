@@ -1,23 +1,41 @@
 CREATE TABLE IF NOT EXISTS files
 (
-    path         VARCHAR   NOT NULL,
-    size         BIGINT    NOT NULL,
-    content_type TEXT      NOT NULL,
-    description  TEXT      NOT NULL,
-    user_id      VARCHAR   NOT NULL,
-    created_at   TIMESTAMP NOT NULL,
-    updated_at   TIMESTAMP NOT NULL,
-    PRIMARY KEY (path)
+	path         VARCHAR   NOT NULL,
+	size         BIGINT    NOT NULL,
+	content_type TEXT      NOT NULL,
+	description  TEXT      NOT NULL,
+	user_id      VARCHAR   NOT NULL,
+	created_at   TIMESTAMP NOT NULL,
+	updated_at   TIMESTAMP NOT NULL DEFAULT '0001-01-01 00:00:00',
+	PRIMARY KEY (path)
+);
+
+CREATE TABLE IF NOT EXISTS permissions
+(
+	path        VARCHAR NOT NULL,
+	allow       BIGINT  NOT NULL,
+	deny        BIGINT  NOT NULL,
+	object_type INT     NOT NULL,
+	object      VARCHAR NOT NULL,
+	PRIMARY KEY (path, object_type, object)
+);
+
+CREATE TABLE IF NOT EXISTS shares
+(
+	id      VARCHAR NOT NULL,
+	path    VARCHAR NOT NULL,
+	user_id VARCHAR NOT NULL,
+	PRIMARY KEY (id)
 );
 
 CREATE TABLE IF NOT EXISTS users
 (
-    id       VARCHAR NOT NULL,
-    username VARCHAR NOT NULL,
-    groups   varchar NOT NULL,
-    email    VARCHAR NOT NULL,
-    home     VARCHAR NOT NULL,
-    PRIMARY KEY (id)
+	id       VARCHAR NOT NULL,
+	username VARCHAR NOT NULL,
+	groups   varchar NOT NULL,
+	email    VARCHAR NOT NULL,
+	home     VARCHAR NOT NULL,
+	PRIMARY KEY (id)
 );
 
 CREATE TABLE IF NOT EXISTS sessions

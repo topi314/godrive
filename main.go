@@ -13,16 +13,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/evanw/esbuild/pkg/api"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
 	"github.com/topi314/godrive/godrive"
+	"github.com/topi314/godrive/godrive/auth"
 	"github.com/topi314/godrive/godrive/database"
 	"github.com/topi314/godrive/godrive/storage"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/oauth2"
 )
 
 //go:generate go run github.com/a-h/templ/cmd/templ@latest generate
@@ -112,30 +111,6 @@ func main() {
 		tracer = trace.NewNoopTracerProvider().Tracer(Namespace)
 	}
 
-	var auth *godrive.Auth
-	if cfg.Auth != nil {
-		provider, err := oidc.NewProvider(context.Background(), cfg.Auth.Issuer)
-		if err != nil {
-			slog.Error("Error while creating oidc provider", slog.Any("err", err))
-			os.Exit(-1)
-		}
-
-		auth = &godrive.Auth{
-			Provider: provider,
-			Verifier: provider.Verifier(&oidc.Config{
-				ClientID: cfg.Auth.ClientID,
-			}),
-			Config: &oauth2.Config{
-				ClientID:     cfg.Auth.ClientID,
-				ClientSecret: cfg.Auth.ClientSecret,
-				Endpoint:     provider.Endpoint(),
-				RedirectURL:  cfg.Auth.RedirectURL,
-				Scopes:       []string{oidc.ScopeOpenID, "groups", "email", "profile", oidc.ScopeOfflineAccess},
-			},
-			States: map[string]godrive.LoginState{},
-		}
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	db, err := database.New(ctx, cfg.Database, Schema)
@@ -144,6 +119,12 @@ func main() {
 		os.Exit(-1)
 	}
 	defer db.Close()
+
+	a, err := auth.New(cfg.Auth, db)
+	if err != nil {
+		slog.Error("Error while creating auth", slog.Any("err", err))
+		os.Exit(-1)
+	}
 
 	str, err := storage.New(context.Background(), cfg.Storage, tracer)
 	if err != nil {
@@ -163,7 +144,7 @@ func main() {
 		assets = http.FS(Public)
 	}
 
-	s := godrive.NewServer(godrive.FormatBuildVersion(Version, Commit, buildTime), cfg, db, auth, str, tracer, meter, assets)
+	s := godrive.NewServer(godrive.FormatBuildVersion(Version, Commit, buildTime), cfg, db, a, str, tracer, meter, assets)
 	slog.Info("godrive listening", slog.String("listen_addr", cfg.ListenAddr))
 	go s.Start()
 	defer s.Close()

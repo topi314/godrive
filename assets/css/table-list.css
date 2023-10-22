@@ -6,6 +6,14 @@
 	grid-template-columns: 2.5rem 2.5rem repeat(4, auto) 3rem;
 }
 
+#user-list {
+	grid-template-columns: 2.5rem repeat(4, auto);
+}
+
+#permission-list {
+	grid-template-columns: 2.5rem repeat(4, auto);
+}
+
 .table-list {
 	display: grid;
 	overflow: auto;
@@ -74,17 +82,17 @@
 		padding: 0.5rem;
 	}
 
-	.table-list {
+	#file-list.table-list {
 		display: flex;
 		flex-direction: column;
 		padding: 0.5rem 0 0.5rem 0;
 	}
 
-	.table-list-header {
+	#file-list .table-list-header {
 		display: none;
 	}
 
-	.table-list-entry {
+	#file-list .table-list-entry {
 		display: grid;
 		grid-template-columns: 2.5rem auto auto 1fr min-content;
 		grid-template-areas: "select name name name more"
@@ -92,59 +100,59 @@
 		border-bottom: 1px solid var(--bg-secondary);
 	}
 
-	#file-list:not(.auth) > .table-list-entry {
+	#file-list:not(.auth) .table-list-entry {
 		grid-template-columns: 2.5rem auto 1fr min-content;
 		grid-template-areas: "select name name more"
         "select size date more";
 	}
 
-	.table-list-entry > * {
+	#file-list .table-list-entry > * {
 		border: none;
 	}
 
-	.table-list-entry > *:nth-child(1) {
+	#file-list .table-list-entry > *:nth-child(1) {
 		grid-area: select;
 	}
 
-	.table-list-entry > *:nth-child(1) > .checkbox.file:not(:checked) + label:before {
+	#file-list .table-list-entry > *:nth-child(1) > .checkbox.file:not(:checked) + label:before {
 		content: '\f15b'
 	}
 
-	.table-list-entry > *:nth-child(1) > .checkbox.folder:not(:checked) + label:before {
+	#file-list .table-list-entry > *:nth-child(1) > .checkbox.folder:not(:checked) + label:before {
 		content: '\e800'
 	}
 
-	.table-list-entry > *:nth-child(2),
-	.table-list-entry > *:nth-child(6) {
+	#file-list .table-list-entry > *:nth-child(2),
+	#file-list .table-list-entry > *:nth-child(6) {
 		display: none;
 	}
 
-	.table-list-entry > *:nth-child(3) {
+	#file-list .table-list-entry > *:nth-child(3) {
 		grid-area: name;
 	}
 
-	.table-list-entry > *:nth-child(4) {
+	#file-list .table-list-entry > *:nth-child(4) {
 		grid-area: size;
 		font-size: 0.7rem;
 		padding-top: 0;
 		color: var(--text-secondary);
 	}
 
-	.table-list-entry > *:nth-child(5) {
+	#file-list .table-list-entry > *:nth-child(5) {
 		grid-area: date;
 		font-size: 0.7rem;
 		padding-top: 0;
 		color: var(--text-secondary);
 	}
 
-	#file-list.auth > .table-list-entry > *:nth-child(7) {
+	#file-list.auth .table-list-entry > *:nth-child(7) {
 		grid-area: owner;
 		font-size: 0.7rem;
 		padding-top: 0;
 		color: var(--text-secondary);
 	}
 
-	.table-list-entry > *:nth-child(8) {
+	#file-list .table-list-entry > *:nth-child(8) {
 		grid-area: more;
 	}
 }
