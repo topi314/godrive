@@ -5,6 +5,7 @@ import (
 	"embed"
 	"errors"
 	"flag"
+	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -14,12 +15,14 @@ import (
 	"time"
 
 	"github.com/evanw/esbuild/pkg/api"
+	"github.com/mattn/go-colorable"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
 	"github.com/topi314/godrive/godrive"
 	"github.com/topi314/godrive/godrive/auth"
 	"github.com/topi314/godrive/godrive/database"
 	"github.com/topi314/godrive/godrive/storage"
+	"github.com/topi314/tint"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -154,20 +157,6 @@ func main() {
 	<-si
 }
 
-func setupLogger(cfg godrive.LogConfig) {
-	opts := &slog.HandlerOptions{
-		AddSource: cfg.AddSource,
-		Level:     cfg.Level,
-	}
-	var handler slog.Handler
-	if cfg.Format == "json" {
-		handler = slog.NewJSONHandler(os.Stdout, opts)
-	} else {
-		handler = slog.NewTextHandler(os.Stdout, opts)
-	}
-	slog.SetDefault(slog.New(handler))
-}
-
 func bundleAssets() error {
 	res := api.Build(api.BuildOptions{
 		Bundle: true,
@@ -199,4 +188,60 @@ func bundleAssets() error {
 		return err
 	}
 	return nil
+}
+
+const (
+	ansiFaint         = "\033[2m"
+	ansiWhiteBold     = "\033[37;1m"
+	ansiYellowBold    = "\033[33;1m"
+	ansiCyanBold      = "\033[36;1m"
+	ansiCyanBoldFaint = "\033[36;1;2m"
+	ansiRedFaint      = "\033[31;2m"
+	ansiRedBold       = "\033[31;1m"
+
+	ansiRed     = "\033[31m"
+	ansiYellow  = "\033[33m"
+	ansiGreen   = "\033[32m"
+	ansiMagenta = "\033[35m"
+)
+
+func setupLogger(cfg godrive.LogConfig) {
+	var handler slog.Handler
+	switch cfg.Format {
+	case "json":
+		handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			AddSource: cfg.AddSource,
+			Level:     cfg.Level,
+		})
+
+	case "text":
+		handler = tint.NewHandler(colorable.NewColorable(os.Stdout), &tint.Options{
+			AddSource: cfg.AddSource,
+			Level:     cfg.Level,
+			NoColor:   cfg.NoColor,
+			LevelColors: map[slog.Level]string{
+				slog.LevelDebug: ansiMagenta,
+				slog.LevelInfo:  ansiGreen,
+				slog.LevelWarn:  ansiYellow,
+				slog.LevelError: ansiRed,
+			},
+			Colors: map[tint.Kind]string{
+				tint.KindTime:            ansiYellowBold,
+				tint.KindSourceFile:      ansiCyanBold,
+				tint.KindSourceSeparator: ansiCyanBoldFaint,
+				tint.KindSourceLine:      ansiCyanBold,
+				tint.KindMessage:         ansiWhiteBold,
+				tint.KindKey:             ansiFaint,
+				tint.KindSeparator:       ansiFaint,
+				tint.KindValue:           ansiWhiteBold,
+				tint.KindErrorKey:        ansiRedFaint,
+				tint.KindErrorSeparator:  ansiFaint,
+				tint.KindErrorValue:      ansiRedBold,
+			},
+		})
+	default:
+		log.Printf("Unknown log format: %s", cfg.Format)
+		os.Exit(-1)
+	}
+	slog.SetDefault(slog.New(handler))
 }

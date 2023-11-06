@@ -12,26 +12,33 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/riandyrn/otelchi"
+	"github.com/samber/slog-chi"
 	"github.com/topi314/godrive/godrive/auth"
 	"github.com/topi314/godrive/godrive/database"
-	"github.com/topi314/godrive/internal/log"
 	"github.com/topi314/godrive/templates"
 )
 
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
 	r.Use(otelchi.Middleware("gobin", otelchi.WithChiRoutes(r)))
-	r.Use(middleware.CleanPath)
-	r.Use(middleware.StripSlashes)
+	r.Use(middleware.Maybe(middleware.StripSlashes, func(r *http.Request) bool {
+		return !strings.HasPrefix(r.URL.Path, "/debug/")
+	}))
 	r.Use(middleware.RealIP)
 	r.Use(middleware.RequestID)
-	r.Use(middleware.Maybe(
-		log.StructuredLogger,
-		func(r *http.Request) bool {
-			// Don't log requests for assets
-			return !strings.HasPrefix(r.URL.Path, "/assets")
+	r.Use(slogchi.NewWithConfig(slog.Default(), slogchi.Config{
+		DefaultLevel:     slog.LevelInfo,
+		ClientErrorLevel: slog.LevelDebug,
+		ServerErrorLevel: slog.LevelError,
+		WithRequestID:    true,
+		WithRequestBody:  true,
+		WithResponseBody: true,
+		WithSpanID:       s.cfg.Otel != nil,
+		WithTraceID:      s.cfg.Otel != nil,
+		Filters: []slogchi.Filter{
+			slogchi.IgnorePathPrefix("/assets"),
 		},
-	))
+	}))
 	r.Use(cacheControl)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Heartbeat("/ping"))

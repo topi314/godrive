@@ -262,7 +262,7 @@ func (s *Server) getFiles(w http.ResponseWriter, r *http.Request, rqPath string,
 		Path:      rqPath,
 		BasePath:  basePath,
 	}
-	fmt.Printf("vars: %+v\n", vars)
+	// fmt.Printf("vars: %+v\n", vars)
 	if action == "main" {
 		w.Header().Set("HX-Replace-Url", rqPath)
 		if err = templates.IndexMain(vars, s.pageVars(r)).Render(r.Context(), w); err != nil {
