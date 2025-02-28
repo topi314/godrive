@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/topi314/godrive/godrive/auth"
@@ -16,6 +17,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/oauth2"
 )
+
+const OauthLoginFlowMaxDuration = 230 * time.Minute
 
 func (s *Server) Auth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -104,7 +107,6 @@ func (s *Server) Auth(next http.Handler) http.Handler {
 			attribute.String("profile", info.Profile),
 			attribute.String("email", info.Email),
 			attribute.String("email_verified", fmt.Sprintf("%t", info.EmailVerified)),
-			attribute.String("audience", strings.Join(info.Audience, ",")),
 			attribute.String("groups", strings.Join(info.Groups, ",")),
 			attribute.String("username", info.Username),
 		))
@@ -141,8 +143,19 @@ func (s *Server) CheckAuth(allowedFunc func(r *http.Request, info *auth.UserInfo
 }
 
 func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
-	state, nonce := s.auth.NewState(r.URL.Query().Get("rd"))
-	http.Redirect(w, r, s.auth.Config().AuthCodeURL(state, oidc.Nonce(nonce)), http.StatusFound)
+	redirect := r.URL.Query().Get("rd")
+	if redirect == "" { // Makes sure to not redirect to /api
+		redirect = "/"
+	}
+	state, loginState := s.auth.NewState(redirect)
+
+	scopes := strings.Join(s.auth.Config().Scopes, " ")
+	url := s.auth.Config().AuthCodeURL(state, oidc.Nonce(loginState.Nonce),
+		oauth2.S256ChallengeOption(loginState.Verifier), oauth2.SetAuthURLParam("scope", scopes))
+
+	expiration := time.Now().Add(OauthLoginFlowMaxDuration)
+	addOauthCookie(w, state, expiration)
+	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
 func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
@@ -161,17 +174,29 @@ func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
 	ctx, span := s.tracer.Start(r.Context(), "callback")
 	defer span.End()
 
+	oauthState, _ := r.Cookie("oauthstate")
 	state := r.URL.Query().Get("state")
-	nonce, redirectURL, ok := s.auth.GetState(state)
+	if oauthState == nil || state != oauthState.Value {
+		s.prettyError(w, r, errors.New("https://media.tenor.com/eEs1jRy5UXgAAAAM/house-explosion.gif"), http.StatusTeapot)
+		return
+	}
+
+	lState, ok := s.auth.GetState(state)
 	if !ok {
 		span.SetStatus(codes.Error, "invalid state")
 		span.AddEvent("invalid state", trace.WithAttributes(attribute.String("state", state)))
-		s.error(w, r, errors.New("invalid state"), http.StatusBadRequest)
+		s.error(w, r, errors.New("invalid state, the server has forgor, perhaps we nuked our database during your login :)"), http.StatusBadRequest)
 		return
 	}
 
 	code := r.URL.Query().Get("code")
-	token, err := s.auth.Config().Exchange(ctx, code)
+
+	var opts []oauth2.AuthCodeOption
+	if s.cfg.Auth.EnablePKCE {
+		opts = append(opts, oauth2.VerifierOption(lState.Verifier))
+	}
+	token, err := s.auth.Config().Exchange(ctx, code, opts...)
+
 	if err != nil {
 		span.SetStatus(codes.Error, "failed to exchange code")
 		span.RecordError(err)
@@ -199,7 +224,7 @@ func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if idToken.Nonce != nonce {
+	if idToken.Nonce != lState.Nonce {
 		span.SetStatus(codes.Error, "invalid nonce")
 		span.AddEvent("invalid nonce", trace.WithAttributes(attribute.String("nonce", idToken.Nonce)))
 		s.prettyError(w, r, errors.New("invalid nonce"), http.StatusBadRequest)
@@ -235,5 +260,19 @@ func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
 		span.SetStatus(codes.Error, "failed to set session")
 	}
 
-	http.Redirect(w, r, redirectURL, http.StatusFound)
+	http.Redirect(w, r, lState.RedirectURL, http.StatusFound)
+}
+
+func addOauthCookie(w http.ResponseWriter, state string, expiration time.Time) {
+	cookie := http.Cookie{
+		Name:     "oauthstate",
+		Value:    state,
+		Expires:  expiration,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   false, // Can use via http reqs
+		HttpOnly: true,  // Can't be accessed by JS
+		Path:     "/api/callback",
+	}
+
+	http.SetCookie(w, &cookie)
 }

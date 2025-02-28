@@ -27,6 +27,7 @@ type Config struct {
 	RefreshTokenLifespan time.Duration `cfg:"refresh_token_lifespan"`
 	DefaultHome          string        `cfg:"default_home"`
 	Groups               Groups        `cfg:"groups"`
+	EnablePKCE           bool          `cfg:"enable_pkce"`
 }
 
 func (c Config) String() string {
@@ -89,7 +90,7 @@ func New(cfg *Config, db *database.DB) (*Auth, error) {
 		provider: provider,
 		verifier: verifier,
 		config:   config,
-		states:   make(map[string]loginState),
+		states:   make(map[string]LoginState),
 		db:       db,
 		rand:     rand.New(rand.NewSource(time.Now().UnixNano())),
 	}, nil
@@ -101,7 +102,7 @@ type Auth struct {
 	verifier *oidc.IDTokenVerifier
 	config   *oauth2.Config
 
-	states   map[string]loginState
+	states   map[string]LoginState
 	statesMu sync.Mutex
 
 	db   *database.DB

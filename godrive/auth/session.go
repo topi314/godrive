@@ -5,30 +5,36 @@ import (
 	"net/http"
 
 	"github.com/topi314/godrive/godrive/database"
+	"golang.org/x/oauth2"
 )
 
 const SessionCookieName = "X-Session-ID"
 
-type loginState struct {
+type LoginState struct {
 	Nonce       string
 	RedirectURL string
+	Verifier    string
 }
 
-func (a *Auth) NewState(redirectURL string) (string, string) {
+func (a *Auth) NewState(redirectURL string) (string, LoginState) {
 	a.statesMu.Lock()
 	defer a.statesMu.Unlock()
 
+	// ~ 90 bits to brute force
 	state := a.NewID(16)
 	nonce := a.NewID(16)
-	a.states[state] = loginState{
+	verifier := oauth2.GenerateVerifier()
+	l := LoginState{
 		Nonce:       nonce,
 		RedirectURL: redirectURL,
+		Verifier:    verifier, // PKCE Verifier
 	}
+	a.states[state] = l
 
-	return state, nonce
+	return state, l
 }
 
-func (a *Auth) GetState(state string) (string, string, bool) {
+func (a *Auth) GetState(state string) (LoginState, bool) {
 	a.statesMu.Lock()
 	defer a.statesMu.Unlock()
 
@@ -37,7 +43,7 @@ func (a *Auth) GetState(state string) (string, string, bool) {
 		delete(a.states, state)
 	}
 
-	return lState.Nonce, lState.RedirectURL, ok
+	return lState, ok
 }
 
 func (a *Auth) NewID(length int) string {
