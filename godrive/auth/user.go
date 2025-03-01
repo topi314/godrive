@@ -22,7 +22,6 @@ var userInfoKey = authKey{}
 type UserInfo struct {
 	oidc.UserInfo
 	Home     string   `json:"home"`
-	Audience []string `json:"aud"`
 	Groups   []string `json:"groups"`
 	Username string   `json:"preferred_username"`
 }
@@ -39,7 +38,6 @@ func GetUserInfo(r *http.Request) *UserInfo {
 				Subject: "guest",
 				Email:   "guest@localhost",
 			},
-			Audience: []string{"godrive"},
 			Groups:   []string{"guest"},
 			Username: "guest",
 		}
