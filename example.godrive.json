@@ -48,6 +48,7 @@
 		"redirect_url": "http://localhost:1234/api/callback",
 		"logout_url": "https://auth.example.com/api/logout",
 		"default_home": "/",
+		"enable_pkce": true,
 		"groups": {
 			"admin": "admin",
 			"user": "user",
