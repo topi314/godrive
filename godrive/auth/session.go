@@ -9,6 +9,7 @@ import (
 )
 
 const SessionCookieName = "X-Session-ID"
+const AuthorizationHeader = "Authorization"
 
 type LoginState struct {
 	Nonce       string

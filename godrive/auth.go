@@ -24,6 +24,37 @@ func (s *Server) Auth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx, span := s.tracer.Start(r.Context(), "auth middleware")
 
+		// Handle Api Token auth
+		if authToken := r.Header.Get(auth.AuthorizationHeader); authToken != "" {
+			apiToken, err := s.db.GetApiToken(ctx, authToken)
+			if err != nil {
+				span.RecordError(err)
+				slog.ErrorContext(ctx, "failed to find api token: %w", slog.Any("err", err))
+				span.End()
+				s.error(w, r, err, http.StatusUnauthorized)
+				return
+			}
+			var info auth.UserInfo
+			user, err := s.db.GetUser(ctx, apiToken.UserID)
+			if err != nil {
+				span.RecordError(err)
+				slog.ErrorContext(ctx, "failed to get user by name: %w", slog.Any("err", err))
+				span.End()
+				s.error(w, r, err, http.StatusInternalServerError)
+				return
+			}
+			info.Home = user.Home
+			info.Subject = user.ID
+			info.Username = user.Username
+			info.Groups = user.Groups
+			info.Email = user.Email
+
+			span.End()
+			next.ServeHTTP(w, auth.SetUserInfo(r, &info))
+			return
+		}
+
+		// Handle normal cookie auth
 		var sessionID string
 		if cookie, err := r.Cookie(auth.SessionCookieName); err == nil {
 			sessionID = cookie.Value

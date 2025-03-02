@@ -33,6 +33,19 @@ func (s *Server) GetSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	apiTokens, err := s.db.GetApiTokens(r.Context(), userInfo.Subject)
+	if err != nil {
+		s.prettyError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+	templateApiTokens := make([]templates.ApiToken, len(apiTokens))
+	for i, apiToken := range apiTokens {
+		templateApiTokens[i] = templates.ApiToken{
+			Description: apiToken.Description,
+			Token:       apiToken.Token,
+		}
+	}
+
 	permissions, err := s.db.GetAllPermissions(r.Context())
 	templatePermissions := make([]templates.Permissions, len(permissions))
 	for i, permission := range permissions {
@@ -59,6 +72,7 @@ func (s *Server) GetSettings(w http.ResponseWriter, r *http.Request) {
 
 	vars := templates.SettingsVars{
 		Users:       templateUsers,
+		ApiTokens:   templateApiTokens,
 		Permissions: templatePermissions,
 	}
 	if err = templates.Settings(vars, s.pageVars(r)).Render(r.Context(), w); err != nil {
