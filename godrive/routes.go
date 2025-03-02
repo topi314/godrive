@@ -67,6 +67,11 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/version", s.GetVersion)
 
 	r.Group(func(r chi.Router) {
+		r.Group(func(r chi.Router) {
+			r.Get("/share/{shareID}", s.GetShare)
+			r.Get("/share/{shareID}/*", s.GetShare)
+		})
+
 		if s.cfg.Auth != nil {
 			r.Use(s.Auth)
 			r.Route("/api", func(r chi.Router) {
@@ -93,8 +98,6 @@ func (s *Server) Routes() http.Handler {
 					return auth.ActionDeny
 				}))
 			}
-			r.Get("/share/{shareID}", s.GetShare)
-			r.Get("/share/{shareID}/*", s.GetShare)
 			r.Get("/*", s.GetFiles)
 			r.Head("/*", s.GetFiles)
 			r.Post("/*", s.PostFile)
