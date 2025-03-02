@@ -1,6 +1,8 @@
 module github.com/topi314/godrive
 
-go 1.21
+go 1.24
+
+toolchain go1.24.0
 
 replace (
 	github.com/riandyrn/otelchi => github.com/topi314/otelchi v0.0.0-20231102200450-1f008a097ec7
@@ -9,7 +11,7 @@ replace (
 
 require (
 	github.com/XSAM/otelsql v0.26.0
-	github.com/a-h/templ v0.2.432
+	github.com/a-h/templ v0.3.833
 	github.com/coreos/go-oidc/v3 v3.7.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/evanw/esbuild v0.19.5
@@ -39,7 +41,7 @@ require (
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
+	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
@@ -82,13 +84,13 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.19.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.0.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.14.0 // indirect
-	golang.org/x/mod v0.14.0 // indirect
-	golang.org/x/net v0.17.0 // indirect
-	golang.org/x/sync v0.5.0 // indirect
-	golang.org/x/sys v0.14.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
-	golang.org/x/tools v0.14.0 // indirect
+	golang.org/x/crypto v0.31.0 // indirect
+	golang.org/x/mod v0.20.0 // indirect
+	golang.org/x/net v0.33.0 // indirect
+	golang.org/x/sync v0.10.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/tools v0.24.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20231106174013-bbf56f31fb17 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231106174013-bbf56f31fb17 // indirect
