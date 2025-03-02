@@ -1,0 +1,85 @@
+package templates
+
+import (
+	"strings"
+	"strconv"
+
+	"github.com/topi314/godrive/godrive/auth"
+)
+
+type SettingsVars struct {
+    Users       []User
+    Permissions []Permissions
+}
+
+templ Settings(vars SettingsVars, page PageVars) {
+    @Page(page) {
+        @SettingsMain(vars)
+    }
+}
+
+templ SettingsMain(vars SettingsVars) {
+	<h2>Settings</h2>
+	<div>
+		<h3>Users</h3>
+		@UserList(vars.Users)
+	</div>
+	<div>
+		<h3>Permissions</h3>
+		@SettingsPermissionList(vars.Permissions)
+	</div>
+}
+
+templ UserList(users []User) {
+	<div id="user-list" class="table-list">
+		<div class="table-list-header">
+			<div></div>
+			<div>Name</div>
+			<div>Groups</div>
+			<div>Email</div>
+			<div>Home</div>
+		</div>
+		for i, user := range users {
+			@UserEntry(i, user)
+		}
+	</div>
+}
+
+templ UserEntry(i int, user User) {
+	<div class="table-list-entry">
+		<div>
+			<span title="user.Type" class={ templ.KV("icon-admin", user.Type == UserTypeAdmin), templ.KV("icon-user", user.Type == UserTypeUser), templ.KV("icon-guest", user.Type == UserTypeGuest) }></span>
+		</div>
+		<div title={ user.ID }>{ user.Name }</div>
+		<div>{ strings.Join(user.Groups, ", ") }</div>
+		<div>{ user.Email }</div>
+		<div>{ user.Home }</div>
+	</div>
+}
+
+templ SettingsPermissionList(permissions []Permissions) {
+	<div id="permission-list" class="table-list">
+		<div class="table-list-header">
+			<div></div>
+			<div>Path</div>
+			<div>Object</div>
+			<div>Allow</div>
+			<div>Deny</div>
+		</div>
+		for i, perms := range permissions {
+			@SettingsPermissionEntry(i, perms)
+		}
+	</div>
+}
+
+templ SettingsPermissionEntry(i int, perms Permissions) {
+	<div class="table-list-entry">
+		<div>
+			<span title="permissions.ObjectType" class={ templ.KV("icon-user", perms.ObjectType == auth.ObjectTypeUser), templ.KV("icon-group", perms.ObjectType ==  auth.ObjectTypeGroup), templ.KV("icon-everyone", perms.ObjectType ==  auth.ObjectTypeEveryone) }></span>
+		</div>
+		<div>{ perms.Path }</div>
+		<div title={ perms.Object }>{ perms.ObjectName }</div>
+		<div title={ strconv.FormatInt(int64(perms.Allow), 10) }>{ perms.Allow.String() }</div>
+		<div title={ strconv.FormatInt(int64(perms.Deny), 10) }>{ perms.Deny.String() }</div>
+	</div>
+}

@@ -1,0 +1,14 @@
+package templates
+
+templ Share(link string, redirectURL string) {
+	<div>
+		<div class="share">
+			<h1>Share</h1>
+			<input id="share-link" type="text" value={ link } readonly/>
+			<div class="share__buttons">
+				<button class="btn primary" onclick="window.copyShareLink()">Copy</button>
+				<button hx-get={ redirectURL + "?action=main" } hx-target="main" hx-swap="innerHTML" hx-ext="accept-html" class="btn secondary">Done</button>
+			</div>
+		</div>
+	</div>
+}

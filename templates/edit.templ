@@ -1,11 +1,11 @@
 package templates
 
-templ EditFile(file File) {
+templ FileEdit(file File) {
 	<form
 		id="file-edit"
 		hx-patch={ file.Path }
 		hx-encoding="multipart/form-data"
-		hx-target="main" hx-swap="outerHTML"
+		hx-target="main" hx-swap="innerHTML"
 		hx-error-target="#file-edit-error" hx-error-swap="innerHTML"
 		hx-ext="edit-file,accept-html"
 		hx-on:reset="window.onFilesReset(event)"
@@ -15,23 +15,12 @@ templ EditFile(file File) {
 			<progress id="upload-progress" value="0" max="100"></progress>
 			<div>
 				<input name="dir" value={ file.Dir }/>
-				<div class="buttons">
-					<button id="upload-button" type="submit" class="btn primary">Edit</button>
-					<button type="button" hx-get={ file.Dir + "?action=files"} hx-target="#content" class="btn secondary">Cancel</button>
-				</div>
+				<button id="upload-button" type="submit" class="btn primary">Edit</button>
 			</div>
 		</div>
 		<div id="file-edit-error"></div>
 
-		<div class="upload-file">
-			<div class="upload-file-icon">
-				<span class="icon icon-large file-icon"></span>
-			</div>
-			<div class="upload-file-content">
-				<label>Name:</label><input name="name" value={ file.Name }/>
-				<label>Description:</label><textarea  name="description">{ file.Description }</textarea>
-			</div>
-		</div>
+		@UploadFile(false, 0, file)
 
 		<div class="file-upload">
 			<input type="file" id="files" name="files" hidden hx-on:change="window.onFilesChange(event)"/>
@@ -42,3 +31,23 @@ templ EditFile(file File) {
 		</div>
 	</form>
 }
+
+templ FolderEdit(path string, files string) {
+	<form
+		id="folder-edit"
+		hx-patch={ path + files }
+		hx-target="main" hx-swap="innerHTML"
+		hx-error-target="#folder-edit-error" hx-error-swap="innerHTML"
+		hx-ext="folder-edit,accept-html"
+	>
+		<div id="form-file-navigation">
+			<div>
+				<input name="dir" value={ path }/>
+				<button id="edit-button" type="submit" class="btn primary">Edit</button>
+			</div>
+		</div>
+		<div id="folder-edit-error"></div>
+	</form>
+}
+
+

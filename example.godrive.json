@@ -1,7 +1,16 @@
 {
+	"log": {
+		// level can be -4 (debug), 0 (info), 4 (warn), 8 (error)
+		"level": 0,
+		// format can be "text" or "json"
+		"format": "text",
+		"add_source": false,
+		"no_color": false
+	},
 	"dev_mode": false,
 	"debug": false,
 	"listen_addr": ":80",
+	"public_url": "http://localhost:80",
 	"jwt_secret": "...",
 	"database": {
 		// type can be "sqlite" or "postgres"
@@ -30,6 +39,22 @@
 		"bucket": "godrive",
 		"region": "",
 		"secure": false
+	},
+	"auth": {
+		"secure": true,
+		"issuer": "https://auth.example.com",
+		"client_id": "godrive",
+		"client_secret": "...",
+		"redirect_url": "http://localhost:1234/api/callback",
+		"logout_url": "https://auth.example.com/api/logout",
+		"default_home": "/",
+		"enable_pkce": true,
+		"groups": {
+			"admin": "admin",
+			"user": "user",
+			"guest": "guest",
+			"allow_guests": true
+		}
 	},
 	"otel": {
 		"instance_id": "godrive-dev",

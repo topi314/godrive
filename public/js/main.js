@@ -53,6 +53,122 @@
     document.cookie = updatedCookie;
   }
 
+  // assets/js/htmx-files.js
+  htmx.defineExtension("new-files", {
+    onEvent: (name, event) => {
+      if (name === "htmx:configRequest") {
+        event.detail.path = event.detail.parameters.dir;
+        event.detail.useUrlParams = true;
+        event.detail.parameters = {
+          dir: event.detail.parameters.dir,
+          action: "new-files",
+          files: event.detail.parameters.files.map((file) => file.name).join(",")
+        };
+      }
+    }
+  });
+  htmx.defineExtension("new-permissions", {
+    onEvent: (name, event) => {
+      if (name === "htmx:configRequest") {
+        event.detail.path = event.detail.parameters.dir;
+        event.detail.useUrlParams = true;
+        const file = event.detail.parameters.file;
+        event.detail.parameters = {
+          dir: event.detail.parameters.dir,
+          action: "new-permissions",
+          file,
+          index: event.detail.parameters.index,
+          object_type: event.detail.parameters[`object_type-${file}`],
+          object_name: event.detail.parameters[`object_name-${file}`]
+        };
+      }
+    }
+  });
+  htmx.defineExtension("upload-files", {
+    encodeParameters: (xhr, params, element) => {
+      const data = new FormData();
+      const files = [];
+      for (let i = 0; i < params.files.length; i++) {
+        const file = params.files[i];
+        files.push({
+          name: params[`name-${i}`] || file.name,
+          description: params[`description-${i}`],
+          overwrite: params[`overwrite-${i}`] === "true",
+          size: file.size,
+          permissions: parsePermissions(i, params)
+        });
+        data.set("json", JSON.stringify(files));
+        data.append(`file-${i}`, file, params[`name-${i}`] || file.name);
+      }
+      return data;
+    },
+    onEvent: (name, event) => {
+      if (name === "htmx:configRequest") {
+        event.detail.path = event.detail.parameters.dir;
+      }
+    }
+  });
+  htmx.defineExtension("edit-file", {
+    encodeParameters: (xhr, params, element) => {
+      const data = new FormData();
+      const file = params.files[0];
+      const json = {
+        dir: params["dir"],
+        name: params["name-0"] || file.name,
+        description: params["description-0"],
+        permissions: parsePermissions(0, params)
+      };
+      if (file) {
+        json.size = file.size;
+      }
+      data.append("json", JSON.stringify(json));
+      if (file) {
+        data.append("file", file, json.name);
+      }
+      return data;
+    },
+    onEvent: (name, event) => {
+      if (name === "htmx:configRequest") {
+      }
+    }
+  });
+  htmx.defineExtension("edit-folder", {
+    encodeParameters: (xhr, params, element) => {
+      return void 0;
+    },
+    onEvent: (name, event) => {
+      if (name === "htmx:configRequest") {
+        event.detail.headers["Destination"] = event.detail.parameters.dir;
+      }
+    }
+  });
+  function parsePermissions(file, params) {
+    const permissions = [];
+    for (const permission of Object.keys(params)) {
+      if (!permission.startsWith(`permissions-${file}`)) {
+        continue;
+      }
+      const values = permission.split("-");
+      const index = values[2];
+      if (permissions.findIndex((p) => p.index === index) !== -1) {
+        continue;
+      }
+      permissions.push({
+        index,
+        object_type: +params[`permissions-${file}-${index}-object_type`],
+        object: params[`permissions-${file}-${index}-object`],
+        permissions: {
+          create: +params[`permissions-${file}-${index}-create`],
+          update: +params[`permissions-${file}-${index}-update`],
+          delete: +params[`permissions-${file}-${index}-delete`],
+          update_permissions: +params[`permissions-${file}-${index}-update_permissions`],
+          read: +params[`permissions-${file}-${index}-read`]
+        }
+      });
+    }
+    return permissions;
+  }
+
   // assets/js/files.js
   var selectedFiles = [];
   function getSelectedFiles() {
@@ -111,31 +227,7 @@
     document.getElementById("upload-progress").value = Math.min(e.detail.loaded / e.detail.total * 100, 100);
   }
   function onFilesChange(e) {
-    let html = "";
-    for (let i = 0; i < e.target.files.length; i++) {
-      const file = e.target.files[i];
-      html += `<li id="upload-file-${i}" xmlns="http://www.w3.org/1999/html">
-	<div class="upload-file">
-		<div class="upload-file-icon">
-			<span class="icon icon-large file-icon"></span>
-		</div>
-		<div class="upload-file-content">
-			<label>Name:</label><input name="name-${i}" value="${file.name}"/>
-			<label>Description:</label><textarea  name="description-${i}"></textarea>
-			<label>Overwrite:</label><span><input id="overwrite-${i}" class="checkbox" type="checkbox" name="overwrite-${i}" value="true" checked/><label for="overwrite-${i}" class="icon"></label></span>
-		</div>
-		<div class="upload-file-icon">
-			<div class="icon-btn icon-remove" role="button" onclick="window.onUploadFileDelete(${i})"></div>
-		</div>
-	</div>
-</li>`;
-      document.getElementById("upload-files").innerHTML = html;
-      document.getElementById("upload-button").disabled = false;
-    }
-  }
-  function onFilesReset(event) {
-    document.getElementById("upload-files").replaceChildren();
-    document.getElementById("upload-button").disabled = true;
+    document.getElementById("upload-button").disabled = false;
   }
   function onUploadFileDelete(i) {
     const dt = new DataTransfer();
@@ -148,11 +240,29 @@
     files.files = dt.files;
     document.getElementById("upload-file-" + i).remove();
   }
+  function onRemovePermissions(e) {
+    e.target.parentElement.parentElement.remove();
+  }
+  function stopBubble(e) {
+    e.stopPropagation();
+  }
   var upload_default = {
     updateUploadProgress,
     onFilesChange,
-    onFilesReset,
-    onUploadFileDelete
+    onUploadFileDelete,
+    onRemovePermissions,
+    stopBubble
+  };
+
+  // assets/js/share.js
+  async function copyShareLink() {
+    const shareLink = document.getElementById("share-link");
+    shareLink.select();
+    shareLink.setSelectionRange(0, 99999);
+    await navigator.clipboard.writeText(shareLink.value);
+  }
+  var share_default = {
+    copyShareLink
   };
 
   // assets/js/main.js
@@ -161,82 +271,10 @@
   window.onDownloadFiles = onDownloadFiles;
   window.updateUploadProgress = updateUploadProgress;
   window.onFilesChange = onFilesChange;
-  window.onFilesReset = onFilesReset;
   window.onUploadFileDelete = onUploadFileDelete;
-  htmx.config.defaultErrorSwapStyle = "innerHTML";
-  htmx.config.defaultErrorTarget = "mirror";
-  htmx.defineExtension("upload-files", {
-    encodeParameters: (xhr, params, element) => {
-      const data = new FormData();
-      const files = [];
-      for (let i = 0; i < params.files.length; i++) {
-        const file = params.files[i];
-        files.push({
-          name: params[`name-${i}`] || file.name,
-          description: params[`description-${i}`],
-          overwrite: params[`overwrite-${i}`] === "true",
-          size: file.size
-        });
-        data.set("json", JSON.stringify(files));
-        data.append(`file-${i}`, file, params[`name-${i}`] || file.name);
-      }
-      return data;
-    },
-    onEvent: (name, event) => {
-      if (name === "htmx:configRequest") {
-        if (event.detail.parameters) {
-          event.detail.path = event.detail.parameters.dir;
-        }
-      }
-    }
-  });
-  htmx.defineExtension("edit-file", {
-    encodeParameters: (xhr, params, element) => {
-      const data = new FormData();
-      const file = params.files[0];
-      const json = {
-        dir: params["dir"],
-        name: params["name"] || file.name,
-        description: params["description"]
-      };
-      if (file) {
-        json.size = file.size;
-      }
-      data.append("json", JSON.stringify(json));
-      if (file) {
-        data.append("file", file, json.name);
-      }
-      return data;
-    }
-  });
-  htmx.defineExtension("move-files", {
-    onEvent: (name, event) => {
-      if (name === "htmx:configRequest") {
-        event.detail.useUrlParams = true;
-        event.detail.parameters["files"] = getSelectedFiles().join(",");
-      }
-    }
-  });
-  htmx.defineExtension("delete-files", {
-    onEvent: (name, event) => {
-      if (name === "htmx:configRequest") {
-        event.detail.useUrlParams = true;
-        event.detail.parameters["files"] = getSelectedFiles().join(",");
-      }
-    }
-  });
-  htmx.defineExtension("destination-header", {
-    encodeParameters: (xhr, params, element) => {
-      return void 0;
-    },
-    onEvent: (name, event) => {
-      if (name === "htmx:configRequest") {
-        if (event.detail.parameters) {
-          event.detail.headers["Destination"] = event.detail.parameters.dir;
-        }
-      }
-    }
-  });
+  window.onRemovePermissions = onRemovePermissions;
+  window.stopBubble = stopBubble;
+  window.copyShareLink = copyShareLink;
   htmx.defineExtension("accept-html", {
     onEvent: (name, event) => {
       if (name === "htmx:configRequest") {

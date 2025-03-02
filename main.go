@@ -5,6 +5,7 @@ import (
 	"embed"
 	"errors"
 	"flag"
+	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -13,16 +14,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/evanw/esbuild/pkg/api"
+	"github.com/mattn/go-colorable"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
 	"github.com/topi314/godrive/godrive"
+	"github.com/topi314/godrive/godrive/auth"
 	"github.com/topi314/godrive/godrive/database"
 	"github.com/topi314/godrive/godrive/storage"
+	"github.com/topi314/tint"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/oauth2"
 )
 
 //go:generate go run github.com/a-h/templ/cmd/templ@latest generate
@@ -112,30 +114,6 @@ func main() {
 		tracer = trace.NewNoopTracerProvider().Tracer(Namespace)
 	}
 
-	var auth *godrive.Auth
-	if cfg.Auth != nil {
-		provider, err := oidc.NewProvider(context.Background(), cfg.Auth.Issuer)
-		if err != nil {
-			slog.Error("Error while creating oidc provider", slog.Any("err", err))
-			os.Exit(-1)
-		}
-
-		auth = &godrive.Auth{
-			Provider: provider,
-			Verifier: provider.Verifier(&oidc.Config{
-				ClientID: cfg.Auth.ClientID,
-			}),
-			Config: &oauth2.Config{
-				ClientID:     cfg.Auth.ClientID,
-				ClientSecret: cfg.Auth.ClientSecret,
-				Endpoint:     provider.Endpoint(),
-				RedirectURL:  cfg.Auth.RedirectURL,
-				Scopes:       []string{oidc.ScopeOpenID, "groups", "email", "profile", oidc.ScopeOfflineAccess},
-			},
-			States: map[string]godrive.LoginState{},
-		}
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	db, err := database.New(ctx, cfg.Database, Schema)
@@ -144,6 +122,12 @@ func main() {
 		os.Exit(-1)
 	}
 	defer db.Close()
+
+	a, err := auth.New(cfg.Auth, db)
+	if err != nil {
+		slog.Error("Error while creating auth", slog.Any("err", err))
+		os.Exit(-1)
+	}
 
 	str, err := storage.New(context.Background(), cfg.Storage, tracer)
 	if err != nil {
@@ -163,7 +147,7 @@ func main() {
 		assets = http.FS(Public)
 	}
 
-	s := godrive.NewServer(godrive.FormatBuildVersion(Version, Commit, buildTime), cfg, db, auth, str, tracer, meter, assets)
+	s := godrive.NewServer(godrive.FormatBuildVersion(Version, Commit, buildTime), cfg, db, a, str, tracer, meter, assets)
 	slog.Info("godrive listening", slog.String("listen_addr", cfg.ListenAddr))
 	go s.Start()
 	defer s.Close()
@@ -171,20 +155,6 @@ func main() {
 	si := make(chan os.Signal, 1)
 	signal.Notify(si, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-si
-}
-
-func setupLogger(cfg godrive.LogConfig) {
-	opts := &slog.HandlerOptions{
-		AddSource: cfg.AddSource,
-		Level:     cfg.Level,
-	}
-	var handler slog.Handler
-	if cfg.Format == "json" {
-		handler = slog.NewJSONHandler(os.Stdout, opts)
-	} else {
-		handler = slog.NewTextHandler(os.Stdout, opts)
-	}
-	slog.SetDefault(slog.New(handler))
 }
 
 func bundleAssets() error {
@@ -218,4 +188,60 @@ func bundleAssets() error {
 		return err
 	}
 	return nil
+}
+
+const (
+	ansiFaint         = "\033[2m"
+	ansiWhiteBold     = "\033[37;1m"
+	ansiYellowBold    = "\033[33;1m"
+	ansiCyanBold      = "\033[36;1m"
+	ansiCyanBoldFaint = "\033[36;1;2m"
+	ansiRedFaint      = "\033[31;2m"
+	ansiRedBold       = "\033[31;1m"
+
+	ansiRed     = "\033[31m"
+	ansiYellow  = "\033[33m"
+	ansiGreen   = "\033[32m"
+	ansiMagenta = "\033[35m"
+)
+
+func setupLogger(cfg godrive.LogConfig) {
+	var handler slog.Handler
+	switch cfg.Format {
+	case "json":
+		handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			AddSource: cfg.AddSource,
+			Level:     cfg.Level,
+		})
+
+	case "text":
+		handler = tint.NewHandler(colorable.NewColorable(os.Stdout), &tint.Options{
+			AddSource: cfg.AddSource,
+			Level:     cfg.Level,
+			NoColor:   cfg.NoColor,
+			LevelColors: map[slog.Level]string{
+				slog.LevelDebug: ansiMagenta,
+				slog.LevelInfo:  ansiGreen,
+				slog.LevelWarn:  ansiYellow,
+				slog.LevelError: ansiRed,
+			},
+			Colors: map[tint.Kind]string{
+				tint.KindTime:            ansiYellowBold,
+				tint.KindSourceFile:      ansiCyanBold,
+				tint.KindSourceSeparator: ansiCyanBoldFaint,
+				tint.KindSourceLine:      ansiCyanBold,
+				tint.KindMessage:         ansiWhiteBold,
+				tint.KindKey:             ansiFaint,
+				tint.KindSeparator:       ansiFaint,
+				tint.KindValue:           ansiWhiteBold,
+				tint.KindErrorKey:        ansiRedFaint,
+				tint.KindErrorSeparator:  ansiFaint,
+				tint.KindErrorValue:      ansiRedBold,
+			},
+		})
+	default:
+		log.Printf("Unknown log format: %s", cfg.Format)
+		os.Exit(-1)
+	}
+	slog.SetDefault(slog.New(handler))
 }
