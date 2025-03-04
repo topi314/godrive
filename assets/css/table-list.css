@@ -10,6 +10,10 @@
 	grid-template-columns: 2.5rem repeat(4, auto);
 }
 
+#api-token-list {
+	grid-template-columns: 2.5rem repeat(2, auto) min-content;
+}
+
 #permission-list {
 	grid-template-columns: 2.5rem repeat(4, auto);
 }

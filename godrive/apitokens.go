@@ -2,6 +2,7 @@ package godrive
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/topi314/godrive/godrive/auth"
@@ -34,7 +35,11 @@ func (s *Server) PostToken(w http.ResponseWriter, r *http.Request) {
 		Token:       apiToken.Token,
 	}
 
-	templates.SettingsTokenEntry(templateApiToken)
+	if err = templates.SettingsTokenEntry(templateApiToken).Render(r.Context(), w); err != nil {
+		slog.ErrorContext(r.Context(), "error executing template", slog.Any("err", err))
+		return
+	}
+
 	return
 }
 

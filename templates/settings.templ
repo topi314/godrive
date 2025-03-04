@@ -64,7 +64,7 @@ templ UserEntry(user User) {
 }
 
 templ SettingsAddApiToken() {
-	<form id="add-api-token-form" method="POST" action="/api/tokens">
+	<form id="add-api-token-form" hx-post="/api/tokens" hx-swap="beforeend" hx-target="#api-token-list">
 		<label>Description: </label>
 		<input name="description" type="text" value=""/>
 		<button class="btn primary" type="submit">Create</button>
@@ -74,6 +74,7 @@ templ SettingsAddApiToken() {
 templ SettingsApiTokenList(tokens []ApiToken) {
 	<div id="api-token-list" class="table-list">
 		<div class="table-list-header">
+			<div></div>
 			<div>Description</div>
 			<div>Token (click to reveal)</div>
 			<div>Action</div>
@@ -86,13 +87,19 @@ templ SettingsApiTokenList(tokens []ApiToken) {
 
 templ SettingsTokenEntry(token ApiToken) {
 	<div class="table-list-entry">
+		<div></div>
 		<div title={ token.Description }>{ token.Description }</div>
-		<input type="password" readonly value="{ token.Token }"/>
+		<div><div class="api-token show-on-click" tabindex="0">{ token.Token }</div></div>
 		<div class="dropdown">
 			<div class="icon-dots" role="button"></div>
 			<ul>
-				<li><a href="/E0Q0Cuz2.mp4?dl=1" target="_blank">Copy Token</a></li>
-				<li><span hx-delete="/api/tokens" hx-confirm="Are you sure you want to delete { token.Description }" role="button">Delete</span></li>
+				<li><span onclick="tokenToClipboard(this)">Copy Token</span></li>
+				<li><span hx-delete="/api/tokens" role="button"
+					hx-headers={ "{\"Authorization\": \"" + token.Token + "\"}" }
+				 	hx-confirm={ "Are you sure you want to delete " + token.Description }
+				 	hx-target="closest .table-list-entry"
+				 	hx-swap="delete"
+				>Delete</span></li>
 			</ul>
 		</div>
 	</div>

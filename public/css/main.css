@@ -636,6 +636,9 @@ main {
 #user-list {
   grid-template-columns: 2.5rem repeat(4, auto);
 }
+#api-token-list {
+  grid-template-columns: 2.5rem repeat(2, auto) min-content;
+}
 #permission-list {
   grid-template-columns: 2.5rem repeat(4, auto);
 }
@@ -753,6 +756,22 @@ main {
   #file-list .table-list-entry > *:nth-child(8) {
     grid-area: more;
   }
+}
+
+/* assets/css/api-tokens.css */
+#add-api-token-form {
+  flex-direction: row;
+  justify-content: right;
+}
+#add-api-token-form > * {
+  align-content: center;
+}
+.show-on-click {
+  padding: 0.25rem;
+  opacity: 0;
+}
+.show-on-click:focus {
+  opacity: 1;
 }
 
 /* assets/css/permissions.css */
