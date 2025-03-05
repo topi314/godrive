@@ -3,6 +3,7 @@ import "./htmx-files.js";
 import {onDownloadFiles, onFileSelect, onFilesSelect} from "./files.js";
 import {onFilesChange, onRemovePermissions, onUploadFileDelete, stopBubble, updateUploadProgress} from "./upload.js";
 import {copyShareLink} from "./share.js";
+import {tokenToClipboard} from "./copy-text.js";
 
 window.onFilesSelect = onFilesSelect;
 window.onFileSelect = onFileSelect;
@@ -15,6 +16,7 @@ window.onRemovePermissions = onRemovePermissions;
 window.stopBubble = stopBubble;
 
 window.copyShareLink = copyShareLink;
+window.tokenToClipboard = tokenToClipboard;
 
 htmx.defineExtension("accept-html", {
 	onEvent: (name, event) => {

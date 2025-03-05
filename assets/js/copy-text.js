@@ -5,3 +5,4 @@ export function tokenToClipboard(el) {
 				.then(_ => alert("Copied!"));
 	}
 }
+

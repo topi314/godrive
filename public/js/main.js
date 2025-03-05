@@ -265,6 +265,14 @@
     copyShareLink
   };
 
+  // assets/js/copy-text.js
+  function tokenToClipboard(el) {
+    let tokenEl = el.parentNode.closest(".table-list-entry")?.querySelector(".api-token");
+    if (tokenEl) {
+      navigator.clipboard.writeText(tokenEl.innerHTML).then((_) => alert("Copied!"));
+    }
+  }
+
   // assets/js/main.js
   window.onFilesSelect = onFilesSelect;
   window.onFileSelect = onFileSelect;
@@ -275,6 +283,7 @@
   window.onRemovePermissions = onRemovePermissions;
   window.stopBubble = stopBubble;
   window.copyShareLink = copyShareLink;
+  window.tokenToClipboard = tokenToClipboard;
   htmx.defineExtension("accept-html", {
     onEvent: (name, event) => {
       if (name === "htmx:configRequest") {
