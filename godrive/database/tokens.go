@@ -56,15 +56,15 @@ func (d *DB) GetApiTokens(ctx context.Context, userId string) ([]ApiToken, error
 	return apiTokens, nil
 }
 
-func (d *DB) DeleteApiToken(ctx context.Context, token string) error {
-	if res, err := d.dbx.ExecContext(ctx, "DELETE FROM api_tokens WHERE token = $1", token); err != nil {
-		if res == nil {
-			return ErrApiTokenNotFound
-		}
-		if rows, err2 := res.RowsAffected(); rows == 0 || err2 != nil {
-			return ErrApiTokenNotFound
-		}
+// DeleteApiToken return true iff >= 1 row has been deleted.
+func (d *DB) DeleteApiToken(ctx context.Context, token string) (bool, error) {
+	res, err := d.dbx.ExecContext(ctx, "DELETE FROM api_tokens WHERE token = $1", token)
+	if err != nil {
+		return false, err
 	}
-
-	return nil
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return rows == 0, nil
 }

@@ -37,10 +37,7 @@ func (s *Server) PostToken(w http.ResponseWriter, r *http.Request) {
 
 	if err = templates.SettingsTokenEntry(templateApiToken).Render(r.Context(), w); err != nil {
 		slog.ErrorContext(r.Context(), "error executing template", slog.Any("err", err))
-		return
 	}
-
-	return
 }
 
 func (s *Server) DeleteToken(w http.ResponseWriter, r *http.Request) {
@@ -50,11 +47,15 @@ func (s *Server) DeleteToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := s.db.DeleteApiToken(r.Context(), token)
+	deletedSome, err := s.db.DeleteApiToken(r.Context(), token)
 	if err != nil {
 		s.prettyError(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
-	return
+	if !deletedSome {
+		s.prettyError(w, r, errors.New("api token not found"), http.StatusNotFound)
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }

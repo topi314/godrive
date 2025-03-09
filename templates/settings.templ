@@ -89,7 +89,7 @@ templ SettingsTokenEntry(token ApiToken) {
 	<div class="table-list-entry">
 		<div></div>
 		<div title={ token.Description }>{ token.Description }</div>
-		<div><div class="api-token show-on-click" tabindex="0">{ token.Token }</div></div>
+		<div><input readonly disabled type="password" class="api-token" tabindex="0" value={ token.Token } onclick="toggleRevealToken(this)"></div>
 		<div class="dropdown">
 			<div class="icon-dots" role="button"></div>
 			<ul>
