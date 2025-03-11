@@ -766,12 +766,9 @@ main {
 #add-api-token-form > * {
   align-content: center;
 }
-.show-on-click {
-  padding: 0.25rem;
-  opacity: 0;
-}
-.show-on-click:focus {
-  opacity: 1;
+.api-token {
+  width: min(100%, 20rem);
+  cursor: auto;
 }
 
 /* assets/css/permissions.css */

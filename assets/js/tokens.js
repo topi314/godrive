@@ -6,3 +6,11 @@ export function tokenToClipboard(el) {
 	}
 }
 
+export function revealToken(el) {
+	el.type = "text";
+}
+
+export function hideToken(el) {
+	el.type = "password";
+}
+

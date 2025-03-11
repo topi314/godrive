@@ -395,20 +395,20 @@ func SettingsTokenEntry(token ApiToken) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</div><div><input readonly disabled type=\"password\" class=\"api-token\" tabindex=\"0\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</div><div><input readonly type=\"password\" class=\"api-token\" tabindex=\"0\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var18 string
 		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(token.Token)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `templates/settings.templ`, Line: 92, Col: 98}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `templates/settings.templ`, Line: 92, Col: 89}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "\"></div><div class=\"dropdown\"><div class=\"icon-dots\" role=\"button\"></div><ul><li><span onclick=\"tokenToClipboard(this)\">Copy Token</span></li><li><span hx-delete=\"/api/tokens\" role=\"button\" hx-headers=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "\" onfocusin=\"revealToken(this)\" onfocusout=\"hideToken(this)\"></div><div class=\"dropdown\"><div class=\"icon-dots\" role=\"button\"></div><ul><li><span onclick=\"tokenToClipboard(this)\">Copy Token</span></li><li><span hx-delete=\"/api/tokens\" role=\"button\" hx-headers=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

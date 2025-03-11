@@ -265,12 +265,18 @@
     copyShareLink
   };
 
-  // assets/js/copy-text.js
+  // assets/js/tokens.js
   function tokenToClipboard(el) {
     let tokenEl = el.parentNode.closest(".table-list-entry")?.querySelector(".api-token");
     if (tokenEl) {
       navigator.clipboard.writeText(tokenEl.innerHTML).then((_) => alert("Copied!"));
     }
+  }
+  function revealToken(el) {
+    el.type = "text";
+  }
+  function hideToken(el) {
+    el.type = "password";
   }
 
   // assets/js/main.js
@@ -284,6 +290,8 @@
   window.stopBubble = stopBubble;
   window.copyShareLink = copyShareLink;
   window.tokenToClipboard = tokenToClipboard;
+  window.revealToken = revealToken;
+  window.hideToken = hideToken;
   htmx.defineExtension("accept-html", {
     onEvent: (name, event) => {
       if (name === "htmx:configRequest") {
