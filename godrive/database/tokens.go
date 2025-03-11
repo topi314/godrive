@@ -11,14 +11,14 @@ import (
 
 var ErrApiTokenNotFound = errors.New("api token not found")
 
-type ApiToken struct {
+type APIToken struct {
 	Token       string `db:"token"`
 	UserID      string `db:"user_id"`
 	Description string `db:"description"`
 }
 
-func (d *DB) CreateToken(ctx context.Context, token string, userId string, description string) (*ApiToken, error) {
-	apiToken := &ApiToken{
+func (d *DB) CreateToken(ctx context.Context, token string, userId string, description string) (*APIToken, error) {
+	apiToken := &APIToken{
 		Token:       token,
 		UserID:      userId,
 		Description: description,
@@ -30,8 +30,8 @@ func (d *DB) CreateToken(ctx context.Context, token string, userId string, descr
 	return apiToken, nil
 }
 
-func (d *DB) GetApiToken(ctx context.Context, token string) (*ApiToken, error) {
-	var apiToken ApiToken
+func (d *DB) GetApiToken(ctx context.Context, token string) (*APIToken, error) {
+	var apiToken APIToken
 	if err := d.dbx.GetContext(ctx, &apiToken, "SELECT * FROM api_tokens WHERE token = $1", token); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			err = ErrApiTokenNotFound
@@ -42,8 +42,8 @@ func (d *DB) GetApiToken(ctx context.Context, token string) (*ApiToken, error) {
 	return &apiToken, nil
 }
 
-func (d *DB) GetApiTokens(ctx context.Context, userId string) ([]ApiToken, error) {
-	var apiTokens []ApiToken
+func (d *DB) GetApiTokens(ctx context.Context, userId string) ([]APIToken, error) {
+	var apiTokens []APIToken
 	query, args, err := sqlx.In("SELECT * FROM api_tokens WHERE user_id = $1", userId)
 	if err != nil {
 		return nil, err
