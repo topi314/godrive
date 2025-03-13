@@ -55,6 +55,7 @@ func (s *Server) DeleteToken(w http.ResponseWriter, r *http.Request) {
 
 	if !deletedSome {
 		s.prettyError(w, r, errors.New("api token not found"), http.StatusNotFound)
+		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
