@@ -38,6 +38,11 @@ type File struct {
 	FilePermissions []Permissions
 }
 
+type ApiToken struct {
+	Description string
+	Token       string
+}
+
 type ToggleState int
 
 const (

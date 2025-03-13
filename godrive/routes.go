@@ -78,6 +78,10 @@ func (s *Server) Routes() http.Handler {
 				r.Get("/login", s.Login)
 				r.Get("/callback", s.Callback)
 				r.Get("/logout", s.Logout)
+				r.Route("/tokens", func(r chi.Router) {
+					r.Post("/", s.PostToken)
+					r.Delete("/", s.DeleteToken)
+				})
 				r.Route("/settings", func(r chi.Router) {
 					r.Get("/", s.GetSettings)
 					r.Head("/", s.GetSettings)

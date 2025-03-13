@@ -1,21 +1,22 @@
 package templates
 
 import (
-	"strings"
 	"strconv"
+	"strings"
 
 	"github.com/topi314/godrive/godrive/auth"
 )
 
 type SettingsVars struct {
-    Users       []User
-    Permissions []Permissions
+	Users       []User
+	ApiTokens   []ApiToken
+	Permissions []Permissions
 }
 
 templ Settings(vars SettingsVars, page PageVars) {
-    @Page(page) {
-        @SettingsMain(vars)
-    }
+	@Page(page) {
+		@SettingsMain(vars)
+	}
 }
 
 templ SettingsMain(vars SettingsVars) {
@@ -23,6 +24,11 @@ templ SettingsMain(vars SettingsVars) {
 	<div>
 		<h3>Users</h3>
 		@UserList(vars.Users)
+	</div>
+	<div>
+		<h3>Api Tokens</h3>
+		@SettingsAddApiToken()
+		@SettingsApiTokenList(vars.ApiTokens)
 	</div>
 	<div>
 		<h3>Permissions</h3>
@@ -39,13 +45,13 @@ templ UserList(users []User) {
 			<div>Email</div>
 			<div>Home</div>
 		</div>
-		for i, user := range users {
-			@UserEntry(i, user)
+		for _, user := range users {
+			@UserEntry(user)
 		}
 	</div>
 }
 
-templ UserEntry(i int, user User) {
+templ UserEntry(user User) {
 	<div class="table-list-entry">
 		<div>
 			<span title="user.Type" class={ templ.KV("icon-admin", user.Type == UserTypeAdmin), templ.KV("icon-user", user.Type == UserTypeUser), templ.KV("icon-guest", user.Type == UserTypeGuest) }></span>
@@ -54,6 +60,48 @@ templ UserEntry(i int, user User) {
 		<div>{ strings.Join(user.Groups, ", ") }</div>
 		<div>{ user.Email }</div>
 		<div>{ user.Home }</div>
+	</div>
+}
+
+templ SettingsAddApiToken() {
+	<form id="add-api-token-form" hx-post="/api/tokens" hx-swap="beforeend" hx-target="#api-token-list">
+		<label>Description: </label>
+		<input name="description" type="text" value=""/>
+		<button class="btn primary" type="submit">Create</button>
+	</form>
+}
+
+templ SettingsApiTokenList(tokens []ApiToken) {
+	<div id="api-token-list" class="table-list">
+		<div class="table-list-header">
+			<div></div>
+			<div>Description</div>
+			<div>Token (click to reveal)</div>
+			<div>Action</div>
+		</div>
+		for _, token := range tokens {
+			@SettingsTokenEntry(token)
+		}
+	</div>
+}
+
+templ SettingsTokenEntry(token ApiToken) {
+	<div class="table-list-entry">
+		<div></div>
+		<div title={ token.Description }>{ token.Description }</div>
+		<div><input readonly type="password" class="api-token" tabindex="0" value={ token.Token } onfocusin="revealToken(this)" onfocusout="hideToken(this)"></div>
+		<div class="dropdown">
+			<div class="icon-dots" role="button"></div>
+			<ul>
+				<li><span onclick="tokenToClipboard(this)">Copy Token</span></li>
+				<li><span hx-delete="/api/tokens" role="button"
+					hx-headers={ "{\"Authorization\": \"" + token.Token + "\"}" }
+				 	hx-confirm={ "Are you sure you want to delete " + token.Description }
+				 	hx-target="closest .table-list-entry"
+				 	hx-swap="delete"
+				>Delete</span></li>
+			</ul>
+		</div>
 	</div>
 }
 
@@ -66,13 +114,13 @@ templ SettingsPermissionList(permissions []Permissions) {
 			<div>Allow</div>
 			<div>Deny</div>
 		</div>
-		for i, perms := range permissions {
-			@SettingsPermissionEntry(i, perms)
+		for _, perms := range permissions {
+			@SettingsPermissionEntry(perms)
 		}
 	</div>
 }
 
-templ SettingsPermissionEntry(i int, perms Permissions) {
+templ SettingsPermissionEntry(perms Permissions) {
 	<div class="table-list-entry">
 		<div>
 			<span title="permissions.ObjectType" class={ templ.KV("icon-user", perms.ObjectType == auth.ObjectTypeUser), templ.KV("icon-group", perms.ObjectType ==  auth.ObjectTypeGroup), templ.KV("icon-everyone", perms.ObjectType ==  auth.ObjectTypeEveryone) }></span>

@@ -47,3 +47,11 @@ CREATE TABLE IF NOT EXISTS sessions
 	id_token      VARCHAR   NOT NULL,
 	PRIMARY KEY (id)
 );
+
+CREATE TABLE IF NOT EXISTS api_tokens
+(
+	token       VARCHAR NOT NULL,
+	user_id     VARCHAR NOT NULL,
+	description VARCHAR NOT NULL,
+	PRIMARY KEY (token)
+);
