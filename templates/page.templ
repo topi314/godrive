@@ -1,0 +1,71 @@
+package templates
+
+import (
+	"fmt"
+	"strings"
+	"crypto/md5"
+)
+
+type PageVars struct {
+	Theme 	 string
+	HashAuth bool
+	URL 	 string
+	User 	 User
+}
+
+templ Page(vars PageVars) {
+	<!DOCTYPE html>
+	<html lang="en" class={ vars.Theme }>
+		<head>
+			<meta charset="utf-8"/>
+			<title>godrive</title>
+			<meta name="description" content="godrive is a simple file sharing service"/>
+
+			<link rel="stylesheet" type="text/css" href="/assets/css/main.css"/>
+			<link rel="icon" href="/assets/favicon.png"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<meta name="theme-color" content="#1f2228"/>
+		</head>
+		<body>
+			@Header(vars)
+			<main>
+				{ children... }
+			</main>
+			<script src="/assets/js/htmx.min.js"></script>
+			<script src="/assets/js/main.js"></script>
+		</body>
+	</html>
+}
+
+func gravatarURL(email string) string {
+	return fmt.Sprintf("https://www.gravatar.com/avatar/%x?s=%d&d=retro", md5.Sum([]byte(strings.ToLower(email))), 80)
+}
+
+templ Header(vars PageVars) {
+	<header>
+		<div>
+			<a title="godrive" id="title" href="/">godrive</a>
+			<a title="GitHub" class="icon-btn icon-github" href="https://github.com/topi314/godrive" target="_blank"></a>
+
+			<input id="theme" class="toggle" type="checkbox"/>
+			<label title="Theme" class="icon-btn" for="theme"></label>
+		</div>
+		<div>
+			if vars.HashAuth {
+				if vars.User.Name != "guest" {
+					<div id="user-menu" class="dropdown">
+						<img src={ gravatarURL(vars.User.Email) } alt={ vars.User.Name + "image" } role="button"/>
+						<ul>
+							if vars.User.Type == UserTypeAdmin {
+								<li><a href="/api/settings">Settings</a></li>
+							}
+							<li><a href={ templ.SafeURL("/api/logout?rd=" + vars.URL) }>Logout</a></li>
+						</ul>
+					</div>
+				} else {
+					<a id="login" class="btn primary" href={ templ.SafeURL("/api/login?rd=" + vars.URL) }>Login</a>
+				}
+			}
+		</div>
+	</header>
+}

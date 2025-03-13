@@ -1,0 +1,74 @@
+package templates
+
+import (
+	"strconv"
+	"fmt"
+	"github.com/topi314/godrive/godrive/auth"
+)
+
+templ PermissionList(file int, filePath string, permissions []Permissions) {
+	<div class="permissions">
+		for i, perms := range permissions {
+			@PermissionEntry(file, i, perms)
+		}
+		@PermissionForm(file, len(permissions), filePath)
+	</div>
+}
+
+templ PermissionResponse(file int, i int, perms Permissions, filePath string) {
+	@PermissionEntry(file, i, perms)
+	@PermissionForm(file, i+1, filePath)
+}
+
+templ PermissionForm(file int, i int, filePath string) {
+	<div class="permission__form"
+		hx-target="this" hx-swap="outerHTML"
+		hx-error-target="find .permission__error" hx-error-swap="innerHTML"
+		hx-vals={ fmt.Sprintf(`{"file": "%d", "index": "%d"}`, file, i) }
+		hx-ext="new-permissions,accept-html"
+		hx-on:htmx:xhr:progress="window.stopBubble(event)"
+	>
+		<div class="permission__error"></div>
+		<div class="permission__content">
+			<select name={ fmt.Sprintf("object_type-%d", file) }>
+				<option value="0">User</option>
+				<option value="1">Group</option>
+				<option value="2">Everyone</option>
+			</select>
+			<input type="text" name={ fmt.Sprintf("object_name-%d", file) } placeholder="username or group"/>
+			<button hx-post={ filePath } class="btn primary">Add</button>
+		</div>
+	</div>
+}
+
+templ PermissionEntry(file int, i int, perms Permissions) {
+	<div class="permission">
+		<div class="permission__title">
+			<span class={ templ.KV("icon-user", perms.ObjectType == auth.ObjectTypeUser), templ.KV("icon-users", perms.ObjectType == auth.ObjectTypeGroup), templ.KV("icon-guest", perms.ObjectType == auth.ObjectTypeEveryone) }></span>
+			<span title={ perms.Object }>{ perms.ObjectName }</span>
+			<div class="icon-btn icon-trash" role="button" onclick="window.onRemovePermissions(event)"></div>
+		</div>
+		<input type="hidden" name={ fmt.Sprintf("permissions-%d-%d-object_type", file, i) } value={ strconv.Itoa(int(perms.ObjectType)) }/>
+		<input type="hidden" name={ fmt.Sprintf("permissions-%d-%d-object", file, i) } value={ perms.Object }/>
+
+		<div class="permission__content">
+			for perm, state := range perms.Map {
+				<span>{ perm }</span>
+				@ThreeWayToggle(fmt.Sprintf("permissions-%d-%d-%s", file, i, perm), state)
+			}
+		</div>
+	</div>
+}
+
+templ ThreeWayToggle(name string, state ToggleState) {
+	<div class="three-way-toggle">
+		<input type="radio" name={ name } id={ name + "-on" } value="1" checked?={ state == ToggleStateOn }/>
+		<label for={ name + "-on" } class="icon-ok"></label>
+
+		<input type="radio" name={ name } id={ name + "-unset" } value="0" checked?={ state == ToggleStateUnset }/>
+		<label for={ name + "-unset" } class="icon-minus"></label>
+
+		<input type="radio" name={ name } id={ name + "-off" } value="2" checked?={ state == ToggleStateOff }/>
+		<label for={ name + "-off" } class="icon-x"></label>
+	</div>
+}

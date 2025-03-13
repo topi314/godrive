@@ -1,0 +1,13 @@
+#add-api-token-form {
+	flex-direction: row;
+	justify-content: right;
+}
+
+#add-api-token-form > * {
+	align-content: center;
+}
+
+.api-token {
+	width: min(100%, 20rem);
+	cursor: auto;
+}

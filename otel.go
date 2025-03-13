@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -17,7 +19,6 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/semconv/v1.18.0"
 	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/exp/slog"
 )
 
 func resources(cfg godrive.OtelConfig) *resource.Resource {
@@ -80,7 +81,7 @@ func newMeter(cfg godrive.OtelConfig) (metric.Meter, error) {
 			Addr:    cfg.Metrics.ListenAddr,
 			Handler: promhttp.Handler(),
 		}
-		if listenErr := server.ListenAndServe(); listenErr != nil && listenErr != http.ErrServerClosed {
+		if listenErr := server.ListenAndServe(); listenErr != nil && !errors.Is(listenErr, http.ErrServerClosed) {
 			slog.Error("failed to listen metrics server", slog.Any("err", listenErr))
 		}
 	}()

@@ -1,34 +1,33 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"crypto/md5"
 	"embed"
+	"errors"
 	"flag"
-	"fmt"
-	"html/template"
-	"io"
-	"io/fs"
+	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
-	"reflect"
 	"strings"
 	"syscall"
 	"time"
 
-	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/dustin/go-humanize"
-	"github.com/topi314/godrive/godrive"
-	"go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/exp/slog"
-	"golang.org/x/oauth2"
-
+	"github.com/evanw/esbuild/pkg/api"
+	"github.com/mattn/go-colorable"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
+	"github.com/topi314/godrive/godrive"
+	"github.com/topi314/godrive/godrive/auth"
+	"github.com/topi314/godrive/godrive/database"
+	"github.com/topi314/godrive/godrive/storage"
+	"github.com/topi314/tint"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 )
+
+//go:generate go run github.com/a-h/templ/cmd/templ@latest generate
 
 // These variables are set via the -ldflags option in go build
 var (
@@ -41,11 +40,8 @@ var (
 )
 
 var (
-	//go:embed templates
-	Templates embed.FS
-
-	//go:embed assets
-	Assets embed.FS
+	//go:embed public
+	Public embed.FS
 
 	//go:embed sql/schema.sql
 	Schema string
@@ -118,103 +114,40 @@ func main() {
 		tracer = trace.NewNoopTracerProvider().Tracer(Namespace)
 	}
 
-	var auth *godrive.Auth
-	if cfg.Auth != nil {
-		provider, err := oidc.NewProvider(context.Background(), cfg.Auth.Issuer)
-		if err != nil {
-			slog.Error("Error while creating oidc provider", slog.Any("err", err))
-			os.Exit(-1)
-		}
-
-		auth = &godrive.Auth{
-			Provider: provider,
-			Verifier: provider.Verifier(&oidc.Config{
-				ClientID: cfg.Auth.ClientID,
-			}),
-			Config: &oauth2.Config{
-				ClientID:     cfg.Auth.ClientID,
-				ClientSecret: cfg.Auth.ClientSecret,
-				Endpoint:     provider.Endpoint(),
-				RedirectURL:  cfg.Auth.RedirectURL,
-				Scopes:       []string{oidc.ScopeOpenID, "groups", "email", "profile", oidc.ScopeOfflineAccess},
-			},
-			Sessions: map[string]*godrive.Session{},
-			States:   map[string]string{},
-		}
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	db, err := godrive.NewDB(ctx, cfg.Database, Schema)
+	db, err := database.New(ctx, cfg.Database, Schema)
 	if err != nil {
 		slog.Error("Error while connecting to database", slog.Any("err", err))
 		os.Exit(-1)
 	}
 	defer db.Close()
 
-	storage, err := godrive.NewStorage(context.Background(), cfg.Storage, tracer)
+	a, err := auth.New(cfg.Auth, db)
+	if err != nil {
+		slog.Error("Error while creating auth", slog.Any("err", err))
+		os.Exit(-1)
+	}
+
+	str, err := storage.New(context.Background(), cfg.Storage, tracer)
 	if err != nil {
 		slog.Error("Error while creating storage", slog.Any("err", err))
 		os.Exit(-1)
 	}
 
-	funcs := template.FuncMap{
-		"humanizeTime":   humanize.Time,
-		"humanizeIBytes": humanize.IBytes,
-		"isLast": func(slice any, index int) bool {
-			return reflect.ValueOf(slice).Len()-1 == index
-		},
-		"assemblePath": func(slice []string, index int) string {
-			return strings.Join(slice[:index+1], "/")
-		},
-		"gravatarURL": func(email string) string {
-			return fmt.Sprintf("https://www.gravatar.com/avatar/%x?s=%d&d=retro", md5.Sum([]byte(strings.ToLower(email))), 80)
-		},
-	}
-
-	var (
-		tmplFunc godrive.ExecuteTemplateFunc
-		jsFunc   godrive.WriterFunc
-		cssFunc  godrive.WriterFunc
-		assets   http.FileSystem
-	)
+	var assets http.FileSystem
 	if cfg.DevMode {
 		slog.Info("Running in dev mode")
-		tmplFunc = func(wr io.Writer, name string, data any) error {
-			tmpl := template.New("").Funcs(funcs)
-			tmpl = template.Must(tmpl.ParseGlob("templates/*"))
-			return tmpl.ExecuteTemplate(wr, name, data)
+		if err = bundleAssets(); err != nil {
+			slog.Error("Error while bundling assets", slog.Any("err", err))
+			os.Exit(-1)
 		}
-		jsFunc = writeDir(os.DirFS("assets"), "js/*")
-		cssFunc = writeDir(os.DirFS("assets"), "css/*")
-		assets = http.Dir(".")
+		assets = http.Dir("public")
 	} else {
-		tmpl := template.New("").Funcs(funcs)
-		tmpl = template.Must(tmpl.ParseFS(Templates, "templates/*"))
-		tmplFunc = tmpl.ExecuteTemplate
-
-		jsBuff := new(bytes.Buffer)
-		if err = writeDir(Assets, "assets/js/*")(jsBuff); err != nil {
-			slog.Error("Error while minifying js", slog.Any("err", err))
-		}
-
-		cssBuff := new(bytes.Buffer)
-		if err = writeDir(Assets, "assets/css/*")(cssBuff); err != nil {
-			slog.Error("Error while minifying css", slog.Any("err", err))
-		}
-
-		jsFunc = func(w io.Writer) error {
-			_, err = w.Write(jsBuff.Bytes())
-			return err
-		}
-		cssFunc = func(w io.Writer) error {
-			_, err = w.Write(cssBuff.Bytes())
-			return err
-		}
-		assets = http.FS(Assets)
+		assets = http.FS(Public)
 	}
 
-	s := godrive.NewServer(godrive.FormatBuildVersion(Version, Commit, buildTime), cfg, db, auth, storage, tracer, meter, assets, tmplFunc, jsFunc, cssFunc)
+	s := godrive.NewServer(godrive.FormatBuildVersion(Version, Commit, buildTime), cfg, db, a, str, tracer, meter, assets)
 	slog.Info("godrive listening", slog.String("listen_addr", cfg.ListenAddr))
 	go s.Start()
 	defer s.Close()
@@ -224,28 +157,91 @@ func main() {
 	<-si
 }
 
-func writeDir(fs fs.FS, pattern string) func(w io.Writer) error {
-	return func(w io.Writer) error {
-		fr, err := newFolderReader(fs, pattern)
-		if err != nil {
-			return err
+func bundleAssets() error {
+	res := api.Build(api.BuildOptions{
+		Bundle: true,
+		Loader: map[string]api.Loader{
+			".js":    api.LoaderJS,
+			".css":   api.LoaderCSS,
+			".png":   api.LoaderDataURL,
+			".svg":   api.LoaderDataURL,
+			".gif":   api.LoaderDataURL,
+			".jpg":   api.LoaderDataURL,
+			".ttf":   api.LoaderFile,
+			".woff":  api.LoaderFile,
+			".eot":   api.LoaderFile,
+			".woff2": api.LoaderFile,
+		},
+		Outdir:      "public",
+		Write:       true,
+		TreeShaking: api.TreeShakingFalse,
+		EntryPoints: []string{
+			"assets/css/main.css",
+			"assets/js/main.js",
+		},
+	})
+	if len(res.Errors) > 0 {
+		var err error
+		for _, e := range res.Errors {
+			err = errors.Join(err, errors.New(e.Text))
 		}
-		defer fr.Close()
-		_, err = io.Copy(w, fr)
 		return err
 	}
+	return nil
 }
 
+const (
+	ansiFaint         = "\033[2m"
+	ansiWhiteBold     = "\033[37;1m"
+	ansiYellowBold    = "\033[33;1m"
+	ansiCyanBold      = "\033[36;1m"
+	ansiCyanBoldFaint = "\033[36;1;2m"
+	ansiRedFaint      = "\033[31;2m"
+	ansiRedBold       = "\033[31;1m"
+
+	ansiRed     = "\033[31m"
+	ansiYellow  = "\033[33m"
+	ansiGreen   = "\033[32m"
+	ansiMagenta = "\033[35m"
+)
+
 func setupLogger(cfg godrive.LogConfig) {
-	opts := &slog.HandlerOptions{
-		AddSource: cfg.AddSource,
-		Level:     cfg.Level,
-	}
 	var handler slog.Handler
-	if cfg.Format == "json" {
-		handler = slog.NewJSONHandler(os.Stdout, opts)
-	} else {
-		handler = slog.NewTextHandler(os.Stdout, opts)
+	switch cfg.Format {
+	case "json":
+		handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			AddSource: cfg.AddSource,
+			Level:     cfg.Level,
+		})
+
+	case "text":
+		handler = tint.NewHandler(colorable.NewColorable(os.Stdout), &tint.Options{
+			AddSource: cfg.AddSource,
+			Level:     cfg.Level,
+			NoColor:   cfg.NoColor,
+			LevelColors: map[slog.Level]string{
+				slog.LevelDebug: ansiMagenta,
+				slog.LevelInfo:  ansiGreen,
+				slog.LevelWarn:  ansiYellow,
+				slog.LevelError: ansiRed,
+			},
+			Colors: map[tint.Kind]string{
+				tint.KindTime:            ansiYellowBold,
+				tint.KindSourceFile:      ansiCyanBold,
+				tint.KindSourceSeparator: ansiCyanBoldFaint,
+				tint.KindSourceLine:      ansiCyanBold,
+				tint.KindMessage:         ansiWhiteBold,
+				tint.KindKey:             ansiFaint,
+				tint.KindSeparator:       ansiFaint,
+				tint.KindValue:           ansiWhiteBold,
+				tint.KindErrorKey:        ansiRedFaint,
+				tint.KindErrorSeparator:  ansiFaint,
+				tint.KindErrorValue:      ansiRedBold,
+			},
+		})
+	default:
+		log.Printf("Unknown log format: %s", cfg.Format)
+		os.Exit(-1)
 	}
 	slog.SetDefault(slog.New(handler))
 }

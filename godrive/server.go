@@ -1,17 +1,19 @@
 package godrive
 
 import (
+	"errors"
 	"fmt"
 	"io"
-	"math/rand"
+	"log/slog"
 	"net/http"
 	"runtime"
-	"strings"
 	"time"
 
+	"github.com/topi314/godrive/godrive/auth"
+	"github.com/topi314/godrive/godrive/database"
+	"github.com/topi314/godrive/godrive/storage"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/exp/slog"
 )
 
 type (
@@ -19,7 +21,23 @@ type (
 	WriterFunc          func(w io.Writer) error
 )
 
-func NewServer(version string, cfg Config, db *DB, auth *Auth, storage Storage, tracer trace.Tracer, meter metric.Meter, assets http.FileSystem, tmpl ExecuteTemplateFunc, js WriterFunc, css WriterFunc) *Server {
+type (
+	ErrorResponse struct {
+		Message   string `json:"message"`
+		Status    int    `json:"status"`
+		Path      string `json:"path"`
+		RequestID string `json:"request_id"`
+	}
+
+	WarningResponse struct {
+		Message   string `json:"message"`
+		Status    int    `json:"status"`
+		Path      string `json:"path"`
+		RequestID string `json:"request_id"`
+	}
+)
+
+func NewServer(version string, cfg Config, db *database.DB, auth *auth.Auth, storage storage.Storage, tracer trace.Tracer, meter metric.Meter, assets http.FileSystem) *Server {
 	s := &Server{
 		version: version,
 		cfg:     cfg,
@@ -29,10 +47,6 @@ func NewServer(version string, cfg Config, db *DB, auth *Auth, storage Storage, 
 		tracer:  tracer,
 		meter:   meter,
 		assets:  assets,
-		tmpl:    tmpl,
-		js:      js,
-		css:     css,
-		rand:    rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 
 	s.server = &http.Server{
@@ -46,21 +60,17 @@ func NewServer(version string, cfg Config, db *DB, auth *Auth, storage Storage, 
 type Server struct {
 	version string
 	cfg     Config
-	db      *DB
+	db      *database.DB
 	server  *http.Server
-	auth    *Auth
-	storage Storage
+	auth    *auth.Auth
+	storage storage.Storage
 	tracer  trace.Tracer
 	meter   metric.Meter
 	assets  http.FileSystem
-	tmpl    ExecuteTemplateFunc
-	js      WriterFunc
-	css     WriterFunc
-	rand    *rand.Rand
 }
 
 func (s *Server) Start() {
-	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	if err := s.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("Error while listening", slog.Any("err", err))
 	}
 }
@@ -73,26 +83,6 @@ func (s *Server) Close() {
 	if err := s.db.Close(); err != nil {
 		slog.Error("Error while closing database", slog.Any("err", err))
 	}
-}
-
-func (s *Server) newID(length int) string {
-	b := make([]rune, length)
-	for i := range b {
-		b[i] = letters[s.rand.Intn(len(letters))]
-	}
-	return string(b)
-}
-
-func cacheControl(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/assets/") {
-			w.Header().Set("Cache-Control", "public, max-age=86400")
-			next.ServeHTTP(w, r)
-			return
-		}
-		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-		next.ServeHTTP(w, r)
-	})
 }
 
 func FormatBuildVersion(version string, commit string, buildTime time.Time) string {

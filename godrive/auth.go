@@ -1,136 +1,64 @@
 package godrive
 
 import (
-	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"path"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/topi314/godrive/godrive/auth"
+	"github.com/topi314/godrive/godrive/database"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/exp/slices"
-	"golang.org/x/exp/slog"
 	"golang.org/x/oauth2"
 )
 
-type authKey struct{}
-
-var UserInfoKey = authKey{}
-
-type Auth struct {
-	Verifier *oidc.IDTokenVerifier
-	Config   *oauth2.Config
-	Provider *oidc.Provider
-
-	// session id <-> id token
-	Sessions   map[string]*Session
-	SessionsMu sync.Mutex
-	// state <-> nonce
-	States   map[string]string
-	StatesMu sync.Mutex
-}
-
-type Session struct {
-	AccessToken  string
-	Expiry       time.Time
-	RefreshToken string
-	IDToken      string
-}
-
-type UserInfo struct {
-	oidc.UserInfo
-	Home     string   `json:"home"`
-	Audience []string `json:"aud"`
-	Groups   []string `json:"groups"`
-	Username string   `json:"preferred_username"`
-}
-
-func (s *Server) ToTemplateUser(info *UserInfo) TemplateUser {
-	return TemplateUser{
-		ID:      info.Subject,
-		Name:    info.Username,
-		Email:   info.Email,
-		Home:    info.Home,
-		IsAdmin: s.isAdmin(info),
-		IsUser:  s.isUser(info),
-		IsGuest: s.isGuest(info),
-	}
-}
-
-func (s *Server) hasFileAccess(info *UserInfo, file File) bool {
-	return info.Subject == file.UserID || s.isAdmin(info)
-}
-
-func (s *Server) hasAccess(info *UserInfo) bool {
-	if !s.cfg.Auth.Groups.Guest && s.isGuest(info) {
-		return false
-	}
-
-	return s.isAdmin(info) || s.isUser(info) || s.isViewer(info) || s.isGuest(info)
-}
-
-func (s *Server) isAdmin(info *UserInfo) bool {
-	return slices.Contains(info.Groups, s.cfg.Auth.Groups.Admin)
-}
-
-func (s *Server) isUser(info *UserInfo) bool {
-	return slices.Contains(info.Groups, s.cfg.Auth.Groups.User)
-}
-
-func (s *Server) isViewer(info *UserInfo) bool {
-	return slices.Contains(info.Groups, s.cfg.Auth.Groups.Viewer)
-}
-
-func (s *Server) isGuest(info *UserInfo) bool {
-	return slices.Contains(info.Groups, "guest")
-}
-
-const SessionCookieName = "X-Session-ID"
-
-func (s *Server) setSession(w http.ResponseWriter, sessionID string, session *Session) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     SessionCookieName,
-		Value:    sessionID,
-		Path:     "/",
-		Secure:   s.cfg.Auth.Secure,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
-
-	s.auth.SessionsMu.Lock()
-	defer s.auth.SessionsMu.Unlock()
-	s.auth.Sessions[sessionID] = session
-}
-
-func (s *Server) removeSession(w http.ResponseWriter, sessionID string) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     SessionCookieName,
-		Path:     "/",
-		MaxAge:   -1,
-		Secure:   s.cfg.Auth.Secure,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
-
-	s.auth.SessionsMu.Lock()
-	defer s.auth.SessionsMu.Unlock()
-	delete(s.auth.Sessions, sessionID)
-}
+const OauthLoginFlowMaxDuration = 230 * time.Minute
 
 func (s *Server) Auth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx, span := s.tracer.Start(r.Context(), "auth middleware")
 
+		// Handle Api Token auth
+		if authToken := r.Header.Get(auth.AuthorizationHeader); authToken != "" {
+			apiToken, err := s.db.GetApiToken(ctx, authToken)
+			if err != nil {
+				span.RecordError(err)
+				slog.ErrorContext(ctx, "failed to find api token: %w", slog.Any("err", err))
+				span.End()
+				s.error(w, r, err, http.StatusUnauthorized)
+				return
+			}
+			var info auth.UserInfo
+			user, err := s.db.GetUser(ctx, apiToken.UserID)
+			if err != nil {
+				span.RecordError(err)
+				slog.ErrorContext(ctx, "failed to get user by name: %w", slog.Any("err", err))
+				span.End()
+				s.error(w, r, err, http.StatusInternalServerError)
+				return
+			}
+			info.Home = user.Home
+			info.Subject = user.ID
+			info.Username = user.Username
+			info.Groups = user.Groups
+			info.Email = user.Email
+
+			span.End()
+			next.ServeHTTP(w, auth.SetUserInfo(r, &info))
+			return
+		}
+
+		// Handle normal cookie auth
 		var sessionID string
-		if cookie, err := r.Cookie(SessionCookieName); err == nil {
+		if cookie, err := r.Cookie(auth.SessionCookieName); err == nil {
 			sessionID = cookie.Value
-			span.SetAttributes(attribute.String("sessionID", sessionID))
+			span.SetAttributes(attribute.String("session_id", sessionID))
 		}
 
 		if sessionID == "" {
@@ -139,28 +67,23 @@ func (s *Server) Auth(next http.Handler) http.Handler {
 			return
 		}
 
-		span.AddEvent("locking sessions map")
-		s.auth.SessionsMu.Lock()
-		span.AddEvent("locked sessions map")
-		session, ok := s.auth.Sessions[sessionID]
-		s.auth.SessionsMu.Unlock()
-		if !ok {
-			span.AddEvent("session not found", trace.WithAttributes(attribute.String("sessionID", sessionID)))
-			slog.Debug("session not found", slog.Any("sessionID", sessionID))
-			s.removeSession(w, sessionID)
-			span.End()
-			next.ServeHTTP(w, r.WithContext(ctx))
+		session, err := s.db.GetSession(ctx, sessionID)
+		if err != nil {
+			span.RecordError(err)
+			slog.ErrorContext(ctx, "failed to get session", slog.Any("err", err))
+			_ = s.auth.RemoveSession(ctx, w, sessionID)
+			next.ServeHTTP(w, r)
 			return
 		}
 		span.AddEvent("session found", trace.WithAttributes(
-			attribute.String("sessionID", sessionID),
-			attribute.String("accessToken", session.AccessToken),
+			attribute.String("session_id", sessionID),
+			attribute.String("access_token", session.AccessToken),
 			attribute.Stringer("expiry", session.Expiry),
-			attribute.String("refreshToken", session.RefreshToken),
-			attribute.String("idToken", session.IDToken),
+			attribute.String("refresh_token", session.RefreshToken),
+			attribute.String("id_token", session.IDToken),
 		))
 
-		tokenSource := s.auth.Config.TokenSource(ctx, &oauth2.Token{
+		tokenSource := s.auth.Config().TokenSource(ctx, &oauth2.Token{
 			AccessToken:  session.AccessToken,
 			TokenType:    "bearer",
 			RefreshToken: session.RefreshToken,
@@ -170,8 +93,8 @@ func (s *Server) Auth(next http.Handler) http.Handler {
 		token, err := tokenSource.Token()
 		if err != nil {
 			span.RecordError(err)
-			slog.Error("failed to get token", slog.Any("err", err))
-			s.removeSession(w, sessionID)
+			slog.ErrorContext(ctx, "failed to get token", slog.Any("err", err))
+			_ = s.auth.RemoveSession(ctx, w, sessionID)
 			span.End()
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
@@ -183,29 +106,29 @@ func (s *Server) Auth(next http.Handler) http.Handler {
 			session.RefreshToken = token.RefreshToken
 			session.IDToken = token.Extra("id_token").(string)
 			span.AddEvent("updating session", trace.WithAttributes(
-				attribute.String("accessToken", session.AccessToken),
+				attribute.String("access_token", session.AccessToken),
 				attribute.Stringer("expiry", session.Expiry),
-				attribute.String("refreshToken", session.RefreshToken),
-				attribute.String("idToken", session.IDToken),
+				attribute.String("refresh_token", session.RefreshToken),
+				attribute.String("id_token", session.IDToken),
 			))
 		}
 
-		idToken, err := s.auth.Verifier.Verify(ctx, session.IDToken)
+		idToken, err := s.auth.Verifier().Verify(ctx, session.IDToken)
 		if err != nil {
 			span.RecordError(err)
-			slog.Error("failed to verify ID Token: %w", slog.Any("err", err), slog.Any("rawIDToken", session.IDToken))
-			s.removeSession(w, sessionID)
+			slog.ErrorContext(ctx, "failed to verify ID Token: %w", slog.Any("err", err), slog.Any("rawIDToken", session.IDToken))
+			_ = s.auth.RemoveSession(ctx, w, sessionID)
 			span.End()
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
-		span.AddEvent("ID Token verified", trace.WithAttributes(attribute.String("idToken", session.IDToken)))
+		span.AddEvent("ID Token verified", trace.WithAttributes(attribute.String("id_token", session.IDToken)))
 
-		var info UserInfo
+		var info auth.UserInfo
 		if err = idToken.Claims(&info); err != nil {
 			span.RecordError(err)
-			slog.Error("failed to parse claims: %w", slog.Any("err", err))
-			s.removeSession(w, sessionID)
+			slog.ErrorContext(ctx, "failed to parse claims: %w", slog.Any("err", err))
+			_ = s.auth.RemoveSession(ctx, w, sessionID)
 			span.End()
 			s.error(w, r, err, http.StatusInternalServerError)
 			return
@@ -214,8 +137,7 @@ func (s *Server) Auth(next http.Handler) http.Handler {
 			attribute.String("subject", info.Subject),
 			attribute.String("profile", info.Profile),
 			attribute.String("email", info.Email),
-			attribute.String("emailVerified", fmt.Sprintf("%t", info.EmailVerified)),
-			attribute.String("audience", strings.Join(info.Audience, ",")),
+			attribute.String("email_verified", fmt.Sprintf("%t", info.EmailVerified)),
 			attribute.String("groups", strings.Join(info.Groups, ",")),
 			attribute.String("username", info.Username),
 		))
@@ -223,7 +145,7 @@ func (s *Server) Auth(next http.Handler) http.Handler {
 		user, err := s.db.GetUserByName(ctx, info.Username)
 		if err != nil {
 			span.RecordError(err)
-			slog.Error("failed to get user by name: %w", slog.Any("err", err))
+			slog.ErrorContext(ctx, "failed to get user by name: %w", slog.Any("err", err))
 			span.End()
 			s.error(w, r, err, http.StatusInternalServerError)
 			return
@@ -231,80 +153,90 @@ func (s *Server) Auth(next http.Handler) http.Handler {
 		info.Home = user.Home
 
 		span.End()
-		next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, UserInfoKey, &info)))
+		next.ServeHTTP(w, auth.SetUserInfo(r, &info))
 	})
 }
 
-type AuthAction string
-
-const (
-	AuthActionDeny  AuthAction = "deny"
-	AuthActionAllow AuthAction = "allow"
-	AuthActionLogin AuthAction = "login"
-)
-
-func (s *Server) CheckAuth(allowedFunc func(r *http.Request, info *UserInfo) AuthAction) func(next http.Handler) http.Handler {
+func (s *Server) CheckAuth(allowedFunc func(r *http.Request, info *auth.UserInfo) auth.Action) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			switch allowedFunc(r, GetUserInfo(r)) {
-			case AuthActionDeny:
+			switch allowedFunc(r, auth.GetUserInfo(r)) {
+			case auth.ActionDeny:
 				s.error(w, r, errors.New("not authorized"), http.StatusForbidden)
 				return
 
-			case AuthActionLogin:
-				http.Redirect(w, r, "/login", http.StatusFound)
+			case auth.ActionLogin:
+				http.Redirect(w, r, "/api/login", http.StatusFound)
 			}
 			next.ServeHTTP(w, r)
 		})
 	}
 }
 
-func GetUserInfo(r *http.Request) *UserInfo {
-	userInfo := r.Context().Value(UserInfoKey)
-	if userInfo == nil {
-		return &UserInfo{
-			UserInfo: oidc.UserInfo{
-				Subject: "guest",
-				Email:   "guest@localhost",
-			},
-			Audience: []string{"godrive"},
-			Groups:   []string{"guest"},
-			Username: "guest",
-		}
-	}
-	return userInfo.(*UserInfo)
-}
-
 func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
-	state := s.newID(16)
-	nonce := s.newID(16)
-	s.auth.States[state] = nonce
-	http.Redirect(w, r, s.auth.Config.AuthCodeURL(state, oidc.Nonce(nonce)), http.StatusFound)
+	redirect := r.URL.Query().Get("rd")
+	if redirect == "" { // Makes sure to not redirect to /api
+		redirect = "/"
+	}
+	state, loginState := s.auth.NewState(redirect)
+
+	scopes := strings.Join(s.auth.Config().Scopes, " ")
+	opts := []oauth2.AuthCodeOption{oidc.Nonce(loginState.Nonce), oauth2.SetAuthURLParam("scope", scopes)}
+	if s.cfg.Auth.EnablePKCE {
+		opts = append(opts, oauth2.S256ChallengeOption(loginState.Verifier))
+	}
+	url := s.auth.Config().AuthCodeURL(state, opts...)
+
+	expiration := time.Now().Add(OauthLoginFlowMaxDuration)
+	addOauthCookie(w, state, expiration)
+	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
 func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 	sessionID, err := r.Cookie("X-Session-ID")
 	if err == nil {
-		s.removeSession(w, sessionID.Value)
+		_ = s.auth.RemoveSession(r.Context(), w, sessionID.Value)
 	}
-	http.Redirect(w, r, "/", http.StatusFound)
+	logoutURL := s.cfg.Auth.LogoutURL
+	if redirectURL := r.URL.Query().Get("rd"); redirectURL != "" {
+		logoutURL += "?rd=" + redirectURL
+	}
+	http.Redirect(w, r, logoutURL, http.StatusFound)
 }
 
 func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
 	ctx, span := s.tracer.Start(r.Context(), "callback")
 	defer span.End()
 
+	oauthState, _ := r.Cookie("oauthstate")
 	state := r.URL.Query().Get("state")
-	nonce, ok := s.auth.States[state]
+	if oauthState == nil || state != oauthState.Value {
+		span.SetStatus(codes.Error, "state mismatch")
+		attrs := []attribute.KeyValue{attribute.String("state", state)}
+		if oauthState != nil {
+			attrs = append(attrs, attribute.String("cookie-state", oauthState.Value))
+		}
+		span.AddEvent("state mismatch", trace.WithAttributes(attrs...))
+		s.error(w, r, errors.New("cookie state and query param state mismatch"), http.StatusBadRequest)
+		return
+	}
+
+	lState, ok := s.auth.GetState(state)
 	if !ok {
-		span.SetStatus(codes.Error, "invalid state")
-		span.AddEvent("invalid state", trace.WithAttributes(attribute.String("state", state)))
-		s.error(w, r, errors.New("invalid state"), http.StatusBadRequest)
+		span.SetStatus(codes.Error, "unknown oauth state")
+		span.AddEvent("unknown oauth state", trace.WithAttributes(attribute.String("state", state)))
+		s.error(w, r, errors.New("unknown oauth state"), http.StatusBadRequest)
 		return
 	}
 
 	code := r.URL.Query().Get("code")
-	token, err := s.auth.Config.Exchange(ctx, code)
+
+	var opts []oauth2.AuthCodeOption
+	if s.cfg.Auth.EnablePKCE {
+		opts = append(opts, oauth2.VerifierOption(lState.Verifier))
+	}
+
+	token, err := s.auth.Config().Exchange(ctx, code, opts...)
 	if err != nil {
 		span.SetStatus(codes.Error, "failed to exchange code")
 		span.RecordError(err)
@@ -312,9 +244,9 @@ func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	span.AddEvent("token exchanged", trace.WithAttributes(
-		attribute.String("accessToken", token.AccessToken),
+		attribute.String("access_token", token.AccessToken),
 		attribute.Stringer("expiry", token.Expiry),
-		attribute.String("refreshToken", token.RefreshToken),
+		attribute.String("refresh_token", token.RefreshToken),
 	))
 
 	rawIDToken, ok := token.Extra("id_token").(string)
@@ -324,7 +256,7 @@ func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
 		s.prettyError(w, r, errors.New("no id_token in token response"), http.StatusInternalServerError)
 		return
 	}
-	idToken, err := s.auth.Verifier.Verify(ctx, rawIDToken)
+	idToken, err := s.auth.Verifier().Verify(ctx, rawIDToken)
 	if err != nil {
 		span.SetStatus(codes.Error, "failed to verify ID Token")
 		span.RecordError(err)
@@ -332,14 +264,14 @@ func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if idToken.Nonce != nonce {
+	if idToken.Nonce != lState.Nonce {
 		span.SetStatus(codes.Error, "invalid nonce")
 		span.AddEvent("invalid nonce", trace.WithAttributes(attribute.String("nonce", idToken.Nonce)))
 		s.prettyError(w, r, errors.New("invalid nonce"), http.StatusBadRequest)
 		return
 	}
 
-	var userInfo UserInfo
+	var userInfo auth.UserInfo
 	if err = idToken.Claims(&userInfo); err != nil {
 		span.SetStatus(codes.Error, "failed to parse claims")
 		span.RecordError(err)
@@ -347,25 +279,40 @@ func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !s.hasAccess(&userInfo) {
+	if !s.auth.HasAccess(&userInfo) {
 		s.prettyError(w, r, errors.New("not authorized"), http.StatusForbidden)
 		return
 	}
 
-	if err = s.db.UpsertUser(ctx, idToken.Subject, userInfo.Username, userInfo.Email, path.Join(s.cfg.Auth.DefaultHome, userInfo.Username)); err != nil {
+	if err = s.db.UpsertUser(ctx, idToken.Subject, userInfo.Username, userInfo.Groups, userInfo.Email, path.Join(s.cfg.Auth.DefaultHome, userInfo.Username)); err != nil {
 		span.SetStatus(codes.Error, "failed to upsert user")
 		span.RecordError(err)
 		s.prettyError(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
-	sessionID := s.newID(32)
-	s.setSession(w, sessionID, &Session{
+	if err = s.auth.NewSession(ctx, w, database.Session{
 		AccessToken:  token.AccessToken,
 		RefreshToken: token.RefreshToken,
 		Expiry:       token.Expiry,
 		IDToken:      rawIDToken,
-	})
+	}); err != nil {
+		span.SetStatus(codes.Error, "failed to set session")
+	}
 
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, lState.RedirectURL, http.StatusTemporaryRedirect)
+}
+
+func addOauthCookie(w http.ResponseWriter, state string, expiration time.Time) {
+	cookie := http.Cookie{
+		Name:     "oauthstate",
+		Value:    state,
+		Expires:  expiration,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   false, // Can use via http reqs
+		HttpOnly: true,  // Can't be accessed by JS
+		Path:     "/api/callback",
+	}
+
+	http.SetCookie(w, &cookie)
 }
