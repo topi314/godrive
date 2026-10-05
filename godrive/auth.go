@@ -2,22 +2,23 @@ package godrive
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
-	"path"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/exp/slices"
-	"golang.org/x/exp/slog"
+	"github.com/topi314/godrive/godrive/db"
 	"golang.org/x/oauth2"
 )
+
+const SessionCookieName = "X-Session-ID"
 
 type authKey struct{}
 
@@ -28,10 +29,6 @@ type Auth struct {
 	Config   *oauth2.Config
 	Provider *oidc.Provider
 
-	// session id <-> id token
-	Sessions   map[string]*Session
-	SessionsMu sync.Mutex
-	// state <-> nonce
 	States   map[string]string
 	StatesMu sync.Mutex
 }
@@ -41,331 +38,296 @@ type Session struct {
 	Expiry       time.Time
 	RefreshToken string
 	IDToken      string
+	UserID       string
 }
 
 type UserInfo struct {
-	oidc.UserInfo
+	Subject  string   `json:"sub"`
+	Email    string   `json:"email"`
 	Home     string   `json:"home"`
-	Audience []string `json:"aud"`
 	Groups   []string `json:"groups"`
 	Username string   `json:"preferred_username"`
 }
 
-func (s *Server) ToTemplateUser(info *UserInfo) TemplateUser {
-	return TemplateUser{
-		ID:      info.Subject,
-		Name:    info.Username,
-		Email:   info.Email,
-		Home:    info.Home,
-		IsAdmin: s.isAdmin(info),
-		IsUser:  s.isUser(info),
-		IsGuest: s.isGuest(info),
-	}
-}
-
-func (s *Server) hasFileAccess(info *UserInfo, file File) bool {
-	return info.Subject == file.UserID || s.isAdmin(info)
-}
-
-func (s *Server) hasAccess(info *UserInfo) bool {
-	if !s.cfg.Auth.Groups.Guest && s.isGuest(info) {
-		return false
-	}
-
-	return s.isAdmin(info) || s.isUser(info) || s.isViewer(info) || s.isGuest(info)
+func GetUserInfo(r *http.Request) *UserInfo {
+	v, _ := r.Context().Value(UserInfoKey).(*UserInfo)
+	return v
 }
 
 func (s *Server) isAdmin(info *UserInfo) bool {
-	return slices.Contains(info.Groups, s.cfg.Auth.Groups.Admin)
+	return info != nil && s.cfg.Auth != nil && containsString(info.Groups, s.cfg.Auth.Groups.Admin)
 }
 
 func (s *Server) isUser(info *UserInfo) bool {
-	return slices.Contains(info.Groups, s.cfg.Auth.Groups.User)
+	return info != nil && s.cfg.Auth != nil && containsString(info.Groups, s.cfg.Auth.Groups.User)
 }
 
 func (s *Server) isViewer(info *UserInfo) bool {
-	return slices.Contains(info.Groups, s.cfg.Auth.Groups.Viewer)
+	return info != nil && s.cfg.Auth != nil && containsString(info.Groups, s.cfg.Auth.Groups.Viewer)
 }
 
 func (s *Server) isGuest(info *UserInfo) bool {
-	return slices.Contains(info.Groups, "guest")
+	return info != nil && containsString(info.Groups, "guest")
 }
 
-const SessionCookieName = "X-Session-ID"
+func (s *Server) hasAccess(info *UserInfo) bool {
+	if s.cfg.Auth == nil {
+		return true
+	}
+	if !s.cfg.Auth.Groups.Guest && s.isGuest(info) {
+		return false
+	}
+	return s.isAdmin(info) || s.isUser(info) || s.isViewer(info) || s.isGuest(info)
+}
 
-func (s *Server) setSession(w http.ResponseWriter, sessionID string, session *Session) {
+func (s *Server) AuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		info := s.resolveUser(r)
+		if info != nil {
+			r = r.WithContext(context.WithValue(r.Context(), UserInfoKey, info))
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) resolveUser(r *http.Request) *UserInfo {
+	if auth := r.Header.Get("Authorization"); strings.HasPrefix(strings.ToLower(auth), "bearer ") {
+		token := strings.TrimSpace(auth[7:])
+		hash := hashToken(token)
+		row, err := s.store.Q.GetAPITokenByHash(r.Context(), hash)
+		if err == nil {
+			user, err := s.store.Q.GetUser(r.Context(), row.UserID)
+			if err == nil {
+				return userToInfo(user)
+			}
+		}
+	}
+
+	c, err := r.Cookie(SessionCookieName)
+	if err != nil || c.Value == "" {
+		return nil
+	}
+	sess, err := s.store.Q.GetSession(r.Context(), c.Value)
+	if err != nil {
+		return nil
+	}
+	if time.Now().After(sess.Expiry) {
+		_ = s.store.Q.DeleteSession(r.Context(), c.Value)
+		return nil
+	}
+	user, err := s.store.Q.GetUser(r.Context(), sess.UserID)
+	if err != nil {
+		return nil
+	}
+	return userToInfo(user)
+}
+
+func userToInfo(u db.User) *UserInfo {
+	var groups []string
+	_ = json.Unmarshal([]byte(u.Groups), &groups)
+	return &UserInfo{
+		Subject:  u.ID,
+		Email:    u.Email,
+		Home:     u.Home,
+		Groups:   groups,
+		Username: u.Username,
+	}
+}
+
+func (s *Server) RequireAccess(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.cfg.Auth == nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+		info := GetUserInfo(r)
+		if info == nil && s.cfg.Auth.Groups.Guest {
+			info = &UserInfo{Subject: "guest", Username: "guest", Groups: []string{"guest"}, Home: "/"}
+			r = r.WithContext(context.WithValue(r.Context(), UserInfoKey, info))
+		}
+		if info == nil || !s.hasAccess(info) {
+			if r.Method == http.MethodGet && wantsHTML(r) && !isBot(r) {
+				http.Redirect(w, r, "/api/login?rd="+r.URL.RequestURI(), http.StatusFound)
+				return
+			}
+			s.writeError(w, r, errors.New("unauthorized"), http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
+	if s.auth == nil {
+		s.writeError(w, r, errors.New("auth not configured"), http.StatusNotImplemented)
+		return
+	}
+	state := randomID(24)
+	nonce := randomID(24)
+	s.auth.StatesMu.Lock()
+	s.auth.States[state] = nonce
+	s.auth.StatesMu.Unlock()
+
+	rd := r.URL.Query().Get("rd")
+	if rd != "" {
+		http.SetCookie(w, &http.Cookie{Name: "godrive_rd", Value: rd, Path: "/", MaxAge: 600, HttpOnly: true})
+	}
+	url := s.auth.Config.AuthCodeURL(state, oidc.Nonce(nonce), oauth2.AccessTypeOffline)
+	http.Redirect(w, r, url, http.StatusFound)
+}
+
+func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
+	if s.auth == nil {
+		s.writeError(w, r, errors.New("auth not configured"), http.StatusNotImplemented)
+		return
+	}
+	state := r.URL.Query().Get("state")
+	s.auth.StatesMu.Lock()
+	nonce, ok := s.auth.States[state]
+	delete(s.auth.States, state)
+	s.auth.StatesMu.Unlock()
+	if !ok {
+		s.writeError(w, r, errors.New("invalid state"), http.StatusBadRequest)
+		return
+	}
+
+	oauth2Token, err := s.auth.Config.Exchange(r.Context(), r.URL.Query().Get("code"))
+	if err != nil {
+		s.writeError(w, r, err, http.StatusBadRequest)
+		return
+	}
+	rawIDToken, ok := oauth2Token.Extra("id_token").(string)
+	if !ok {
+		s.writeError(w, r, errors.New("missing id_token"), http.StatusBadRequest)
+		return
+	}
+	idToken, err := s.auth.Verifier.Verify(r.Context(), rawIDToken)
+	if err != nil {
+		s.writeError(w, r, err, http.StatusBadRequest)
+		return
+	}
+	if idToken.Nonce != nonce {
+		s.writeError(w, r, errors.New("invalid nonce"), http.StatusBadRequest)
+		return
+	}
+
+	var claims struct {
+		Email             string   `json:"email"`
+		PreferredUsername string   `json:"preferred_username"`
+		Groups            []string `json:"groups"`
+	}
+	if err := idToken.Claims(&claims); err != nil {
+		s.writeError(w, r, err, http.StatusBadRequest)
+		return
+	}
+
+	home := "/"
+	if s.cfg.Auth.DefaultHome != "" {
+		home = s.cfg.Auth.DefaultHome
+	}
+	groupsJSON, _ := json.Marshal(claims.Groups)
+	now := time.Now().UTC()
+	user, err := s.store.Q.UpsertUser(r.Context(), db.UpsertUserParams{
+		ID:        idToken.Subject,
+		Username:  claims.PreferredUsername,
+		Email:     claims.Email,
+		Home:      home,
+		Groups:    string(groupsJSON),
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		s.writeError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+
+	info := userToInfo(user)
+	if !s.hasAccess(info) {
+		s.writeError(w, r, errors.New("access denied"), http.StatusForbidden)
+		return
+	}
+
+	sessionID := randomID(32)
+	expiry := oauth2Token.Expiry
+	if expiry.IsZero() {
+		expiry = now.Add(24 * time.Hour)
+	}
+	_, err = s.store.Q.UpsertSession(r.Context(), db.UpsertSessionParams{
+		ID:           sessionID,
+		UserID:       user.ID,
+		AccessToken:  oauth2Token.AccessToken,
+		Expiry:       expiry,
+		RefreshToken: oauth2Token.RefreshToken,
+		IDToken:      rawIDToken,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	})
+	if err != nil {
+		s.writeError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     SessionCookieName,
 		Value:    sessionID,
 		Path:     "/",
-		Secure:   s.cfg.Auth.Secure,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-	})
-
-	s.auth.SessionsMu.Lock()
-	defer s.auth.SessionsMu.Unlock()
-	s.auth.Sessions[sessionID] = session
-}
-
-func (s *Server) removeSession(w http.ResponseWriter, sessionID string) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     SessionCookieName,
-		Path:     "/",
-		MaxAge:   -1,
 		Secure:   s.cfg.Auth.Secure,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
+		Expires:  expiry,
 	})
 
-	s.auth.SessionsMu.Lock()
-	defer s.auth.SessionsMu.Unlock()
-	delete(s.auth.Sessions, sessionID)
-}
-
-func (s *Server) Auth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx, span := s.tracer.Start(r.Context(), "auth middleware")
-
-		var sessionID string
-		if cookie, err := r.Cookie(SessionCookieName); err == nil {
-			sessionID = cookie.Value
-			span.SetAttributes(attribute.String("sessionID", sessionID))
-		}
-
-		if sessionID == "" {
-			span.End()
-			next.ServeHTTP(w, r.WithContext(ctx))
-			return
-		}
-
-		span.AddEvent("locking sessions map")
-		s.auth.SessionsMu.Lock()
-		span.AddEvent("locked sessions map")
-		session, ok := s.auth.Sessions[sessionID]
-		s.auth.SessionsMu.Unlock()
-		if !ok {
-			span.AddEvent("session not found", trace.WithAttributes(attribute.String("sessionID", sessionID)))
-			slog.Debug("session not found", slog.Any("sessionID", sessionID))
-			s.removeSession(w, sessionID)
-			span.End()
-			next.ServeHTTP(w, r.WithContext(ctx))
-			return
-		}
-		span.AddEvent("session found", trace.WithAttributes(
-			attribute.String("sessionID", sessionID),
-			attribute.String("accessToken", session.AccessToken),
-			attribute.Stringer("expiry", session.Expiry),
-			attribute.String("refreshToken", session.RefreshToken),
-			attribute.String("idToken", session.IDToken),
-		))
-
-		tokenSource := s.auth.Config.TokenSource(ctx, &oauth2.Token{
-			AccessToken:  session.AccessToken,
-			TokenType:    "bearer",
-			RefreshToken: session.RefreshToken,
-			Expiry:       session.Expiry,
-		})
-
-		token, err := tokenSource.Token()
-		if err != nil {
-			span.RecordError(err)
-			slog.Error("failed to get token", slog.Any("err", err))
-			s.removeSession(w, sessionID)
-			span.End()
-			next.ServeHTTP(w, r.WithContext(ctx))
-			return
-		}
-
-		if token.AccessToken != session.AccessToken {
-			session.AccessToken = token.AccessToken
-			session.Expiry = token.Expiry
-			session.RefreshToken = token.RefreshToken
-			session.IDToken = token.Extra("id_token").(string)
-			span.AddEvent("updating session", trace.WithAttributes(
-				attribute.String("accessToken", session.AccessToken),
-				attribute.Stringer("expiry", session.Expiry),
-				attribute.String("refreshToken", session.RefreshToken),
-				attribute.String("idToken", session.IDToken),
-			))
-		}
-
-		idToken, err := s.auth.Verifier.Verify(ctx, session.IDToken)
-		if err != nil {
-			span.RecordError(err)
-			slog.Error("failed to verify ID Token: %w", slog.Any("err", err), slog.Any("rawIDToken", session.IDToken))
-			s.removeSession(w, sessionID)
-			span.End()
-			next.ServeHTTP(w, r.WithContext(ctx))
-			return
-		}
-		span.AddEvent("ID Token verified", trace.WithAttributes(attribute.String("idToken", session.IDToken)))
-
-		var info UserInfo
-		if err = idToken.Claims(&info); err != nil {
-			span.RecordError(err)
-			slog.Error("failed to parse claims: %w", slog.Any("err", err))
-			s.removeSession(w, sessionID)
-			span.End()
-			s.error(w, r, err, http.StatusInternalServerError)
-			return
-		}
-		span.AddEvent("claims parsed", trace.WithAttributes(
-			attribute.String("subject", info.Subject),
-			attribute.String("profile", info.Profile),
-			attribute.String("email", info.Email),
-			attribute.String("emailVerified", fmt.Sprintf("%t", info.EmailVerified)),
-			attribute.String("audience", strings.Join(info.Audience, ",")),
-			attribute.String("groups", strings.Join(info.Groups, ",")),
-			attribute.String("username", info.Username),
-		))
-
-		user, err := s.db.GetUserByName(ctx, info.Username)
-		if err != nil {
-			span.RecordError(err)
-			slog.Error("failed to get user by name: %w", slog.Any("err", err))
-			span.End()
-			s.error(w, r, err, http.StatusInternalServerError)
-			return
-		}
-		info.Home = user.Home
-
-		span.End()
-		next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, UserInfoKey, &info)))
-	})
-}
-
-type AuthAction string
-
-const (
-	AuthActionDeny  AuthAction = "deny"
-	AuthActionAllow AuthAction = "allow"
-	AuthActionLogin AuthAction = "login"
-)
-
-func (s *Server) CheckAuth(allowedFunc func(r *http.Request, info *UserInfo) AuthAction) func(next http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			switch allowedFunc(r, GetUserInfo(r)) {
-			case AuthActionDeny:
-				s.error(w, r, errors.New("not authorized"), http.StatusForbidden)
-				return
-
-			case AuthActionLogin:
-				http.Redirect(w, r, "/login", http.StatusFound)
-			}
-			next.ServeHTTP(w, r)
-		})
+	rd := "/"
+	if c, err := r.Cookie("godrive_rd"); err == nil && c.Value != "" {
+		rd = c.Value
+		http.SetCookie(w, &http.Cookie{Name: "godrive_rd", Value: "", Path: "/", MaxAge: -1})
 	}
-}
-
-func GetUserInfo(r *http.Request) *UserInfo {
-	userInfo := r.Context().Value(UserInfoKey)
-	if userInfo == nil {
-		return &UserInfo{
-			UserInfo: oidc.UserInfo{
-				Subject: "guest",
-				Email:   "guest@localhost",
-			},
-			Audience: []string{"godrive"},
-			Groups:   []string{"guest"},
-			Username: "guest",
-		}
-	}
-	return userInfo.(*UserInfo)
-}
-
-func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
-	state := s.newID(16)
-	nonce := s.newID(16)
-	s.auth.States[state] = nonce
-	http.Redirect(w, r, s.auth.Config.AuthCodeURL(state, oidc.Nonce(nonce)), http.StatusFound)
+	http.Redirect(w, r, rd, http.StatusFound)
 }
 
 func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
-	sessionID, err := r.Cookie("X-Session-ID")
-	if err == nil {
-		s.removeSession(w, sessionID.Value)
+	if c, err := r.Cookie(SessionCookieName); err == nil {
+		_ = s.store.Q.DeleteSession(r.Context(), c.Value)
 	}
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.SetCookie(w, &http.Cookie{Name: SessionCookieName, Value: "", Path: "/", MaxAge: -1})
+	if r.Method == http.MethodGet {
+		http.Redirect(w, r, "/", http.StatusFound)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
-	ctx, span := s.tracer.Start(r.Context(), "callback")
-	defer span.End()
-
-	state := r.URL.Query().Get("state")
-	nonce, ok := s.auth.States[state]
-	if !ok {
-		span.SetStatus(codes.Error, "invalid state")
-		span.AddEvent("invalid state", trace.WithAttributes(attribute.String("state", state)))
-		s.error(w, r, errors.New("invalid state"), http.StatusBadRequest)
+func (s *Server) Me(w http.ResponseWriter, r *http.Request) {
+	info := GetUserInfo(r)
+	if info == nil {
+		s.writeJSON(w, map[string]any{"authenticated": false}, http.StatusOK)
 		return
 	}
+	s.writeJSON(w, map[string]any{
+		"authenticated": true,
+		"id":            info.Subject,
+		"username":      info.Username,
+		"email":         info.Email,
+		"home":          info.Home,
+		"groups":        info.Groups,
+		"is_admin":      s.isAdmin(info),
+		"is_user":       s.isUser(info),
+		"is_viewer":     s.isViewer(info),
+		"is_guest":      s.isGuest(info),
+	}, http.StatusOK)
+}
 
-	code := r.URL.Query().Get("code")
-	token, err := s.auth.Config.Exchange(ctx, code)
-	if err != nil {
-		span.SetStatus(codes.Error, "failed to exchange code")
-		span.RecordError(err)
-		s.prettyError(w, r, err, http.StatusInternalServerError)
-		return
-	}
-	span.AddEvent("token exchanged", trace.WithAttributes(
-		attribute.String("accessToken", token.AccessToken),
-		attribute.Stringer("expiry", token.Expiry),
-		attribute.String("refreshToken", token.RefreshToken),
-	))
+func randomID(n int) string {
+	b := make([]byte, n)
+	_, _ = rand.Read(b)
+	return base64.RawURLEncoding.EncodeToString(b)
+}
 
-	rawIDToken, ok := token.Extra("id_token").(string)
-	if !ok {
-		span.SetStatus(codes.Error, "no id_token in token response")
-		span.AddEvent("no id_token in token response")
-		s.prettyError(w, r, errors.New("no id_token in token response"), http.StatusInternalServerError)
-		return
-	}
-	idToken, err := s.auth.Verifier.Verify(ctx, rawIDToken)
-	if err != nil {
-		span.SetStatus(codes.Error, "failed to verify ID Token")
-		span.RecordError(err)
-		s.prettyError(w, r, fmt.Errorf("failed to verify ID Token: %w", err), http.StatusInternalServerError)
-		return
-	}
+func hashToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
 
-	if idToken.Nonce != nonce {
-		span.SetStatus(codes.Error, "invalid nonce")
-		span.AddEvent("invalid nonce", trace.WithAttributes(attribute.String("nonce", idToken.Nonce)))
-		s.prettyError(w, r, errors.New("invalid nonce"), http.StatusBadRequest)
-		return
-	}
-
-	var userInfo UserInfo
-	if err = idToken.Claims(&userInfo); err != nil {
-		span.SetStatus(codes.Error, "failed to parse claims")
-		span.RecordError(err)
-		s.prettyError(w, r, err, http.StatusInternalServerError)
-		return
-	}
-
-	if !s.hasAccess(&userInfo) {
-		s.prettyError(w, r, errors.New("not authorized"), http.StatusForbidden)
-		return
-	}
-
-	if err = s.db.UpsertUser(ctx, idToken.Subject, userInfo.Username, userInfo.Email, path.Join(s.cfg.Auth.DefaultHome, userInfo.Username)); err != nil {
-		span.SetStatus(codes.Error, "failed to upsert user")
-		span.RecordError(err)
-		s.prettyError(w, r, err, http.StatusInternalServerError)
-		return
-	}
-
-	sessionID := s.newID(32)
-	s.setSession(w, sessionID, &Session{
-		AccessToken:  token.AccessToken,
-		RefreshToken: token.RefreshToken,
-		Expiry:       token.Expiry,
-		IDToken:      rawIDToken,
-	})
-
-	http.Redirect(w, r, "/", http.StatusFound)
+func wantsHTML(r *http.Request) bool {
+	return strings.Contains(r.Header.Get("Accept"), "text/html")
 }

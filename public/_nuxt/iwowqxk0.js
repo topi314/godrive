@@ -1,0 +1,1 @@
+import{A as e,S as t,U as n}from"./CBnVfA_J.js";import{t as r}from"./BOggK4Ld.js";var i=e({__name:`index`,setup(e){return(e,i)=>(n(),t(r,{"base-path":`/`}))}});export{i as default};
