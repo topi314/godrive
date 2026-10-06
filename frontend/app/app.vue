@@ -1,7 +1,19 @@
 <template>
   <div class="app-shell">
     <header class="topbar">
-      <NuxtLink to="/" class="brand">go<span>drive</span></NuxtLink>
+      <div class="topbar-brand">
+        <NuxtLink to="/" class="brand">go<span>drive</span></NuxtLink>
+        <a
+          class="icon-btn"
+          href="https://github.com/topi314/godrive"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="GitHub"
+          aria-label="GitHub"
+        >
+          <AppIcon name="github" />
+        </a>
+      </div>
       <div class="topbar-actions">
         <IconBtn
           :name="theme === 'dark' ? 'sun' : 'moon'"

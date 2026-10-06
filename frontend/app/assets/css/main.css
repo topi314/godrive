@@ -125,6 +125,13 @@ button:disabled {
   z-index: 10;
 }
 
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
 .brand {
   font-family: var(--font-display);
   font-size: 1.75rem;
