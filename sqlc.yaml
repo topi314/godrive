@@ -1,12 +1,12 @@
 version: "2"
 sql:
   - engine: "sqlite"
-    queries: "queries"
-    schema: "migrations/sqlite"
+    queries: "server/database/queries"
+    schema: "server/database/migrations/sqlite"
     gen:
       go:
-        package: "db"
-        out: "godrive/db"
+        package: "dbsqlc"
+        out: "server/database/dbsqlc"
         emit_json_tags: true
         emit_empty_slices: true
         emit_interface: true

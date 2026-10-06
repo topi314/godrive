@@ -6,32 +6,33 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Docker meta
         id: meta
-        uses: docker/metadata-action@v4
+        uses: docker/metadata-action@v5
         with:
           images: |
-            ghcr.io/${{ github.repository }}
+            ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}
           tags: |
             type=ref,event=branch
             type=ref,event=tag
             type=ref,event=pr
             type=sha,prefix=
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -39,12 +40,12 @@ jobs:
 
       - name: Prepare Version Info
         run: |
-          echo "VERSION=$(git describe --tags)" >> $GITHUB_ENV
+          echo "VERSION=$(git describe --tags --always)" >> $GITHUB_ENV
           echo "COMMIT=$(git rev-parse HEAD)" >> $GITHUB_ENV
           echo "BUILD_TIME=$(date --rfc-3339=seconds)" >> $GITHUB_ENV
 
       - name: Build and push
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm/v7,linux/arm64/v8
@@ -55,6 +56,9 @@ jobs:
             VERSION=${{ env.VERSION }}
             COMMIT=${{ env.COMMIT }}
             BUILD_TIME=${{ env.BUILD_TIME }}
+          provenance: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   deploy:
     needs:
@@ -65,6 +69,6 @@ jobs:
         uses: fjogeleit/http-request-action@v1
         with:
           url: "https://watchtower.topi.wtf/v1/update?image=ghcr.io/topi314/godrive"
-          method: "POST"
+          method: POST
           timeout: 60000
           customHeaders: '{"Authorization": "Bearer ${{ secrets.TOKEN }}"}'

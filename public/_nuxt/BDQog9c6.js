@@ -1,1 +1,0 @@
-import{A as e,S as t,U as n,b as r,st as i}from"./CBnVfA_J.js";import{rt as a}from"./DdqM33tI.js";import{t as o}from"./BOggK4Ld.js";var s=e({__name:`[...path]`,setup(e){let s=a(),c=r(()=>{let e=s.params.path;return e?`/`+(Array.isArray(e)?e.join(`/`):String(e)).replace(/^\/+/,``):`/`});return(e,r)=>(n(),t(o,{"base-path":i(c)},null,8,[`base-path`]))}});export{s as default};

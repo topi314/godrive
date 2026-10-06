@@ -13,8 +13,6 @@ require (
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/topi314/gomigrate v0.0.0-20250604001904-f3f6e21ecfc9
-	go.opentelemetry.io/otel/trace v1.16.0
-	golang.org/x/exp v0.0.0-20261005173118-76772065c9b0
 	golang.org/x/image v0.46.0
 	golang.org/x/oauth2 v0.37.0
 	modernc.org/sqlite v1.60.1
@@ -44,10 +42,10 @@ require (
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	go.opentelemetry.io/otel v1.16.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
+	golang.org/x/tools v0.51.0 // indirect
 	modernc.org/libc v1.77.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect

@@ -1,0 +1,69 @@
+listen_addr = ":80"
+dev_mode = false
+debug = false
+# Used when the API is built with -tags dev (no embedded UI):
+# frontend_url = "http://localhost:3000"
+
+[log]
+level = "INFO"
+format = "text"
+add_source = false
+
+[database]
+# type can be "sqlite" or "postgres"
+type = "sqlite"
+debug = false
+path = "godrive.db"
+# postgres fields:
+# host = "localhost"
+# port = 5432
+# username = "godrive"
+# password = "godrive"
+# database = "godrive"
+# ssl_mode = "disable"
+
+[storage]
+# type can be "local" or "s3"
+type = "local"
+debug = false
+path = "storage"
+# sync_interval = "15m" # optional backstop reconcile; omit or "0" to disable
+
+# S3-compatible (AWS, R2, B2, Garage, MinIO, …):
+# type = "s3"
+# endpoint = "https://s3.amazonaws.com"
+# access_key_id = "..."
+# secret_access_key = "..."
+# bucket = "godrive"
+# region = "us-east-1"
+# secure = true
+# force_path_style = false
+
+[storage.notify]
+# webhook_secret = "..."
+# sqs_queue_url = ""
+
+# OIDC via Authelia (or any OIDC IdP). See example.production.toml for a live-shaped template.
+# jwt_secret from the old JSON config is unused (DB sessions).
+# [auth]
+# secure = false
+# issuer = "https://auth.example.com"
+# client_id = "godrive"
+# client_secret = "..."
+# redirect_url = "http://localhost:3000/api/callback"
+# default_home = "/"
+#
+# [auth.groups]
+# admin = "admin"
+# user = "godrive"
+# viewer = "godrive-viewer"
+# guest = true
+
+
+# [otel]
+# instance_id = "godrive"
+# [otel.trace]
+# endpoint = "http://otel-collector:4317"
+# insecure = true
+# [otel.metrics]
+# listen_addr = ":2112"

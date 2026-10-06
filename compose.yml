@@ -1,0 +1,8 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8090:80"
+    volumes:
+      - ./config.toml:/var/lib/godrive/config.toml
+      - ./storage:/var/lib/godrive/storage
