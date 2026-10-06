@@ -11,3 +11,6 @@ SELECT * FROM api_tokens WHERE user_id = @user_id ORDER BY created_at DESC;
 
 -- name: DeleteAPIToken :exec
 DELETE FROM api_tokens WHERE token_hash = @token_hash AND user_id = @user_id;
+
+-- name: DeleteAPITokensForUser :exec
+DELETE FROM api_tokens WHERE user_id = @user_id;

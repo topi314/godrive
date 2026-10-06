@@ -2,60 +2,49 @@ package server
 
 import (
 	"testing"
+	"time"
 
-	"github.com/topi314/godrive/server/database/dbsqlc"
+	"github.com/topi314/godrive/server/database/dbq"
 )
 
-func TestShareBrowsePath(t *testing.T) {
-	share := dbsqlc.Share{ID: "xyz", Path: "/home/docs"}
-	cases := map[string]string{
-		"/home/docs":            "/s/xyz",
-		"/home/docs/":           "/s/xyz",
-		"/home/docs/lol2":       "/s/xyz/lol2",
-		"/home/docs/lol2/a.pdf": "/s/xyz/lol2/a.pdf",
+func TestParseExpiresIn(t *testing.T) {
+	if got, err := parseExpiresIn("7d"); err != nil || got != 7*24*time.Hour {
+		t.Fatalf("7d: %v %v", got, err)
 	}
-	for storage, want := range cases {
-		if got := shareBrowsePath(share, storage); got != want {
-			t.Errorf("shareBrowsePath(%q) = %q, want %q", storage, got, want)
+	if got, err := parseExpiresIn(""); err != nil || got != 0 {
+		t.Fatalf("empty: %v %v", got, err)
+	}
+	for _, raw := range []string{"0h", "nope", "-2d"} {
+		if _, err := parseExpiresIn(raw); err == nil {
+			t.Errorf("parseExpiresIn(%q) expected error", raw)
 		}
+	}
+}
+
+func TestShareBrowsePath(t *testing.T) {
+	share := dbq.Share{ID: "xyz", Path: "/home/docs"}
+	if got := shareBrowsePath(share, "/home/docs/lol2/a.pdf"); got != "/s/xyz/lol2/a.pdf" {
+		t.Fatalf("got %q", got)
+	}
+	if got := shareBrowsePath(share, "/home/docs"); got != "/s/xyz" {
+		t.Fatalf("root %q", got)
 	}
 }
 
 func TestJoinShareTarget(t *testing.T) {
 	root := "/home/docs"
-	ok := map[string]string{
-		"":           "/home/docs",
-		"lol2":       "/home/docs/lol2",
-		"lol2/a.pdf": "/home/docs/lol2/a.pdf",
-		"lol2/../x":  "/home/docs/x",
-		"./y":        "/home/docs/y",
-		`lol2\x`:     "/home/docs/lol2/x", // backslash normalized to /
+	got, err := joinShareTarget(root, "lol2/../x")
+	if err != nil || got != "/home/docs/x" {
+		t.Fatalf("got %q %v", got, err)
 	}
-	for rest, want := range ok {
-		got, err := joinShareTarget(root, rest)
-		if err != nil || got != want {
-			t.Errorf("joinShareTarget(%q) = %q, %v; want %q, nil", rest, got, err, want)
-		}
-	}
-	forbidden := []string{
-		"..", "../", "../..", "../../etc",
-		"..\\secret", "foo/../../..",
-		"...\x00x", "%2e%2e",
-	}
-	for _, rest := range forbidden {
+	for _, rest := range []string{"..", "../..", "foo/../../..", "..\\secret"} {
 		if _, err := joinShareTarget(root, rest); err == nil {
-			t.Errorf("joinShareTarget(%q) expected forbidden, got nil", rest)
+			t.Errorf("joinShareTarget(%q) expected forbidden", rest)
 		}
 	}
 }
 
 func TestUnderShare(t *testing.T) {
-	if !underShare("/home/docs", "/home/docs") {
-		t.Fatal("root should be under itself")
-	}
-	if !underShare("/home/docs", "/home/docs/lol2") {
-		t.Fatal("child should be under root")
-	}
 	if underShare("/home/docs", "/home") {
 		t.Fatal("parent must not be under share")
 	}

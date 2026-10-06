@@ -5,8 +5,8 @@ sql:
     schema: "server/database/migrations/sqlite"
     gen:
       go:
-        package: "dbsqlc"
-        out: "server/database/dbsqlc"
+        package: "dbq"
+        out: "server/database/dbq"
         emit_json_tags: true
         emit_empty_slices: true
         emit_interface: true

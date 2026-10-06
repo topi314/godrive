@@ -21,5 +21,14 @@ WHERE path = @path AND principal_type = @principal_type AND principal_id = @prin
 -- name: DeleteACLForPath :exec
 DELETE FROM path_acl WHERE path = @path;
 
+-- name: DeleteACLForPrincipal :exec
+DELETE FROM path_acl
+WHERE principal_type = @principal_type AND principal_id = @principal_id;
+
+-- name: ListACLUnder :many
+SELECT * FROM path_acl
+WHERE path = @path OR path LIKE @path_like
+ORDER BY path, principal_type, principal_id;
+
 -- name: ListAllACL :many
 SELECT * FROM path_acl ORDER BY path, principal_type, principal_id;

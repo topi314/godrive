@@ -3,17 +3,12 @@ package server
 import (
 	"io/fs"
 	"net/http"
-	"strings"
 )
 
 func (s *Server) serveSPA(w http.ResponseWriter, r *http.Request) {
 	if s.public == nil {
 		// -tags dev: send the browser to the Nuxt origin instead of a dead end.
-		front := strings.TrimRight(s.cfg.FrontendURL, "/")
-		if front == "" {
-			front = "http://localhost:3000"
-		}
-		target := front + r.URL.RequestURI()
+		target := s.cfg.FrontendURL + r.URL.RequestURI()
 		http.Redirect(w, r, target, http.StatusTemporaryRedirect)
 		return
 	}

@@ -59,11 +59,23 @@ cp example.config.toml config.toml
 
 Env overrides use the `GODRIVE_` prefix (e.g. `GODRIVE_DATABASE_PASSWORD`).
 
+### Uploads
+
+Large files use resumable chunked sessions (`[upload]` in config). Defaults: `max_size = 50GB`, `chunk_size = 16MB`, `session_ttl = 72h`, `max_parallel = 2`. Reverse proxies in front of godrive must allow request bodies at least as large as `chunk_size` and keep connections open long enough for slow multi-GB transfers.
+
+### Share links
+
+Share URLs (`/s/{id}`) are capability links. Permissions come from `path_acl` rows with `principal_type = share` (not from normal user/guest rules on the same path). Creating a share upserts a default Read grant for that share id; any allow/deny combination is valid (for example Create without Read for drop-box style links).
+
 ## Features
 
 - SQLite or Postgres (sqlc + [gomigrate](https://github.com/topi314/gomigrate))
-- Path ACLs with inheritance; publish via `everyone` + read
-- Short share links at `/s/{id}`
+- Path ACLs with inheritance; `everyone` = logged-in users, `guest` = anonymous (publish via `guest` + read); `share` = capability URL only
+- OIDC groups mapped to godrive groups in `[auth.groups.map]`; `admin` bypasses ACLs, `access` gates who can use the app
+- Short opaque sessions (`session_lifespan`, default 15m) plus a long-lived refresh cookie (`refresh_token_lifespan`, default 30d); groups refresh on renewal
+- OIDC authorization code + PKCE; PAR / introspection / revocation when the IdP advertises them; RP logout when `end_session_endpoint` is present
+- Short share links at `/s/{id}` with configurable share-principal ACL bits
+- Resumable large-file uploads via the upload dialog (chunked PATCH sessions)
 - Instant pickup of files dropped into local storage (fsnotify) or via S3 notifications
 - Open Graph previews for public paths; private URLs get a generic teaser card
 - S3-compatible object storage via AWS SDK v2

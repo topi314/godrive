@@ -51,14 +51,36 @@ path = "storage"
 # client_id = "godrive"
 # client_secret = "..."
 # redirect_url = "http://localhost:3000/api/callback"
-# default_home = "/"
+# session_lifespan = "15m"
+# refresh_token_lifespan = "720h" # 30 days
+# Optional RP logout when discovery has no end_session_endpoint:
+# end_session_endpoint = "https://auth.example.com/api/oidc/end-session"
+# post_logout_redirect_url = "http://localhost:3000/"
+# default_home = "/home/{user}"
+# Placeholders: {user} / {username}, {email}, {id}. Applied on first login;
+# later logins keep the saved home path. Missing folders are created.
 #
 # [auth.groups]
-# admin = "admin"
-# user = "godrive"
-# viewer = "godrive-viewer"
-# guest = true
+# admin = "admin"     # OIDC group: full access (bypasses ACLs)
+# access = "godrive"  # OIDC group required to use the app (admin also counts)
+# guest = true        # allow unauthenticated browsing (uses "guest" ACL, default read)
+#
+# Map extra OIDC groups to godrive names used in ACLs. Unmapped IdP groups are ignored.
+# admin and access are included automatically (same name unless remapped here).
+# [auth.groups.map]
+# "ldap-linux" = "linux"
+# family = "family"
+#
+# On first start with an empty ACL table, godrive seeds "/":
+#   everyone → all (logged-in users); guest → read.
+# With auth disabled, all requests get full access (no ACL).
 
+
+# [upload]
+# max_size = "50GB"      # global upload ceiling
+# chunk_size = "16MB"    # resumable PATCH body size
+# session_ttl = "72h"    # how long incomplete uploads can be resumed
+# max_parallel = 2       # concurrent file uploads in the UI
 
 # [otel]
 # instance_id = "godrive"

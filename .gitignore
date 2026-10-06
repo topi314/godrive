@@ -2,7 +2,7 @@
 config.toml
 godrive.db
 godrive.db-*
-storage/
+/storage/
 /godrive
 *.exe
 *.exe~

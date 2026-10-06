@@ -3,66 +3,70 @@ package server
 import (
 	"context"
 	"crypto/rand"
-	"encoding/json"
 	"fmt"
 	"io/fs"
 	"log/slog"
 	"math/big"
 	"net/http"
+	"sync"
 	"time"
 
-	"github.com/coreos/go-oidc/v3/oidc"
+	gooidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/topi314/godrive/frontend"
+	"github.com/topi314/godrive/server/config"
 	"github.com/topi314/godrive/server/database"
+	"github.com/topi314/godrive/server/oidc"
+	"github.com/topi314/godrive/server/storage"
 	"golang.org/x/oauth2"
 )
 
 type Server struct {
-	version string
-	cfg     Config
-	store   *Store
-	auth    *Auth
-	storage Storage
-	public  fs.FS
-	cancel  context.CancelFunc
-	http    *http.Server
+	version   string
+	cfg       config.Config
+	store     *database.Store
+	auth      *oidc.Client
+	storage   storage.Storage
+	public    fs.FS
+	cancel    context.CancelFunc
+	http      *http.Server
+	refreshMu sync.Mutex
 }
 
 // New constructs the server (DB, storage, auth, sync, frontend FS).
-func New(cfg Config, version string) (*Server, error) {
+func New(cfg config.Config, version string) (*Server, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	store, err := NewStore(ctx, cfg.Database, database.Migrations)
+	store, err := database.NewStore(ctx, cfg.Database, database.Migrations)
 	if err != nil {
 		return nil, fmt.Errorf("database: %w", err)
 	}
 
-	storage, err := NewStorage(context.Background(), cfg.Storage)
+	st, err := storage.New(context.Background(), cfg.Storage)
 	if err != nil {
 		_ = store.Close()
 		return nil, fmt.Errorf("storage: %w", err)
 	}
 
-	var auth *Auth
+	var auth *oidc.Client
 	if cfg.Auth != nil {
-		provider, err := oidc.NewProvider(context.Background(), cfg.Auth.Issuer)
+		provider, err := gooidc.NewProvider(context.Background(), cfg.Auth.Issuer)
 		if err != nil {
-			_ = storage.Close()
+			_ = st.Close()
 			_ = store.Close()
 			return nil, fmt.Errorf("oidc: %w", err)
 		}
-		auth = &Auth{
+		auth = &oidc.Client{
 			Provider: provider,
-			Verifier: provider.Verifier(&oidc.Config{ClientID: cfg.Auth.ClientID}),
+			Verifier: provider.Verifier(&gooidc.Config{ClientID: cfg.Auth.ClientID}),
 			Config: &oauth2.Config{
 				ClientID:     cfg.Auth.ClientID,
 				ClientSecret: cfg.Auth.ClientSecret,
 				Endpoint:     provider.Endpoint(),
 				RedirectURL:  cfg.Auth.RedirectURL,
-				Scopes:       []string{oidc.ScopeOpenID, "groups", "email", "profile", oidc.ScopeOfflineAccess},
+				Scopes:       []string{gooidc.ScopeOpenID, "groups", "email", "profile", gooidc.ScopeOfflineAccess},
 			},
-			States: map[string]string{},
+			States: map[string]oidc.LoginFlow{},
 		}
 	}
 
@@ -77,9 +81,22 @@ func New(cfg Config, version string) (*Server, error) {
 		cfg:     cfg,
 		store:   store,
 		auth:    auth,
-		storage: storage,
+		storage: st,
 		public:  publicFS,
 		cancel:  runCancel,
+	}
+	if s.auth != nil {
+		endSession := ""
+		if cfg.Auth != nil {
+			endSession = cfg.Auth.EndSessionEndpoint
+		}
+		s.auth.LoadDiscovery(endSession)
+	}
+	if err := s.seedDefaultRootACL(ctx); err != nil {
+		runCancel()
+		_ = st.Close()
+		_ = store.Close()
+		return nil, fmt.Errorf("seed default ACL: %w", err)
 	}
 	s.startSync(runCtx)
 	return s, nil
@@ -114,21 +131,6 @@ func (s *Server) Stop() {
 
 // Close is an alias for Stop for compatibility.
 func (s *Server) Close() { s.Stop() }
-
-func (s *Server) writeJSON(w http.ResponseWriter, v any, status int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error, status int) {
-	slog.ErrorContext(r.Context(), "request error", slog.String("path", r.URL.Path), slog.Any("err", err))
-	s.writeJSON(w, map[string]any{
-		"message": err.Error(),
-		"status":  status,
-		"path":    r.URL.Path,
-	}, status)
-}
 
 func FormatBuildVersion(version, commit string, buildTime time.Time) string {
 	if buildTime.IsZero() {

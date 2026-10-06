@@ -2,160 +2,193 @@ package server
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"log/slog"
 	"path"
-	"strings"
+	"time"
+
+	"github.com/topi314/godrive/server/acl"
+	"github.com/topi314/godrive/server/database"
+	"github.com/topi314/godrive/server/database/dbq"
+	"github.com/topi314/godrive/server/storage"
 )
 
-type Permissions uint64
-
-const (
-	PermissionRead Permissions = 1 << iota
-	PermissionCreate
-	PermissionUpdate
-	PermissionDelete
-	PermissionUpdatePermissions
-	PermissionShare
-
-	PermissionsAll = PermissionRead | PermissionCreate | PermissionUpdate | PermissionDelete | PermissionUpdatePermissions | PermissionShare
-)
-
-func (p Permissions) Has(bit Permissions) bool { return p&bit == bit }
-func (p Permissions) Add(bit Permissions) Permissions {
-	return p | bit
-}
-func (p Permissions) Remove(bit Permissions) Permissions {
-	return p &^ bit
-}
-
-const (
-	PrincipalUser     = "user"
-	PrincipalGroup    = "group"
-	PrincipalEveryone = "everyone"
-	EveryoneID        = "*"
-)
-
-type ACLRow struct {
-	Path          string
-	PrincipalType string
-	PrincipalID   string
-	Allow         Permissions
-	Deny          Permissions
-}
-
-// NormalizePath returns an absolute path without trailing slash (except root "/").
-func NormalizePath(p string) string {
-	if p == "" {
-		return "/"
+func aclIdentity(info *UserInfo) *acl.Identity {
+	if info == nil {
+		return nil
 	}
-	p = path.Clean("/" + strings.TrimPrefix(p, "/"))
-	if p == "." {
-		return "/"
-	}
-	return p
+	return &acl.Identity{Subject: info.Subject, Groups: info.Groups}
 }
 
-// AncestorPaths returns [path, parent, ..., "/"] from leaf to root.
-func AncestorPaths(filePath string) []string {
-	filePath = NormalizePath(filePath)
-	var paths []string
-	for {
-		paths = append(paths, filePath)
-		if filePath == "/" {
-			break
+func (s *Server) EffectivePermissions(ctx context.Context, filePath string, info *UserInfo, ownerID *string) (acl.Permissions, error) {
+	if s.cfg.Auth == nil {
+		return acl.PermissionsAll, nil
+	}
+	if info != nil && s.isAdmin(info) {
+		return acl.PermissionsAll, nil
+	}
+	if info != nil && info.Subject != "" && info.Subject != "guest" {
+		if ownerID != nil && *ownerID != "" && info.Subject == *ownerID {
+			return acl.PermissionsAll, nil
 		}
-		parent := path.Dir(filePath)
-		if parent == filePath {
-			break
-		}
-		filePath = parent
-	}
-	return paths
-}
-
-// AncestorPathsRootFirst returns ["/", ..., parent, path].
-func AncestorPathsRootFirst(filePath string) []string {
-	paths := AncestorPaths(filePath)
-	for i, j := 0, len(paths)-1; i < j; i, j = i+1, j-1 {
-		paths[i], paths[j] = paths[j], paths[i]
-	}
-	return paths
-}
-
-func LikeUnder(prefix string) string {
-	prefix = NormalizePath(prefix)
-	if prefix == "/" {
-		return "/%"
-	}
-	return prefix + "/%"
-}
-
-type ACLStore interface {
-	ListACLByPaths(ctx context.Context, paths []string) ([]ACLRow, error)
-}
-
-func CalculatePermissions(pathsRootFirst []string, rows []ACLRow, info *UserInfo) Permissions {
-	byPath := map[string][]ACLRow{}
-	for _, row := range rows {
-		byPath[row.Path] = append(byPath[row.Path], row)
-	}
-
-	var allow, deny Permissions
-	for _, p := range pathsRootFirst {
-		for _, row := range byPath[p] {
-			switch row.PrincipalType {
-			case PrincipalEveryone:
-				allow = allow.Add(row.Allow)
-				deny = deny.Add(row.Deny)
-			case PrincipalGroup:
-				if info != nil && containsString(info.Groups, row.PrincipalID) {
-					allow = allow.Add(row.Allow)
-					deny = deny.Add(row.Deny)
-				}
-			case PrincipalUser:
-				if info != nil && info.Subject == row.PrincipalID {
-					allow = allow.Add(row.Allow)
-					deny = deny.Add(row.Deny)
-				}
+		if ownerID == nil {
+			if file, err := s.store.Q.GetFile(ctx, acl.NormalizePath(filePath)); err == nil && file.UserID.Valid && file.UserID.String == info.Subject {
+				return acl.PermissionsAll, nil
 			}
 		}
 	}
-	return allow.Remove(deny)
-}
-
-func containsString(ss []string, v string) bool {
-	for _, s := range ss {
-		if s == v {
-			return true
-		}
-	}
-	return false
-}
-
-func (s *Server) EffectivePermissions(ctx context.Context, filePath string, info *UserInfo, ownerID *string) (Permissions, error) {
-	if s.cfg.Auth == nil {
-		return PermissionsAll, nil
-	}
-	if info != nil && s.isAdmin(info) {
-		return PermissionsAll, nil
-	}
-	if ownerID != nil && info != nil && *ownerID != "" && info.Subject == *ownerID {
-		return PermissionsAll, nil
+	if info == nil && !s.cfg.Auth.Groups.Guest {
+		return 0, nil
 	}
 
-	paths := AncestorPathsRootFirst(filePath)
+	paths := acl.AncestorPathsRootFirst(filePath)
 	rows, err := s.store.ListACLByPaths(ctx, paths)
 	if err != nil {
 		return 0, err
 	}
-	return CalculatePermissions(paths, rows, info), nil
+	return acl.CalculatePermissions(paths, rows, aclIdentity(info)), nil
 }
 
 func (s *Server) CanAnonymousRead(ctx context.Context, filePath string) (bool, error) {
-	paths := AncestorPathsRootFirst(filePath)
+	if s.cfg.Auth != nil && !s.cfg.Auth.Groups.Guest {
+		return false, nil
+	}
+	paths := acl.AncestorPathsRootFirst(filePath)
 	rows, err := s.store.ListACLByPaths(ctx, paths)
 	if err != nil {
 		return false, err
 	}
-	perms := CalculatePermissions(paths, rows, nil)
-	return perms.Has(PermissionRead), nil
+	perms := acl.CalculatePermissions(paths, rows, nil)
+	return perms.Has(acl.PermissionRead), nil
+}
+
+// seedDefaultRootACL inserts a starter ACL on "/" when none exist yet:
+// authenticated users (everyone) get full access; guests get read.
+func (s *Server) seedDefaultRootACL(ctx context.Context) error {
+	if s.cfg.Auth == nil {
+		return nil
+	}
+	rows, err := s.store.Q.ListAllACL(ctx)
+	if err != nil {
+		return err
+	}
+	if len(rows) > 0 {
+		return nil
+	}
+	if _, err := s.store.Q.UpsertACL(ctx, dbq.UpsertACLParams{
+		Path: "/", PrincipalType: acl.PrincipalEveryone, PrincipalID: acl.EveryoneID,
+		Allow: int64(acl.PermissionsAll), Deny: 0,
+	}); err != nil {
+		return err
+	}
+	if _, err := s.store.Q.UpsertACL(ctx, dbq.UpsertACLParams{
+		Path: "/", PrincipalType: acl.PrincipalGuest, PrincipalID: acl.GuestID,
+		Allow: int64(acl.PermissionRead), Deny: 0,
+	}); err != nil {
+		return err
+	}
+	slog.Info("seeded default root ACL",
+		slog.String("everyone", "all"),
+		slog.String("guest", "read"),
+	)
+	return nil
+}
+
+// provisionUserHome creates the user's home folder (parents included) and grants
+// them owner-like ACL on that path. Existing ACLs and other owners are left alone.
+func (s *Server) provisionUserHome(ctx context.Context, home string, info *UserInfo) error {
+	if s.cfg.Auth == nil || info == nil || s.isGuest(info) || info.Subject == "" {
+		return nil
+	}
+	home = acl.NormalizePath(home)
+	if home == "/" {
+		return nil
+	}
+	if acl.IsReservedPath(home) {
+		return errors.New("reserved path")
+	}
+
+	now := time.Now().UTC()
+	var missing []string
+	for p := home; p != "/"; p = path.Dir(p) {
+		file, err := s.store.Q.GetFile(ctx, p)
+		if err == nil {
+			if p == home && !storage.IsDirectory(file.ContentType) {
+				return errors.New("home is not a folder")
+			}
+			break
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		ok, err := s.pathExists(ctx, p)
+		if err != nil {
+			return err
+		}
+		if ok && p != home {
+			break
+		}
+		missing = append(missing, p)
+	}
+
+	for i := len(missing) - 1; i >= 0; i-- {
+		p := missing[i]
+		if err := s.storage.Mkdir(ctx, p); err != nil {
+			return err
+		}
+		params := dbq.UpsertFileParams{
+			Path: p, Size: 0, ContentType: storage.ContentTypeDirectory,
+			CreatedAt: now, UpdatedAt: now,
+		}
+		if p == home {
+			params.UserID = database.NullString(&info.Subject)
+		}
+		if _, err := s.store.Q.UpsertFile(ctx, params); err != nil {
+			return err
+		}
+	}
+
+	file, err := s.store.Q.GetFile(ctx, home)
+	if errors.Is(err, sql.ErrNoRows) {
+		if err := s.storage.Mkdir(ctx, home); err != nil {
+			return err
+		}
+		file, err = s.store.Q.UpsertFile(ctx, dbq.UpsertFileParams{
+			Path: home, Size: 0, ContentType: storage.ContentTypeDirectory,
+			UserID: database.NullString(&info.Subject), CreatedAt: now, UpdatedAt: now,
+		})
+	}
+	if err != nil {
+		return err
+	}
+	if !storage.IsDirectory(file.ContentType) {
+		return errors.New("home is not a folder")
+	}
+	if file.UserID.Valid && file.UserID.String != info.Subject {
+		return nil
+	}
+	if !file.UserID.Valid {
+		file, err = s.store.Q.UpsertFile(ctx, dbq.UpsertFileParams{
+			Path: file.Path, Size: file.Size, ContentType: file.ContentType,
+			Description: file.Description, UserID: database.NullString(&info.Subject),
+			CreatedAt: file.CreatedAt, UpdatedAt: now,
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	existing, err := s.store.Q.ListACLByPath(ctx, home)
+	if err != nil || len(existing) > 0 {
+		return err
+	}
+	_, err = s.store.Q.UpsertACL(ctx, dbq.UpsertACLParams{
+		Path:          home,
+		PrincipalType: acl.PrincipalUser,
+		PrincipalID:   info.Subject,
+		Allow:         int64(acl.PermissionsAll),
+		Deny:          0,
+	})
+	return err
 }

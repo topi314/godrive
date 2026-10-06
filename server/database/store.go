@@ -1,4 +1,4 @@
-package server
+package database
 
 import (
 	"context"
@@ -10,7 +10,9 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
-	"github.com/topi314/godrive/server/database/dbsqlc"
+	"github.com/topi314/godrive/server/acl"
+	"github.com/topi314/godrive/server/config"
+	"github.com/topi314/godrive/server/database/dbq"
 	"github.com/topi314/gomigrate"
 	gomigratepg "github.com/topi314/gomigrate/drivers/postgres"
 	gomigratesqlite "github.com/topi314/gomigrate/drivers/sqlite"
@@ -19,17 +21,17 @@ import (
 
 type Store struct {
 	DB *sql.DB
-	Q  dbsqlc.Querier
+	Q  dbq.Querier
 }
 
-func NewStore(ctx context.Context, cfg DatabaseConfig, migrations fs.FS) (*Store, error) {
+func NewStore(ctx context.Context, cfg config.DatabaseConfig, migrations fs.FS) (*Store, error) {
 	var (
 		sqlDB *sql.DB
 		err   error
 	)
 
 	switch cfg.Type {
-	case DatabaseTypeSQLite:
+	case config.DatabaseTypeSQLite:
 		sqlDB, err = sql.Open("sqlite", cfg.Path+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
 		if err != nil {
 			return nil, fmt.Errorf("open sqlite: %w", err)
@@ -42,7 +44,7 @@ func NewStore(ctx context.Context, cfg DatabaseConfig, migrations fs.FS) (*Store
 			_ = sqlDB.Close()
 			return nil, fmt.Errorf("migrate sqlite: %w", err)
 		}
-	case DatabaseTypePostgres:
+	case config.DatabaseTypePostgres:
 		pgCfg, err := pgx.ParseConfig(cfg.PostgresDataSourceName())
 		if err != nil {
 			return nil, fmt.Errorf("parse postgres config: %w", err)
@@ -68,7 +70,7 @@ func NewStore(ctx context.Context, cfg DatabaseConfig, migrations fs.FS) (*Store
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
 
-	return &Store{DB: sqlDB, Q: dbsqlc.New(sqlDB)}, nil
+	return &Store{DB: sqlDB, Q: dbq.New(sqlDB)}, nil
 }
 
 func (s *Store) Close() error {
@@ -78,32 +80,32 @@ func (s *Store) Close() error {
 	return s.DB.Close()
 }
 
-func (s *Store) ListACLByPaths(ctx context.Context, paths []string) ([]ACLRow, error) {
+func (s *Store) ListACLByPaths(ctx context.Context, paths []string) ([]acl.ACLRow, error) {
 	rows, err := s.Q.ListACLByPaths(ctx, paths)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]ACLRow, len(rows))
+	out := make([]acl.ACLRow, len(rows))
 	for i, r := range rows {
-		out[i] = ACLRow{
+		out[i] = acl.ACLRow{
 			Path:          r.Path,
 			PrincipalType: r.PrincipalType,
 			PrincipalID:   r.PrincipalID,
-			Allow:         Permissions(r.Allow),
-			Deny:          Permissions(r.Deny),
+			Allow:         acl.Permissions(r.Allow),
+			Deny:          acl.Permissions(r.Deny),
 		}
 	}
 	return out, nil
 }
 
-func nullString(s *string) sql.NullString {
+func NullString(s *string) sql.NullString {
 	if s == nil || *s == "" {
 		return sql.NullString{}
 	}
 	return sql.NullString{String: *s, Valid: true}
 }
 
-func nullTime(t *time.Time) sql.NullTime {
+func NullTime(t *time.Time) sql.NullTime {
 	if t == nil {
 		return sql.NullTime{}
 	}

@@ -5,28 +5,36 @@
     @drop.prevent="onDrop"
   >
     <nav class="crumbs" aria-label="Breadcrumb">
-      <NuxtLink :to="rootLink" class="crumb-root">{{ rootLabel }}</NuxtLink>
+      <NuxtLink :to="rootLink" class="crumb-root" @click.prevent="goTo(rootLink)">{{ rootLabel }}</NuxtLink>
       <template v-for="(c, i) in crumbs" :key="c.path">
         <!-- Root is already "/"; don't render a second slash before the first segment. -->
         <span v-if="i > 0 || rootLabel !== '/'" class="sep" aria-hidden="true">/</span>
-        <NuxtLink v-if="i < crumbs.length - 1" :to="c.path">{{ c.name }}</NuxtLink>
+        <NuxtLink v-if="i < crumbs.length - 1" :to="c.path" @click.prevent="goTo(c.path)">{{ c.name }}</NuxtLink>
         <span v-else class="crumb-current">{{ c.name }}</span>
       </template>
     </nav>
 
     <div class="toolbar">
+      <NuxtLink
+        v-if="canGoHome"
+        :to="homePath"
+        class="icon-btn"
+        title="Home"
+        aria-label="Home"
+        @click.prevent="goTo(homePath)"
+      >
+        <AppIcon name="home" />
+      </NuxtLink>
       <IconBtn name="download" label="Download" :disabled="!selected.length" @click="downloadSelected" />
-      <IconBtn name="upload" label="Upload" :disabled="!canCreate" @click="fileInput?.click()" />
-      <IconBtn name="trash" label="Delete" variant="danger" :disabled="!selected.length || !canDelete" @click="deleteSelected" />
-      <IconBtn v-if="selectedOne && canShare" name="share" label="Share" @click="shareSelected" />
-      <IconBtn v-if="selectedOne && canACL" name="lock" label="Permissions" @click="openACL" />
+      <IconBtn name="upload" label="Upload" :disabled="!canCreate" @click="openUpload()" />
+      <IconBtn name="folder" label="New folder" :disabled="!canCreate || !!shareId" @click="openNewFolder" />
+      <IconBtn name="trash" label="Delete" variant="danger" :disabled="!selected.length || !canDelete || !!shareId" @click="deleteSelected" />
       <input ref="fileInput" type="file" multiple hidden @change="onPick" />
     </div>
 
     <p v-if="error" class="error">{{ error }}</p>
-    <p v-if="loading" class="muted">Loading…</p>
 
-    <table class="file-table" v-if="!loading">
+    <table class="file-table browser-files">
       <thead>
         <tr>
           <th><input type="checkbox" :checked="allSelected" @change="toggleAll" aria-label="Select all" /></th>
@@ -66,7 +74,7 @@
             <AppIcon name="folder" class="type-icon" />
           </td>
           <td>
-            <NuxtLink class="name" :to="parentPath">..</NuxtLink>
+            <NuxtLink class="name" :to="parentPath" @click.prevent="goTo(parentPath)">..</NuxtLink>
           </td>
           <td class="muted">—</td>
           <td class="muted">—</td>
@@ -84,7 +92,7 @@
             <AppIcon :name="f.is_dir ? 'folder' : 'file'" class="type-icon" />
           </td>
           <td>
-            <NuxtLink v-if="f.is_dir" class="name" :to="linkFor(f)">{{ f.name }}</NuxtLink>
+            <NuxtLink v-if="f.is_dir" class="name" :to="linkFor(f)" @click.prevent="goTo(linkFor(f))">{{ f.name }}</NuxtLink>
             <a
               v-else-if="mediaKind(f.name, f.content_type)"
               class="name"
@@ -106,17 +114,6 @@
                 @click.stop="toggleMenu(f.path)"
               />
               <div v-if="menuPath === f.path" class="row-menu-panel" role="menu" @click.stop>
-                <a
-                  v-if="rowMenu(f).preview"
-                  :href="streamUrl(f)"
-                  target="_blank"
-                  rel="noopener"
-                  role="menuitem"
-                  class="row-menu-link"
-                  @click="menuPath = ''"
-                >
-                  <AppIcon name="external" /> Open
-                </a>
                 <button
                   v-if="rowMenu(f).download"
                   type="button"
@@ -125,20 +122,19 @@
                 >
                   <AppIcon name="download" /> Download
                 </button>
-                <NuxtLink
-                  v-if="rowMenu(f).open"
-                  :to="linkFor(f)"
+                <button
+                  v-if="rowMenu(f).rename"
+                  type="button"
                   role="menuitem"
-                  class="row-menu-link"
-                  @click="menuPath = ''"
+                  @click="runMenu(() => openRename(f))"
                 >
-                  <AppIcon name="external" /> Open
-                </NuxtLink>
+                  <AppIcon name="edit" /> Rename
+                </button>
                 <button
                   v-if="rowMenu(f).share"
                   type="button"
                   role="menuitem"
-                  @click="runMenu(() => shareOne(f.path))"
+                  @click="runMenu(() => openShare(f.path))"
                 >
                   <AppIcon name="share" /> Share
                 </button>
@@ -167,45 +163,149 @@
     </table>
 
     <div
-      v-if="canCreate"
       class="dropzone"
-      :class="{ active: drag }"
+      :class="{ active: drag && canCreate, disabled: !canCreate }"
       role="button"
-      tabindex="0"
-      @click="fileInput?.click()"
-      @keydown.enter.prevent="fileInput?.click()"
-      @keydown.space.prevent="fileInput?.click()"
+      :tabindex="canCreate ? 0 : -1"
+      :aria-disabled="!canCreate"
+      @click="canCreate && openUpload()"
+      @keydown.enter.prevent="canCreate && openUpload()"
+      @keydown.space.prevent="canCreate && openUpload()"
     >
       Drop files here or click to upload
-      <div v-if="progress >= 0" class="progress"><i :style="{ width: progress + '%' }" /></div>
     </div>
 
-    <div v-if="aclOpen" class="dialog-backdrop" @click.self="aclOpen = false">
-      <div class="dialog">
-        <h2>Permissions</h2>
-        <p class="muted">{{ aclPath }}</p>
+    <PermissionsDialog v-model="aclOpen" v-model:path="aclPath" @saved="onACLSaved" />
+    <UploadDialog
+      v-model="uploadOpen"
+      :base-dir="uploadBaseDir"
+      :share-id="shareId"
+      :initial-files="uploadInitialFiles"
+      @done="onUploadDone"
+    />
+
+    <div v-if="folderOpen" class="dialog-backdrop" @click.self="folderOpen = false" @keydown.escape.prevent="folderOpen = false">
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="folder-title">
+        <div class="dialog-head">
+          <h2 id="folder-title">New folder</h2>
+          <IconBtn name="x" label="Close" variant="ghost" @click="folderOpen = false" />
+        </div>
         <label>
-          Publish (everyone can read)
-          <input type="checkbox" v-model="publish" />
+          Name
+          <input
+            ref="folderInput"
+            v-model="folderName"
+            placeholder="folder"
+            @keydown.enter.prevent="createFolder"
+            @keydown.escape.prevent="folderOpen = false"
+          >
         </label>
+        <p v-if="folderError" class="error">{{ folderError }}</p>
         <div class="dialog-actions">
-          <IconBtn name="x" label="Cancel" @click="aclOpen = false" />
-          <IconBtn name="check" label="Save" variant="primary" @click="saveACL" />
+          <IconBtn name="check" label="Create" variant="primary" :disabled="!folderName.trim()" @click="createFolder" />
         </div>
       </div>
     </div>
 
-    <div v-if="shareUrl" class="dialog-backdrop" @click.self="shareUrl = ''">
-      <div class="dialog">
-        <h2>Share link</h2>
-        <label>
-          URL
-          <input :value="absoluteShare" readonly @focus="($event.target as HTMLInputElement).select()" />
-        </label>
-        <div class="dialog-actions">
-          <IconBtn name="copy" label="Copy" variant="primary" @click="copyShare" />
-          <IconBtn name="x" label="Close" @click="shareUrl = ''" />
+    <div v-if="renameOpen" class="dialog-backdrop" @click.self="renameOpen = false" @keydown.escape.prevent="renameOpen = false">
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="rename-title">
+        <div class="dialog-head">
+          <h2 id="rename-title">Rename</h2>
+          <IconBtn name="x" label="Close" variant="ghost" @click="renameOpen = false" />
         </div>
+        <label>
+          Name or path
+          <input
+            ref="renameInput"
+            v-model="renameName"
+            placeholder="name or ../folder/name"
+            @keydown.enter.prevent="submitRename"
+            @keydown.escape.prevent="renameOpen = false"
+          >
+        </label>
+        <p class="muted">Use <code>../</code> or a folder path to move. Missing folders are created.</p>
+        <p v-if="renameError" class="error">{{ renameError }}</p>
+        <div class="dialog-actions">
+          <IconBtn name="check" label="Rename" variant="primary" :disabled="!renameName.trim()" @click="submitRename" />
+        </div>
+      </div>
+    </div>
+
+    <div v-if="shareOpen" class="dialog-backdrop" @click.self="closeShare" @keydown.escape.prevent="closeShare">
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="share-title">
+        <div class="dialog-head">
+          <h2 id="share-title">{{ shareUrl ? 'Share link' : 'Share' }}</h2>
+          <IconBtn name="x" label="Close" variant="ghost" @click="closeShare" />
+        </div>
+        <template v-if="!shareUrl">
+          <label>
+            Expires
+            <select v-model="shareExpiry">
+              <option value="">Never</option>
+              <option value="1h">1 hour</option>
+              <option value="6h">6 hours</option>
+              <option value="24h">1 day</option>
+              <option value="168h">7 days</option>
+              <option value="720h">30 days</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          <div v-if="shareExpiry === 'custom'" class="expiry-custom">
+            <label>
+              After
+              <input v-model.number="shareCustomAmount" type="number" min="1" step="1">
+            </label>
+            <label>
+              Unit
+              <select v-model="shareCustomUnit">
+                <option value="h">hours</option>
+                <option value="d">days</option>
+              </select>
+            </label>
+          </div>
+          <div class="share-perms">
+            <span class="share-perms-label">Link permissions</span>
+            <table class="file-table acl-table share-acl-table">
+              <thead>
+                <tr>
+                  <th
+                    v-for="b in shareBitOptions"
+                    :key="'h-' + b.bit"
+                    class="perm-col"
+                    :class="'perm-' + b.short.toLowerCase()"
+                  >{{ b.short }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td v-for="b in shareBitOptions" :key="'c-' + b.bit" class="perm-cell">
+                    <button
+                      type="button"
+                      class="perm-mark"
+                      :class="shareMarkClass(b.bit)"
+                      :title="b.label + ' (click to cycle allow / deny / none)'"
+                      @click="cycleSharePerm(b.bit)"
+                    >{{ shareMarkLabel(b.bit) }}</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p v-if="shareError" class="error">{{ shareError }}</p>
+          <div class="dialog-actions">
+            <IconBtn name="check" label="Create link" variant="primary" @click="createShareLink" />
+          </div>
+        </template>
+        <template v-else>
+          <label>
+            URL
+            <input :value="absoluteShare" readonly @focus="($event.target as HTMLInputElement).select()" />
+          </label>
+          <p v-if="shareExpiresLabel" class="muted">Expires {{ shareExpiresLabel }}</p>
+          <div class="dialog-actions">
+            <IconBtn name="copy" label="Copy" variant="primary" @click="copyShare" />
+          </div>
+        </template>
       </div>
     </div>
 
@@ -220,21 +320,100 @@ import {
   mediaKind,
   Perm,
   type FileEntry,
+  type Me,
 } from '~/composables/useApi'
+
 
 const props = defineProps<{ basePath: string; shareId?: string }>()
 const api = useApi()
+const { toast } = useToast()
+const user = useState<Me | null>('me')
 const files = ref<FileEntry[]>([])
+const dirPerms = ref(0)
 const selected = ref<string[]>([])
-const loading = ref(true)
 const error = ref('')
+/** Path currently shown in crumbs + list (updated together when a listing arrives). */
+const listedPath = ref(props.basePath || '/')
+let loadSeq = 0
+const listingInflight = new Map<string, Promise<{ files: FileEntry[]; permissions: number }>>()
+
+function listingKey(path: string) {
+  return (props.shareId || '') + '\0' + path
+}
+
+function fetchListing(path: string) {
+  const key = listingKey(path)
+  let pending = listingInflight.get(key)
+  if (!pending) {
+    pending = api.listPath(path).then(res => ({
+      files: res.files || [],
+      permissions: res.permissions ?? 0,
+    })).finally(() => {
+      listingInflight.delete(key)
+    })
+    listingInflight.set(key, pending)
+  }
+  return pending
+}
 const drag = ref(false)
-const progress = ref(-1)
 const fileInput = ref<HTMLInputElement | null>(null)
 const aclOpen = ref(false)
 const aclPath = ref('/')
-const publish = ref(false)
+const shareOpen = ref(false)
+const sharePath = ref('')
 const shareUrl = ref('')
+const shareError = ref('')
+const shareExpiry = ref('')
+const shareCustomAmount = ref(24)
+const shareCustomUnit = ref<'h' | 'd'>('h')
+const shareExpiresAt = ref<string | null>(null)
+const shareAllow = ref(Perm.Read)
+const shareDeny = ref(0)
+const shareBitOptions = [
+  { bit: Perm.Read, short: 'R', label: 'Read' },
+  { bit: Perm.Create, short: 'C', label: 'Create' },
+  { bit: Perm.Update, short: 'U', label: 'Update' },
+  { bit: Perm.Delete, short: 'D', label: 'Delete' },
+  { bit: Perm.UpdatePermissions, short: 'A', label: 'ACL' },
+  { bit: Perm.Share, short: 'S', label: 'Share' },
+]
+
+function cycleSharePerm(bit: number) {
+  const allowed = hasPerm(shareAllow.value, bit)
+  const denied = hasPerm(shareDeny.value, bit)
+  if (!allowed && !denied) {
+    shareAllow.value |= bit
+  } else if (allowed) {
+    shareAllow.value &= ~bit
+    shareDeny.value |= bit
+  } else {
+    shareDeny.value &= ~bit
+  }
+}
+
+function shareMarkClass(bit: number) {
+  if (hasPerm(shareDeny.value, bit)) return 'deny'
+  if (hasPerm(shareAllow.value, bit)) return 'allow'
+  return 'none'
+}
+
+function shareMarkLabel(bit: number) {
+  if (hasPerm(shareDeny.value, bit)) return '−'
+  if (hasPerm(shareAllow.value, bit)) return '+'
+  return '·'
+}
+const uploadOpen = ref(false)
+const uploadInitialFiles = ref<File[]>([])
+const uploadBaseDir = computed(() => listedPath.value || props.basePath || '/')
+const folderOpen = ref(false)
+const folderName = ref('')
+const folderError = ref('')
+const folderInput = ref<HTMLInputElement | null>(null)
+const renameOpen = ref(false)
+const renameName = ref('')
+const renameError = ref('')
+const renamePath = ref('')
+const renameInput = ref<HTMLInputElement | null>(null)
 const menuPath = ref('')
 type SortKey = 'type' | 'name' | 'description' | 'owner' | 'size' | 'date'
 const sortKey = ref<SortKey>('name')
@@ -247,12 +426,12 @@ const rootLabel = '/'
 const parentPath = computed(() => {
   const root = rootLink.value
   if (props.shareId) {
-    const cur = (props.basePath || root).replace(/\/+$/, '') || root
+    const cur = (listedPath.value || root).replace(/\/+$/, '') || root
     if (cur === root) return null
     const idx = cur.lastIndexOf('/')
     return idx <= 0 ? root : cur.slice(0, idx)
   }
-  const cur = normalizePath(props.basePath || '/')
+  const cur = normalizePath(listedPath.value || '/')
   if (cur === '/') return null
   const idx = cur.lastIndexOf('/')
   return idx <= 0 ? '/' : cur.slice(0, idx)
@@ -306,7 +485,7 @@ function sortIndicator(key: SortKey) {
 }
 
 const crumbs = computed(() => {
-  let path = props.basePath || '/'
+  let path = listedPath.value || '/'
   let acc = ''
   if (props.shareId) {
     const prefix = `/s/${props.shareId}`
@@ -322,45 +501,44 @@ const crumbs = computed(() => {
   return out
 })
 
-const selectedOne = computed(() => selected.value.length === 1 ? selected.value[0] : '')
 const selectedEntries = computed(() => files.value.filter(f => selected.value.includes(f.path)))
-const canCreate = computed(() =>
-  files.value.some(f => hasPerm(f.permissions, Perm.Create)) || files.value.length === 0,
+const canCreate = computed(() => hasPerm(dirPerms.value, Perm.Create))
+const canGoHome = computed(() =>
+  !props.shareId && (!!user.value?.authenticated || !!user.value?.guests_allowed),
 )
+const homePath = computed(() => {
+  if (user.value?.is_guest || !user.value?.authenticated) return '/'
+  const h = (user.value?.home || '/').trim() || '/'
+  if (h === '/') return '/'
+  return h.startsWith('/') ? h.replace(/\/+$/, '') : '/' + h.replace(/\/+$/, '')
+})
 const canDelete = computed(() =>
   selectedEntries.value.length > 0 && selectedEntries.value.every(f => rowCan(f, Perm.Delete)),
 )
-const canShare = computed(() => {
-  const f = files.value.find(x => x.path === selectedOne.value)
-  return !!f && rowCan(f, Perm.Share)
-})
-const canACL = computed(() => {
-  const f = files.value.find(x => x.path === selectedOne.value)
-  return !!f && rowCan(f, Perm.UpdatePermissions)
-})
 const allSelected = computed(() => files.value.length > 0 && selected.value.length === files.value.length)
 const absoluteShare = computed(() => (typeof window !== 'undefined' ? window.location.origin : '') + shareUrl.value)
+const shareExpiresLabel = computed(() => {
+  if (!shareExpiresAt.value) return ''
+  try { return new Date(shareExpiresAt.value).toLocaleString() } catch { return shareExpiresAt.value }
+})
 
 function rowCan(f: FileEntry, bit: number) {
-  // Share links are read-only in the UI even if listing bits look wider.
-  if (props.shareId && bit !== Perm.Read) return false
   return hasPerm(f.permissions ?? 0, bit)
 }
 
 function rowMenu(f: FileEntry) {
   return {
-    preview: !f.is_dir && !!mediaKind(f.name, f.content_type) && rowCan(f, Perm.Read),
-    download: !f.is_dir && rowCan(f, Perm.Read),
-    open: f.is_dir && rowCan(f, Perm.Read),
-    share: rowCan(f, Perm.Share),
-    permissions: rowCan(f, Perm.UpdatePermissions),
-    delete: rowCan(f, Perm.Delete),
+    download: rowCan(f, Perm.Read),
+    rename: !props.shareId && (rowCan(f, Perm.Update) || rowCan(f, Perm.Delete)),
+    share: !props.shareId && rowCan(f, Perm.Share),
+    permissions: !props.shareId && rowCan(f, Perm.UpdatePermissions),
+    delete: !props.shareId && rowCan(f, Perm.Delete),
   }
 }
 
 function hasRowMenu(f: FileEntry) {
   const m = rowMenu(f)
-  return m.preview || m.download || m.open || m.share || m.permissions || m.delete
+  return m.download || m.rename || m.share || m.permissions || m.delete
 }
 
 function streamUrl(f: FileEntry) {
@@ -384,23 +562,39 @@ function normalizePath(p: string) {
 }
 
 async function load() {
-  loading.value = true
+  const path = props.basePath || '/'
+  const seq = ++loadSeq
   error.value = ''
   selected.value = []
+  menuPath.value = ''
   try {
-    const res = await api.listPath(props.basePath || '/')
-    files.value = res.files || []
+    const res = await fetchListing(path)
+    if (seq !== loadSeq) return
+    files.value = res.files
+    dirPerms.value = res.permissions
+    listedPath.value = path
   } catch (e: any) {
+    if (seq !== loadSeq) return
     const status = e?.statusCode || e?.status || e?.response?.status
-    if (!props.shareId && status === 404 && normalizePath(props.basePath || '/') !== '/') {
+    if (!props.shareId && status === 404 && normalizePath(path) !== '/') {
       await navigateTo('/')
       return
     }
-    error.value = e?.data?.message || e.message || 'Failed to load'
+    if (status !== 401) {
+      error.value = e?.data?.message || e.message || 'Failed to load'
+    }
     files.value = []
-  } finally {
-    loading.value = false
+    dirPerms.value = 0
+    listedPath.value = path
   }
+}
+
+async function goTo(path: string | null | undefined) {
+  if (!path) return
+  const cur = props.basePath || '/'
+  if (path === cur) return
+  void fetchListing(path)
+  await navigateTo(path)
 }
 
 function linkFor(f: FileEntry) {
@@ -423,33 +617,34 @@ function toggleAll(e: Event) {
   selected.value = on ? sortedFiles.value.map(f => f.path) : []
 }
 
-async function onPick(e: Event) {
+function openUpload(files?: File[]) {
+  if (!canCreate.value) return
+  uploadInitialFiles.value = files?.length ? [...files] : []
+  uploadOpen.value = true
+}
+
+function onPick(e: Event) {
   const input = e.target as HTMLInputElement
   if (!input.files?.length) return
-  await uploadFiles([...input.files])
+  openUpload([...input.files])
   input.value = ''
 }
 
-async function onDrop(e: DragEvent) {
+function onDrop(e: DragEvent) {
   drag.value = false
+  if (!canCreate.value) return
   const list = e.dataTransfer?.files
   if (!list?.length) return
-  await uploadFiles([...list])
+  openUpload([...list])
 }
 
-async function uploadFiles(list: File[]) {
-  progress.value = 0
-  try {
-    for (const file of list) {
-      await api.upload(props.basePath || '/', file, '', (n) => { progress.value = n })
-    }
-    await load()
-  } catch (e: any) {
-    error.value = e.message || 'Upload failed'
-  } finally {
-    progress.value = -1
-  }
+async function onUploadDone() {
+  await load()
 }
+
+watch(uploadOpen, (v) => {
+  if (!v) uploadInitialFiles.value = []
+})
 
 function toggleMenu(path: string) {
   menuPath.value = menuPath.value === path ? '' : path
@@ -465,7 +660,25 @@ function onDocClick() {
 }
 
 function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape') menuPath.value = ''
+  if (e.key !== 'Escape') return
+  // Nested dialogs (upload/permissions/settings/admin) handle Escape themselves.
+  if (shareOpen.value) {
+    closeShare()
+    e.preventDefault()
+    return
+  }
+  if (renameOpen.value) {
+    renameOpen.value = false
+    e.preventDefault()
+    return
+  }
+  if (folderOpen.value) {
+    folderOpen.value = false
+    e.preventDefault()
+    return
+  }
+  if (uploadOpen.value || aclOpen.value) return
+  menuPath.value = ''
 }
 
 async function deleteSelected() {
@@ -482,7 +695,7 @@ async function deleteOne(f: FileEntry) {
 
 function downloadSelected() {
   for (const f of selectedEntries.value) {
-    if (!f.is_dir) window.open(downloadUrl(f), '_blank')
+    window.open(downloadUrl(f), '_blank')
   }
 }
 
@@ -490,35 +703,131 @@ function downloadOne(f: FileEntry) {
   window.open(downloadUrl(f), '_blank')
 }
 
-async function shareSelected() {
-  await shareOne(selectedOne.value)
+function openShare(path: string) {
+  sharePath.value = path
+  shareUrl.value = ''
+  shareError.value = ''
+  shareExpiry.value = ''
+  shareCustomAmount.value = 24
+  shareCustomUnit.value = 'h'
+  shareExpiresAt.value = null
+  shareAllow.value = Perm.Read
+  shareDeny.value = 0
+  shareOpen.value = true
 }
 
-async function shareOne(path: string) {
-  const res = await api.createShare(path)
-  shareUrl.value = res.url
+function closeShare() {
+  shareOpen.value = false
+  shareUrl.value = ''
+  shareError.value = ''
+}
+
+function shareExpiresIn() {
+  if (!shareExpiry.value) return undefined
+  if (shareExpiry.value !== 'custom') return shareExpiry.value
+  const n = Number(shareCustomAmount.value)
+  if (!Number.isFinite(n) || n < 1) return ''
+  return Math.floor(n) + shareCustomUnit.value
+}
+
+async function createShareLink() {
+  const expiresIn = shareExpiresIn()
+  if (expiresIn === '') {
+    shareError.value = 'Enter a valid duration'
+    return
+  }
+  shareError.value = ''
+  try {
+    const allow = shareAllow.value
+    if (!allow) {
+      shareError.value = 'Select at least one permission'
+      return
+    }
+    const res = await api.createShare(sharePath.value, {
+      ...(expiresIn ? { expires_in: expiresIn } : {}),
+      allow,
+      deny: shareDeny.value,
+    })
+    shareUrl.value = res.url
+    shareExpiresAt.value = res.expires_at || null
+  } catch (e: any) {
+    shareError.value = e?.data?.message || e.message || 'Failed to create share'
+  }
 }
 
 async function copyShare() {
   await navigator.clipboard.writeText(absoluteShare.value)
 }
 
-async function openACL(path = selectedOne.value) {
+async function openACL(path: string) {
   aclPath.value = path
-  const res = await api.getPermissions(aclPath.value)
-  publish.value = res.acl.some(
-    (a: any) => a.principal_type === 'everyone' && (a.allow & Perm.Read) === Perm.Read && a.deny === 0,
-  )
   aclOpen.value = true
 }
 
-async function saveACL() {
-  const acl = publish.value
-    ? [{ principal_type: 'everyone', principal_id: '*', allow: Perm.Read, deny: 0 }]
-    : []
-  await api.putPermissions(aclPath.value, acl)
-  aclOpen.value = false
+async function onACLSaved() {
   await load()
+  toast('Permissions saved')
+}
+
+async function openNewFolder() {
+  if (!canCreate.value) return
+  folderName.value = ''
+  folderError.value = ''
+  folderOpen.value = true
+  await nextTick()
+  folderInput.value?.focus()
+}
+
+async function createFolder() {
+  const name = folderName.value.trim()
+  if (!name || name === '.' || name === '..' || /[\\/]/.test(name)) {
+    folderError.value = 'Invalid folder name'
+    return
+  }
+  folderError.value = ''
+  try {
+    await api.mkdir(listedPath.value || '/', name)
+    folderOpen.value = false
+    toast('Folder created')
+    await load()
+  } catch (e: any) {
+    folderError.value = e?.data?.message || e.message || 'Failed to create folder'
+  }
+}
+
+async function openRename(f: FileEntry) {
+  if (!rowCan(f, Perm.Update)) return
+  renamePath.value = f.path
+  renameName.value = f.name
+  renameError.value = ''
+  renameOpen.value = true
+  await nextTick()
+  renameInput.value?.focus()
+  renameInput.value?.select()
+}
+
+async function submitRename() {
+  const spec = renameName.value.trim()
+  if (!validRenameSpec(spec)) {
+    renameError.value = 'Invalid name'
+    return
+  }
+  renameError.value = ''
+  try {
+    await api.rename(renamePath.value, spec)
+    renameOpen.value = false
+    toast('Renamed')
+    await load()
+  } catch (e: any) {
+    renameError.value = e?.data?.message || e.message || 'Failed to rename'
+  }
+}
+
+function validRenameSpec(spec: string) {
+  const s = spec.replaceAll('\\', '/').trim()
+  if (!s) return false
+  const base = s.split('/').filter(Boolean).at(-1) || ''
+  return base !== '' && base !== '.' && base !== '..'
 }
 
 function formatSize(n: number) {
@@ -533,10 +842,7 @@ function formatDate(d: string) {
   try { return new Date(d).toLocaleString() } catch { return d }
 }
 
-watch(() => props.basePath, () => {
-  menuPath.value = ''
-  return load()
-}, { immediate: true })
+watch(() => props.basePath, () => load(), { immediate: true })
 
 onMounted(() => {
   document.addEventListener('click', onDocClick)

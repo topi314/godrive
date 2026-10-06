@@ -10,21 +10,22 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/topi314/godrive/server/database/dbsqlc"
+	"github.com/topi314/godrive/server/config"
+	"github.com/topi314/godrive/server/database/dbq"
+	"github.com/topi314/godrive/server/oidc"
 	"golang.org/x/oauth2"
 )
 
 // oidcClaims holds profile fields from an ID token and/or UserInfo response.
 type oidcClaims struct {
-	Email             string      `json:"email"`
-	PreferredUsername string      `json:"preferred_username"`
-	Groups            stringList  `json:"groups"`
+	Email             string     `json:"email"`
+	PreferredUsername string     `json:"preferred_username"`
+	Groups            stringList `json:"groups"`
 }
 
 func (c *oidcClaims) merge(o oidcClaims) {
@@ -34,7 +35,7 @@ func (c *oidcClaims) merge(o oidcClaims) {
 	if c.PreferredUsername == "" {
 		c.PreferredUsername = o.PreferredUsername
 	}
-	if len(c.Groups) == 0 {
+	if len(o.Groups) > 0 {
 		c.Groups = o.Groups
 	}
 }
@@ -72,15 +73,6 @@ type authKey struct{}
 
 var UserInfoKey = authKey{}
 
-type Auth struct {
-	Verifier *oidc.IDTokenVerifier
-	Config   *oauth2.Config
-	Provider *oidc.Provider
-
-	States   map[string]string
-	StatesMu sync.Mutex
-}
-
 type Session struct {
 	AccessToken  string
 	Expiry       time.Time
@@ -106,19 +98,20 @@ func (s *Server) isAdmin(info *UserInfo) bool {
 	if s.cfg.Auth == nil {
 		return true
 	}
-	return info != nil && containsString(info.Groups, s.cfg.Auth.Groups.Admin)
+	admin := s.cfg.Auth.Groups.AdminGroup()
+	return info != nil && admin != "" && containsString(info.Groups, admin)
 }
 
-func (s *Server) isUser(info *UserInfo) bool {
-	return info != nil && s.cfg.Auth != nil && containsString(info.Groups, s.cfg.Auth.Groups.User)
-}
-
-func (s *Server) isViewer(info *UserInfo) bool {
-	return info != nil && s.cfg.Auth != nil && containsString(info.Groups, s.cfg.Auth.Groups.Viewer)
+func (s *Server) isAccess(info *UserInfo) bool {
+	if info == nil || s.cfg.Auth == nil {
+		return false
+	}
+	access := s.cfg.Auth.Groups.AccessGroup()
+	return access != "" && containsString(info.Groups, access)
 }
 
 func (s *Server) isGuest(info *UserInfo) bool {
-	return info != nil && containsString(info.Groups, "guest")
+	return userIsGuest(info)
 }
 
 func (s *Server) hasAccess(info *UserInfo) bool {
@@ -128,24 +121,74 @@ func (s *Server) hasAccess(info *UserInfo) bool {
 	if !s.cfg.Auth.Groups.Guest && s.isGuest(info) {
 		return false
 	}
-	return s.isAdmin(info) || s.isUser(info) || s.isViewer(info) || s.isGuest(info)
+	return s.isAdmin(info) || s.isAccess(info) || s.isGuest(info)
+}
+
+func parseGroupsJSON(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var groups []string
+	if err := json.Unmarshal([]byte(raw), &groups); err == nil {
+		return groups
+	}
+	return []string{raw}
+}
+
+func (s *Server) mappedGroups(groups []string) []string {
+	if s.cfg.Auth == nil {
+		return nil
+	}
+	return s.cfg.Auth.Groups.MapOIDCGroups(groups)
+}
+
+func (s *Server) availableGroups() []string {
+	if s.cfg.Auth == nil {
+		return nil
+	}
+	return s.cfg.Auth.Groups.AvailableGroups()
+}
+
+func (s *Server) userPublicJSON(ctx context.Context, u dbq.User) map[string]any {
+	_ = ctx
+	info := s.userToInfo(u)
+	return map[string]any{
+		"id":         u.ID,
+		"username":   u.Username,
+		"email":      u.Email,
+		"avatar":     gravatarURL(u.Email),
+		"home":       u.Home,
+		"groups":     info.Groups,
+		"is_admin":   s.isAdmin(info),
+		"is_access":  s.isAccess(info),
+		"created_at": u.CreatedAt,
+		"updated_at": u.UpdatedAt,
+	}
 }
 
 func (s *Server) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		info := s.resolveUser(r)
+		info, sessExp := s.resolveUser(r)
 		if info == nil && s.cfg.Auth == nil {
 			// Open mode: no OIDC — every request is a local admin.
 			info = &UserInfo{Subject: "local", Username: "local", Groups: []string{"admin"}, Home: "/"}
 		}
+		if info == nil && s.cfg.Auth != nil {
+			info, sessExp = s.tryRefresh(w, r)
+		}
 		if info != nil {
-			r = r.WithContext(context.WithValue(r.Context(), UserInfoKey, info))
+			ctx := context.WithValue(r.Context(), UserInfoKey, info)
+			if !sessExp.IsZero() {
+				ctx = context.WithValue(ctx, sessionExpiryKey{}, sessExp)
+			}
+			r = r.WithContext(ctx)
 		}
 		next.ServeHTTP(w, r)
 	})
 }
 
-func (s *Server) resolveUser(r *http.Request) *UserInfo {
+func (s *Server) resolveUser(r *http.Request) (*UserInfo, time.Time) {
 	if auth := r.Header.Get("Authorization"); strings.HasPrefix(strings.ToLower(auth), "bearer ") {
 		token := strings.TrimSpace(auth[7:])
 		hash := hashToken(token)
@@ -153,38 +196,40 @@ func (s *Server) resolveUser(r *http.Request) *UserInfo {
 		if err == nil {
 			user, err := s.store.Q.GetUser(r.Context(), row.UserID)
 			if err == nil {
-				return userToInfo(user)
+				return s.userToInfo(user), time.Time{}
 			}
 		}
 	}
 
 	c, err := r.Cookie(SessionCookieName)
 	if err != nil || c.Value == "" {
-		return nil
+		return nil, time.Time{}
 	}
 	sess, err := s.store.Q.GetSession(r.Context(), c.Value)
 	if err != nil {
-		return nil
+		return nil, time.Time{}
 	}
-	if time.Now().After(sess.Expiry) {
+	now := time.Now()
+	if now.After(s.refreshDeadline(sess)) {
 		_ = s.store.Q.DeleteSession(r.Context(), c.Value)
-		return nil
+		return nil, time.Time{}
+	}
+	if now.After(sess.Expiry) {
+		return nil, time.Time{}
 	}
 	user, err := s.store.Q.GetUser(r.Context(), sess.UserID)
 	if err != nil {
-		return nil
+		return nil, time.Time{}
 	}
-	return userToInfo(user)
+	return s.userToInfo(user), sess.Expiry
 }
 
-func userToInfo(u dbsqlc.User) *UserInfo {
-	var groups []string
-	_ = json.Unmarshal([]byte(u.Groups), &groups)
+func (s *Server) userToInfo(u dbq.User) *UserInfo {
 	return &UserInfo{
 		Subject:  u.ID,
 		Email:    u.Email,
 		Home:     u.Home,
-		Groups:   groups,
+		Groups:   s.mappedGroups(parseGroupsJSON(u.Groups)),
 		Username: u.Username,
 	}
 }
@@ -223,16 +268,19 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	state := randomID(24)
 	nonce := randomID(24)
-	s.auth.StatesMu.Lock()
-	s.auth.States[state] = nonce
-	s.auth.StatesMu.Unlock()
+	verifier := oauth2.GenerateVerifier()
+	s.auth.PutLoginFlow(state, oidc.LoginFlow{Nonce: nonce, CodeVerifier: verifier, Created: time.Now()})
 
 	rd := r.URL.Query().Get("rd")
 	if rd != "" {
 		http.SetCookie(w, &http.Cookie{Name: "godrive_rd", Value: rd, Path: "/", MaxAge: 600, HttpOnly: true})
 	}
-	url := s.auth.Config.AuthCodeURL(state, oidc.Nonce(nonce), oauth2.AccessTypeOffline)
-	http.Redirect(w, r, url, http.StatusFound)
+	authURL, err := s.auth.AuthorizationURL(r.Context(), state, nonce, verifier)
+	if err != nil {
+		s.writeError(w, r, err, http.StatusBadGateway)
+		return
+	}
+	http.Redirect(w, r, authURL, http.StatusFound)
 }
 
 func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
@@ -240,17 +288,26 @@ func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, errors.New("auth not configured"), http.StatusNotImplemented)
 		return
 	}
+	if errParam := r.URL.Query().Get("error"); errParam != "" {
+		desc := r.URL.Query().Get("error_description")
+		if desc == "" {
+			desc = errParam
+		}
+		s.writeError(w, r, fmt.Errorf("oidc: %s", desc), http.StatusBadRequest)
+		return
+	}
+	if !oidc.AuthorizationIssValid(r.URL.Query().Get("iss"), s.cfg.Auth.Issuer, s.auth.Discovery.IssParameterSupported) {
+		s.writeError(w, r, errors.New("invalid issuer"), http.StatusBadRequest)
+		return
+	}
 	state := r.URL.Query().Get("state")
-	s.auth.StatesMu.Lock()
-	nonce, ok := s.auth.States[state]
-	delete(s.auth.States, state)
-	s.auth.StatesMu.Unlock()
+	flow, ok := s.auth.TakeLoginFlow(state)
 	if !ok {
 		s.writeError(w, r, errors.New("invalid state"), http.StatusBadRequest)
 		return
 	}
 
-	oauth2Token, err := s.auth.Config.Exchange(r.Context(), r.URL.Query().Get("code"))
+	oauth2Token, err := s.auth.Config.Exchange(r.Context(), r.URL.Query().Get("code"), oauth2.VerifierOption(flow.CodeVerifier))
 	if err != nil {
 		s.writeError(w, r, err, http.StatusBadRequest)
 		return
@@ -265,7 +322,7 @@ func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, err, http.StatusBadRequest)
 		return
 	}
-	if idToken.Nonce != nonce {
+	if idToken.Nonce != flow.Nonce {
 		s.writeError(w, r, errors.New("invalid nonce"), http.StatusBadRequest)
 		return
 	}
@@ -283,18 +340,15 @@ func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	home := "/"
-	if s.cfg.Auth.DefaultHome != "" {
-		home = s.cfg.Auth.DefaultHome
-	}
-	groups := claims.Groups.Strings()
+	groups := s.cfg.Auth.Groups.MapOIDCGroups(claims.Groups.Strings())
 	groupsJSON, _ := json.Marshal(groups)
 	username := claims.PreferredUsername
 	if username == "" {
 		username = claims.Email
 	}
+	home := config.ExpandHome(s.cfg.Auth.DefaultHome, username, claims.Email, idToken.Subject)
 	now := time.Now().UTC()
-	user, err := s.store.Q.UpsertUser(r.Context(), dbsqlc.UpsertUserParams{
+	user, err := s.store.Q.UpsertUser(r.Context(), dbq.UpsertUserParams{
 		ID:        idToken.Subject,
 		Username:  username,
 		Email:     claims.Email,
@@ -308,22 +362,23 @@ func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	info := userToInfo(user)
+	info := s.userToInfo(user)
 	if !s.hasAccess(info) {
 		s.writeError(w, r, fmt.Errorf("access denied (groups=%v)", groups), http.StatusForbidden)
 		return
 	}
+	if err := s.provisionUserHome(r.Context(), user.Home, info); err != nil {
+		slog.Warn("provision home failed", slog.String("path", user.Home), slog.Any("err", err))
+	}
 
 	sessionID := randomID(32)
-	expiry := oauth2Token.Expiry
-	if expiry.IsZero() {
-		expiry = now.Add(24 * time.Hour)
-	}
-	_, err = s.store.Q.UpsertSession(r.Context(), dbsqlc.UpsertSessionParams{
+	sessionExp := now.Add(s.cfg.Auth.SessionLifespan.Duration)
+	refreshExp := now.Add(s.cfg.Auth.RefreshTokenLifespan.Duration)
+	_, err = s.store.Q.UpsertSession(r.Context(), dbq.UpsertSessionParams{
 		ID:           sessionID,
 		UserID:       user.ID,
 		AccessToken:  oauth2Token.AccessToken,
-		Expiry:       expiry,
+		Expiry:       sessionExp,
 		RefreshToken: oauth2Token.RefreshToken,
 		IDToken:      rawIDToken,
 		CreatedAt:    now,
@@ -334,15 +389,7 @@ func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     SessionCookieName,
-		Value:    sessionID,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   s.cfg.Auth.Secure,
-		Expires:  expiry,
-	})
+	s.setAuthCookies(w, sessionID, sessionExp, refreshExp)
 
 	rd := "/"
 	if c, err := r.Cookie("godrive_rd"); err == nil && c.Value != "" {
@@ -353,11 +400,34 @@ func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
+	var idToken string
+	sessID := ""
 	if c, err := r.Cookie(SessionCookieName); err == nil {
-		_ = s.store.Q.DeleteSession(r.Context(), c.Value)
+		sessID = c.Value
 	}
-	http.SetCookie(w, &http.Cookie{Name: SessionCookieName, Value: "", Path: "/", MaxAge: -1})
+	if sessID == "" {
+		if c, err := r.Cookie(RefreshCookieName); err == nil {
+			sessID = c.Value
+		}
+	}
+	if sessID != "" {
+		if sess, err := s.store.Q.GetSession(r.Context(), sessID); err == nil {
+			idToken = sess.IDToken
+			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+			s.auth.Revoke(ctx, sess.RefreshToken, "refresh_token")
+			s.auth.Revoke(ctx, sess.AccessToken, "access_token")
+			cancel()
+			_ = s.store.Q.DeleteSession(r.Context(), sess.ID)
+		} else {
+			_ = s.store.Q.DeleteSession(r.Context(), sessID)
+		}
+	}
+	s.clearAuthCookies(w)
 	if r.Method == http.MethodGet {
+		if loc := s.rpLogoutURL(idToken); loc != "" {
+			http.Redirect(w, r, loc, http.StatusFound)
+			return
+		}
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
@@ -369,39 +439,59 @@ func (s *Server) Me(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.Auth == nil {
 		// Open mode: no OIDC — treat the operator as a local admin.
 		s.writeJSON(w, map[string]any{
-			"authenticated": true,
-			"auth_enabled":  false,
-			"id":            info.Subject,
-			"username":      info.Username,
-			"home":          info.Home,
-			"is_admin":      true,
-			"is_user":       true,
-			"is_viewer":     true,
-			"is_guest":      false,
+			"authenticated":    true,
+			"auth_enabled":     false,
+			"id":               info.Subject,
+			"username":         info.Username,
+			"home":             info.Home,
+			"is_admin":         true,
+			"is_access":        true,
+			"is_guest":         false,
+			"groups":           []string{"admin"},
+			"available_groups": []string{"admin"},
 		}, http.StatusOK)
 		return
 	}
 	if info == nil {
-		s.writeJSON(w, map[string]any{
-			"authenticated": false,
-			"auth_enabled":  true,
-		}, http.StatusOK)
+		out := map[string]any{
+			"authenticated":  false,
+			"auth_enabled":   true,
+			"guests_allowed": s.cfg.Auth.Groups.Guest,
+		}
+		if s.cfg.Auth.Groups.Guest {
+			out["is_guest"] = true
+			out["home"] = "/"
+		}
+		s.writeJSON(w, out, http.StatusOK)
 		return
 	}
+	home := info.Home
+	if s.isGuest(info) {
+		home = "/"
+	}
 	s.writeJSON(w, map[string]any{
-		"authenticated": true,
-		"auth_enabled":  true,
-		"id":            info.Subject,
-		"username":      info.Username,
-		"email":         info.Email,
-		"avatar":        gravatarURL(info.Email),
-		"home":          info.Home,
-		"groups":        info.Groups,
-		"is_admin":      s.isAdmin(info),
-		"is_user":       s.isUser(info),
-		"is_viewer":     s.isViewer(info),
-		"is_guest":      s.isGuest(info),
+		"authenticated":      true,
+		"auth_enabled":       true,
+		"guests_allowed":     s.cfg.Auth.Groups.Guest,
+		"id":                 info.Subject,
+		"username":           info.Username,
+		"email":              info.Email,
+		"avatar":             gravatarURL(info.Email),
+		"home":               home,
+		"groups":             info.Groups,
+		"available_groups":   s.availableGroups(),
+		"is_admin":           s.isAdmin(info),
+		"is_access":          s.isAccess(info),
+		"is_guest":           s.isGuest(info),
+		"session_expires_at": sessionExpiryJSON(GetSessionExpiry(r)),
 	}, http.StatusOK)
+}
+
+func sessionExpiryJSON(t time.Time) any {
+	if t.IsZero() {
+		return nil
+	}
+	return t.UTC().Format(time.RFC3339)
 }
 
 // gravatarURL matches the pre-rewrite template helper (MD5 email, retro default).
@@ -425,6 +515,22 @@ func hashToken(token string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func wantsHTML(r *http.Request) bool {
-	return strings.Contains(r.Header.Get("Accept"), "text/html")
+func containsString(ss []string, v string) bool {
+	for _, s := range ss {
+		if s == v {
+			return true
+		}
+	}
+	return false
+}
+
+func userIsGuest(info *UserInfo) bool {
+	return info != nil && (info.Subject == "guest" || containsString(info.Groups, "guest"))
+}
+
+func (s *Server) rpLogoutURL(idToken string) string {
+	if s.auth == nil || s.cfg.Auth == nil {
+		return ""
+	}
+	return s.auth.LogoutURL(idToken, s.cfg.Auth.PostLogoutRedirectURL)
 }

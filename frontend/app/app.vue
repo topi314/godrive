@@ -42,23 +42,43 @@
             <span v-else class="user-label">{{ user.username || 'Account' }}</span>
           </button>
           <nav v-if="userMenuOpen" class="user-menu-dropdown" role="menu">
+            <div class="user-menu-head">
+              <strong>{{ user.username || 'Account' }}</strong>
+              <span v-if="user.email" class="muted">{{ user.email }}</span>
+            </div>
+            <button type="button" role="menuitem" @click="openSettings">
+              <AppIcon name="settings" />
+              Settings
+            </button>
             <button
               v-if="user.is_admin"
               type="button"
               role="menuitem"
-              @click="openSettings"
+              @click="openAdmin"
             >
-              Settings
+              <AppIcon name="lock" />
+              Admin
             </button>
-            <a href="/api/logout" role="menuitem">Logout</a>
+            <div class="user-menu-sep" role="separator" />
+            <a href="/api/logout" role="menuitem" class="danger">
+              <AppIcon name="logout" />
+              Logout
+            </a>
           </nav>
         </div>
-        <IconBtn
-          v-else-if="user?.authenticated && user.is_admin"
-          name="settings"
-          label="Settings"
-          @click="settingsOpen = true"
-        />
+        <template v-else-if="user?.authenticated && !user.auth_enabled">
+          <IconBtn
+            v-if="user.is_admin"
+            name="lock"
+            label="Admin"
+            @click="adminOpen = true"
+          />
+          <IconBtn
+            name="settings"
+            label="Settings"
+            @click="settingsOpen = true"
+          />
+        </template>
         <a
           v-else-if="user?.auth_enabled"
           :href="loginHref"
@@ -71,23 +91,59 @@
       </div>
     </header>
     <main class="main">
-      <NuxtPage />
+      <NuxtPage :page-key="pageKey" />
     </main>
-    <SettingsDialog v-if="user?.is_admin" v-model="settingsOpen" />
+    <SettingsDialog
+      v-if="user?.authenticated"
+      v-model="settingsOpen"
+      :me="user"
+      @updated="refreshMe"
+    />
+    <AdminDialog
+      v-if="user?.authenticated && user.is_admin"
+      v-model="adminOpen"
+      :me="user"
+    />
+    <LoginRequiredDialog v-if="needsLogin" :href="loginHref" />
+    <ToastHost />
   </div>
 </template>
 
 <script setup lang="ts">
+import type { Me } from '~/composables/useApi'
+import type { RouteLocationNormalizedLoaded } from 'vue-router'
+
 const api = useApi()
-const user = ref<Awaited<ReturnType<typeof api.me>> | null>(null)
+const user = useState<Me | null>('me', () => null)
+const meReady = ref(false)
 const theme = ref<'dark' | 'light'>('dark')
 const settingsOpen = useState('settingsOpen', () => false)
+const adminOpen = useState('adminOpen', () => false)
 const userMenuOpen = ref(false)
 const userMenuEl = ref<HTMLElement | null>(null)
+
+/** Keep BrowserView mounted across folder navigations (default key is full path → remount/flash). */
+function pageKey(route: RouteLocationNormalizedLoaded) {
+  if (route.path === '/s' || route.path.startsWith('/s/')) {
+    return 'share:' + String(route.params.id || '')
+  }
+  return 'browse'
+}
 const loginHref = computed(() => {
   if (typeof window === 'undefined') return '/api/login?rd=/'
   return '/api/login?rd=' + encodeURIComponent(window.location.href)
 })
+const needsLogin = computed(() =>
+  meReady.value
+  && !!user.value?.auth_enabled
+  && !user.value?.authenticated
+  && user.value?.guests_allowed === false,
+)
+
+watch(needsLogin, (locked) => {
+  if (typeof document === 'undefined') return
+  document.body.style.overflow = locked ? 'hidden' : ''
+}, { immediate: true })
 
 function applyTheme(next: 'dark' | 'light') {
   theme.value = next
@@ -110,6 +166,47 @@ function openSettings() {
   settingsOpen.value = true
 }
 
+function openAdmin() {
+  userMenuOpen.value = false
+  adminOpen.value = true
+}
+
+async function refreshMe() {
+  try {
+    user.value = await api.me()
+  } catch {
+    /* keep current */
+  }
+}
+
+let sessionRefreshTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearSessionRefreshTimer() {
+  if (sessionRefreshTimer) {
+    clearTimeout(sessionRefreshTimer)
+    sessionRefreshTimer = null
+  }
+}
+
+function scheduleSessionRefresh() {
+  clearSessionRefreshTimer()
+  const raw = user.value?.session_expires_at
+  if (!user.value?.authenticated || user.value.is_guest || !raw) return
+  const at = Date.parse(raw)
+  if (!Number.isFinite(at)) return
+  const delay = Math.max(5_000, at - Date.now() - 60_000)
+  sessionRefreshTimer = setTimeout(async () => {
+    try {
+      await api.refreshSession()
+      await refreshMe()
+    } catch {
+      /* session will be retried on the next 401 */
+    }
+  }, delay)
+}
+
+watch(() => user.value?.session_expires_at, scheduleSessionRefresh)
+
 function onDocClick(e: MouseEvent) {
   if (!userMenuEl.value?.contains(e.target as Node)) {
     userMenuOpen.value = false
@@ -117,7 +214,16 @@ function onDocClick(e: MouseEvent) {
 }
 
 function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape') userMenuOpen.value = false
+  if (e.key !== 'Escape') return
+  if (adminOpen.value) {
+    adminOpen.value = false
+    return
+  }
+  if (settingsOpen.value) {
+    settingsOpen.value = false
+    return
+  }
+  userMenuOpen.value = false
 }
 
 onMounted(async () => {
@@ -129,11 +235,14 @@ onMounted(async () => {
     user.value = await api.me()
   } catch {
     user.value = { authenticated: false }
+  } finally {
+    meReady.value = true
   }
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', onDocClick)
   document.removeEventListener('keydown', onKeydown)
+  clearSessionRefreshTimer()
 })
 </script>

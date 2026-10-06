@@ -1,4 +1,4 @@
-package server
+package storage
 
 import (
 	"context"
@@ -11,13 +11,16 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+
+	"github.com/topi314/godrive/server/acl"
+	"github.com/topi314/godrive/server/config"
 )
 
 type localStorage struct {
 	root string
 }
 
-func newLocalStorage(cfg StorageConfig) (*localStorage, error) {
+func newLocalStorage(cfg config.StorageConfig) (*localStorage, error) {
 	root, err := filepath.Abs(cfg.Path)
 	if err != nil {
 		return nil, err
@@ -29,7 +32,7 @@ func newLocalStorage(cfg StorageConfig) (*localStorage, error) {
 }
 
 func (s *localStorage) resolve(p string) (string, error) {
-	p = strings.TrimPrefix(NormalizePath(p), "/")
+	p = strings.TrimPrefix(acl.NormalizePath(p), "/")
 	full := filepath.Join(s.root, filepath.FromSlash(p))
 	abs, err := filepath.Abs(full)
 	if err != nil {
@@ -48,7 +51,7 @@ func (s *localStorage) toLogical(abs string) string {
 	if err != nil {
 		return "/"
 	}
-	return NormalizePath("/" + filepath.ToSlash(rel))
+	return acl.NormalizePath("/" + filepath.ToSlash(rel))
 }
 
 func (s *localStorage) GetObject(ctx context.Context, path string, start, end int64) (io.ReadCloser, ObjectInfo, error) {
@@ -104,10 +107,28 @@ func (s *localStorage) PutObject(ctx context.Context, path string, size int64, r
 	return os.Rename(tmp, abs)
 }
 
+func (s *localStorage) Mkdir(ctx context.Context, path string) error {
+	abs, err := s.resolve(path)
+	if err != nil {
+		return err
+	}
+	return os.MkdirAll(abs, 0o755)
+}
+
 func (s *localStorage) DeleteObject(ctx context.Context, path string) error {
 	abs, err := s.resolve(path)
 	if err != nil {
 		return err
+	}
+	st, err := os.Lstat(abs)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if st.IsDir() {
+		return os.RemoveAll(abs)
 	}
 	return os.Remove(abs)
 }
@@ -121,6 +142,21 @@ func (s *localStorage) CopyObject(ctx context.Context, from, to string) error {
 	return s.PutObject(ctx, to, info.Size, src, info.ContentType)
 }
 
+func (s *localStorage) RenameObject(ctx context.Context, from, to string) error {
+	src, err := s.resolve(from)
+	if err != nil {
+		return err
+	}
+	dst, err := s.resolve(to)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	return os.Rename(src, dst)
+}
+
 func (s *localStorage) Stat(ctx context.Context, path string) (ObjectInfo, error) {
 	abs, err := s.resolve(path)
 	if err != nil {
@@ -130,12 +166,20 @@ func (s *localStorage) Stat(ctx context.Context, path string) (ObjectInfo, error
 	if err != nil {
 		return ObjectInfo{}, err
 	}
+	if st.IsDir() {
+		return ObjectInfo{
+			Path:         acl.NormalizePath(path),
+			Size:         0,
+			ContentType:  ContentTypeDirectory,
+			LastModified: st.ModTime(),
+		}, nil
+	}
 	ct := mime.TypeByExtension(filepath.Ext(abs))
 	if ct == "" {
 		ct = "application/octet-stream"
 	}
 	return ObjectInfo{
-		Path:         NormalizePath(path),
+		Path:         acl.NormalizePath(path),
 		Size:         st.Size(),
 		ContentType:  ct,
 		LastModified: st.ModTime(),
@@ -143,13 +187,25 @@ func (s *localStorage) Stat(ctx context.Context, path string) (ObjectInfo, error
 }
 
 func (s *localStorage) List(ctx context.Context, prefix string) ([]ObjectInfo, error) {
-	prefix = NormalizePath(prefix)
+	prefix = acl.NormalizePath(prefix)
 	var out []ObjectInfo
 	err := filepath.WalkDir(s.root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if d.IsDir() {
+			if path == s.root {
+				return nil
+			}
+			logical := s.toLogical(path)
+			if prefix != "/" && logical != prefix && !strings.HasPrefix(logical, prefix+"/") {
+				return nil
+			}
+			info, err := s.Stat(ctx, logical)
+			if err != nil {
+				return nil
+			}
+			out = append(out, info)
 			return nil
 		}
 		logical := s.toLogical(path)
@@ -166,7 +222,7 @@ func (s *localStorage) List(ctx context.Context, prefix string) ([]ObjectInfo, e
 	return out, err
 }
 
-func (s *localStorage) Watch(ctx context.Context, onChange func(StorageEvent)) error {
+func (s *localStorage) Watch(ctx context.Context, onChange func(Event)) error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return err
@@ -206,6 +262,11 @@ func (s *localStorage) Watch(ctx context.Context, onChange func(StorageEvent)) e
 				if ev.Has(fsnotify.Create) {
 					if st, err := os.Stat(ev.Name); err == nil && st.IsDir() {
 						addDir(ev.Name)
+						logical := s.toLogical(ev.Name)
+						info, err := s.Stat(ctx, logical)
+						if err == nil {
+							onChange(Event{Type: EventUpsert, Path: logical, Info: info})
+						}
 						continue
 					}
 				}
@@ -220,14 +281,14 @@ func (s *localStorage) Watch(ctx context.Context, onChange func(StorageEvent)) e
 				debounce[path] = time.AfterFunc(200*time.Millisecond, func() {
 					delete(debounce, path)
 					if ev.Has(fsnotify.Remove) || ev.Has(fsnotify.Rename) {
-						onChange(StorageEvent{Type: StorageEventDelete, Path: path})
+						onChange(Event{Type: EventDelete, Path: path})
 						return
 					}
 					info, err := s.Stat(ctx, path)
 					if err != nil {
 						return
 					}
-					onChange(StorageEvent{Type: StorageEventUpsert, Path: path, Info: info})
+					onChange(Event{Type: EventUpsert, Path: path, Info: info})
 				})
 			}
 		}
@@ -236,3 +297,98 @@ func (s *localStorage) Watch(ctx context.Context, onChange func(StorageEvent)) e
 }
 
 func (s *localStorage) Close() error { return nil }
+
+func (s *localStorage) uploadAbs(tempKey string) (string, error) {
+	if tempKey == "" || strings.Contains(tempKey, "..") || strings.ContainsAny(tempKey, "/\\") {
+		return "", fmt.Errorf("invalid upload key")
+	}
+	dir := filepath.Join(s.root, ".uploads")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, tempKey), nil
+}
+
+func (s *localStorage) CreateUpload(ctx context.Context, tempKey string, size int64) (string, error) {
+	abs, err := s.uploadAbs(tempKey)
+	if err != nil {
+		return "", err
+	}
+	f, err := os.OpenFile(abs, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	if size > 0 {
+		if err := f.Truncate(size); err != nil {
+			_ = os.Remove(abs)
+			return "", err
+		}
+	}
+	return "", nil
+}
+
+func (s *localStorage) WriteUpload(ctx context.Context, tempKey string, offset int64, r io.Reader, n int64, uploadID string, partNumber int32) (string, error) {
+	abs, err := s.uploadAbs(tempKey)
+	if err != nil {
+		return "", err
+	}
+	f, err := os.OpenFile(abs, os.O_RDWR, 0o644)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	if _, err := f.Seek(offset, io.SeekStart); err != nil {
+		return "", err
+	}
+	written, err := io.Copy(f, io.LimitReader(r, n))
+	if err != nil {
+		return "", err
+	}
+	if written != n {
+		return "", fmt.Errorf("short write: %d/%d", written, n)
+	}
+	return "", nil
+}
+
+func (s *localStorage) CommitUpload(ctx context.Context, tempKey, destPath, contentType, uploadID string, parts []CompletedPart) error {
+	abs, err := s.uploadAbs(tempKey)
+	if err != nil {
+		return err
+	}
+	dest, err := s.resolve(destPath)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		return err
+	}
+	if err := os.Rename(abs, dest); err != nil {
+		// Cross-device fallback.
+		in, err := os.Open(abs)
+		if err != nil {
+			return err
+		}
+		defer in.Close()
+		st, _ := in.Stat()
+		size := int64(0)
+		if st != nil {
+			size = st.Size()
+		}
+		if err := s.PutObject(ctx, destPath, size, in, contentType); err != nil {
+			return err
+		}
+		_ = os.Remove(abs)
+	}
+	return nil
+}
+
+func (s *localStorage) AbortUpload(ctx context.Context, tempKey, uploadID string) error {
+	abs, err := s.uploadAbs(tempKey)
+	if err != nil {
+		return err
+	}
+	_ = os.Remove(abs)
+	return nil
+}
+

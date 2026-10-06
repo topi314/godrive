@@ -54,11 +54,21 @@ func (s *Server) Routes() http.Handler {
 
 		r.Get("/me", s.Me)
 		r.Get("/login", s.Login)
+		r.Post("/refresh", s.Refresh)
 		r.Get("/logout", s.Logout)
 		r.Post("/logout", s.Logout)
 		if s.cfg.Auth != nil {
 			r.Get("/callback", s.Callback)
 		}
+
+		r.Get("/upload/config", s.UploadConfigAPI)
+		// Share-authorized upload sessions (anonymous OK when share grants Create).
+		r.Post("/uploads/preflight", s.PreflightUploadAPI)
+		r.Post("/uploads", s.CreateUploadSessionAPI)
+		r.Get("/uploads/{id}", s.GetUploadSessionAPI)
+		r.Patch("/uploads/{id}", s.PatchUploadSessionAPI)
+		r.Post("/uploads/{id}/complete", s.CompleteUploadSessionAPI)
+		r.Delete("/uploads/{id}", s.AbortUploadSessionAPI)
 
 		r.Post("/internal/storage-events", s.StorageEventsWebhook)
 
@@ -76,7 +86,11 @@ func (s *Server) Routes() http.Handler {
 			r.Post("/tokens", s.CreateTokenAPI)
 			r.Delete("/tokens/{hash}", s.DeleteTokenAPI)
 
+			r.Patch("/me", s.PatchMeAPI)
+
 			r.Get("/settings/users", s.ListUsersAPI)
+			r.Patch("/settings/users/{id}", s.PatchUserAPI)
+			r.Delete("/settings/users/{id}", s.DeleteUserAPI)
 			r.Get("/settings/permissions", s.ListAllPermissionsAPI)
 		})
 	})
@@ -85,6 +99,9 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/preview", s.GetSharePreview)
 		r.Get("/", s.GetSharePage)
 		r.Get("/*", s.GetSharePage)
+		// Mutating share routes (authorized via share ACL principal).
+		r.Post("/", s.ShareUploadFileAPI)
+		r.Post("/*", s.ShareUploadFileAPI)
 	})
 
 	// Path-based file API (content negotiation): JSON list vs bytes/HTML via Accept.

@@ -9,11 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/topi314/godrive/server/database/dbsqlc"
+	"github.com/topi314/godrive/server/acl"
+	"github.com/topi314/godrive/server/database/dbq"
+	"github.com/topi314/godrive/server/storage"
 )
 
 func (s *Server) startSync(ctx context.Context) {
-	_ = s.storage.Watch(ctx, func(ev StorageEvent) {
+	_ = s.storage.Watch(ctx, func(ev storage.Event) {
 		s.applyStorageEvent(context.Background(), ev)
 	})
 
@@ -37,17 +39,15 @@ func (s *Server) startSync(ctx context.Context) {
 	}()
 }
 
-func (s *Server) applyStorageEvent(ctx context.Context, ev StorageEvent) {
-	path := NormalizePath(ev.Path)
-	if IsReservedPath(path) {
+func (s *Server) applyStorageEvent(ctx context.Context, ev storage.Event) {
+	path := acl.NormalizePath(ev.Path)
+	if acl.IsReservedPath(path) {
 		return
 	}
 	switch ev.Type {
-	case StorageEventDelete:
+	case storage.EventDelete:
 		_ = s.store.Q.DeleteFile(ctx, path)
-		_ = s.store.Q.DeleteACLForPath(ctx, path)
-		_ = s.store.Q.DeleteSharesForPath(ctx, path)
-	case StorageEventUpsert:
+	case storage.EventUpsert:
 		info := ev.Info
 		if info.Path == "" {
 			var err error
@@ -61,10 +61,16 @@ func (s *Server) applyStorageEvent(ctx context.Context, ev StorageEvent) {
 		if ct == "" {
 			ct = "application/octet-stream"
 		}
-		_, _ = s.store.Q.UpsertFile(ctx, dbsqlc.UpsertFileParams{
+		params := dbq.UpsertFileParams{
 			Path: path, Size: info.Size, ContentType: ct,
 			Description: "", CreatedAt: now, UpdatedAt: now,
-		})
+		}
+		if existing, err := s.store.Q.GetFile(ctx, path); err == nil {
+			params.Description = existing.Description
+			params.UserID = existing.UserID
+			params.CreatedAt = existing.CreatedAt
+		}
+		_, _ = s.store.Q.UpsertFile(ctx, params)
 	}
 }
 
@@ -76,7 +82,7 @@ func (s *Server) syncPrefix(ctx context.Context, prefix string) {
 	seen := map[string]struct{}{}
 	now := time.Now().UTC()
 	for _, obj := range objs {
-		if IsReservedPath(obj.Path) {
+		if acl.IsReservedPath(obj.Path) {
 			continue
 		}
 		seen[obj.Path] = struct{}{}
@@ -84,13 +90,13 @@ func (s *Server) syncPrefix(ctx context.Context, prefix string) {
 		if ct == "" {
 			ct = "application/octet-stream"
 		}
-		_, _ = s.store.Q.UpsertFile(ctx, dbsqlc.UpsertFileParams{
+		_, _ = s.store.Q.UpsertFile(ctx, dbq.UpsertFileParams{
 			Path: obj.Path, Size: obj.Size, ContentType: ct,
 			Description: "", CreatedAt: now, UpdatedAt: now,
 		})
 	}
-	rows, err := s.store.Q.ListFilesUnder(ctx, dbsqlc.ListFilesUnderParams{
-		Path: NormalizePath(prefix), PathLike: LikeUnder(prefix),
+	rows, err := s.store.Q.ListFilesUnder(ctx, dbq.ListFilesUnderParams{
+		Path: acl.NormalizePath(prefix), PathLike: acl.LikeUnder(prefix),
 	})
 	if err != nil {
 		return
@@ -129,15 +135,15 @@ func (s *Server) StorageEventsWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, rec := range body.Records {
-		key := NormalizePath("/" + rec.S3.Object.Key)
+		key := acl.NormalizePath("/" + rec.S3.Object.Key)
 		if strings.Contains(rec.EventName, "ObjectRemoved") {
-			s.applyStorageEvent(r.Context(), StorageEvent{Type: StorageEventDelete, Path: key})
+			s.applyStorageEvent(r.Context(), storage.Event{Type: storage.EventDelete, Path: key})
 		} else {
-			s.applyStorageEvent(r.Context(), StorageEvent{Type: StorageEventUpsert, Path: key})
+			s.applyStorageEvent(r.Context(), storage.Event{Type: storage.EventUpsert, Path: key})
 		}
 	}
 	if body.Key != "" {
-		s.applyStorageEvent(r.Context(), StorageEvent{Type: StorageEventUpsert, Path: NormalizePath("/" + body.Key)})
+		s.applyStorageEvent(r.Context(), storage.Event{Type: storage.EventUpsert, Path: acl.NormalizePath("/" + body.Key)})
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

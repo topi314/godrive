@@ -17,7 +17,7 @@ defineProps<{
   name: string
   label: string
   disabled?: boolean
-  variant?: 'primary' | 'danger' | ''
+  variant?: 'primary' | 'danger' | 'ghost' | ''
 }>()
 
 defineEmits<{ click: [MouseEvent] }>()

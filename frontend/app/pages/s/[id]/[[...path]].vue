@@ -5,6 +5,10 @@
 <script setup lang="ts">
 import BrowserView from '~/components/BrowserView.vue'
 
+definePageMeta({
+  key: route => 'share:' + String(route.params.id || ''),
+})
+
 const route = useRoute()
 const router = useRouter()
 

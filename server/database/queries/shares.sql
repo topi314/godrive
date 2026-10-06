@@ -17,3 +17,6 @@ DELETE FROM shares WHERE id = @id;
 
 -- name: DeleteSharesForPath :exec
 DELETE FROM shares WHERE path = @path;
+
+-- name: UpdateSharePath :exec
+UPDATE shares SET path = @path WHERE id = @id;

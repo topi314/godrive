@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/topi314/godrive/server"
+	"github.com/topi314/godrive/server/config"
 )
 
 var (
@@ -25,7 +26,7 @@ func main() {
 	cfgPath := flag.String("config", "config.toml", "path to config file")
 	flag.Parse()
 
-	cfg, err := server.LoadConfig(*cfgPath)
+	cfg, err := config.LoadConfig(*cfgPath)
 	if err != nil {
 		slog.Error("Error while loading config", slog.Any("err", err))
 		os.Exit(1)
@@ -59,7 +60,7 @@ func main() {
 	<-ch
 }
 
-func setupLogger(cfg server.LogConfig) {
+func setupLogger(cfg config.LogConfig) {
 	opts := &slog.HandlerOptions{AddSource: cfg.AddSource, Level: cfg.Level}
 	var handler slog.Handler
 	if cfg.Format == "json" {

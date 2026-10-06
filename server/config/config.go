@@ -1,9 +1,10 @@
-package server
+package config
 
 import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -12,45 +13,20 @@ import (
 )
 
 type Config struct {
-	Log          LogConfig      `toml:"log"`
-	DevMode      bool           `toml:"dev_mode"`
-	Debug        bool           `toml:"debug"`
-	ListenAddr   string         `toml:"listen_addr"`
-	FrontendURL  string         `toml:"frontend_url"` // Nuxt origin in -tags dev (e.g. http://localhost:3000)
-	Database     DatabaseConfig `toml:"database"`
-	Storage      StorageConfig  `toml:"storage"`
-	Auth         *AuthConfig    `toml:"auth"`
-	Otel         *OtelConfig    `toml:"otel"`
-}
-
-func DefaultConfig() Config {
-	return Config{
-		ListenAddr:  ":80",
-		FrontendURL: "http://localhost:3000",
-		DevMode:     false,
-		Debug:       false,
-		Log: LogConfig{
-			Level:  slog.LevelInfo,
-			Format: "text",
-		},
-		Database: DatabaseConfig{
-			Type:     DatabaseTypeSQLite,
-			Path:     "godrive.db",
-			Host:     "localhost",
-			Port:     5432,
-			Username: "godrive",
-			Database: "godrive",
-			SSLMode:  "disable",
-		},
-		Storage: StorageConfig{
-			Type: StorageTypeLocal,
-			Path: "/var/lib/godrive/storage",
-		},
-	}
+	Log         LogConfig      `toml:"log"`
+	DevMode     bool           `toml:"dev_mode"`
+	Debug       bool           `toml:"debug"`
+	ListenAddr  string         `toml:"listen_addr"`
+	FrontendURL string         `toml:"frontend_url"` // Nuxt origin in -tags dev (e.g. http://localhost:3000)
+	Database    DatabaseConfig `toml:"database"`
+	Storage     StorageConfig  `toml:"storage"`
+	Auth        *AuthConfig    `toml:"auth"`
+	Otel        *OtelConfig    `toml:"otel"`
+	Upload      UploadConfig   `toml:"upload"`
 }
 
 func LoadConfig(path string) (Config, error) {
-	cfg := DefaultConfig()
+	var cfg Config
 
 	configPath := path
 	if configPath == "" {
@@ -73,6 +49,7 @@ func LoadConfig(path string) (Config, error) {
 		return cfg, fmt.Errorf("parse config: %w", err)
 	}
 	applyEnvOverrides(&cfg)
+	applyDefaults(&cfg)
 	return cfg, nil
 }
 
@@ -219,19 +196,19 @@ const (
 )
 
 type StorageConfig struct {
-	Type         StorageType       `toml:"type"`
-	Debug        bool              `toml:"debug"`
-	Path         string            `toml:"path"`
-	Umask        int               `toml:"umask"`
-	Endpoint     string            `toml:"endpoint"`
-	AccessKeyID  string            `toml:"access_key_id"`
-	SecretAccessKey string         `toml:"secret_access_key"`
-	Bucket       string            `toml:"bucket"`
-	Region       string            `toml:"region"`
-	Secure       bool              `toml:"secure"`
-	ForcePathStyle bool            `toml:"force_path_style"`
-	SyncInterval Duration          `toml:"sync_interval"`
-	Notify       StorageNotifyConfig `toml:"notify"`
+	Type            StorageType         `toml:"type"`
+	Debug           bool                `toml:"debug"`
+	Path            string              `toml:"path"`
+	Umask           int                 `toml:"umask"`
+	Endpoint        string              `toml:"endpoint"`
+	AccessKeyID     string              `toml:"access_key_id"`
+	SecretAccessKey string              `toml:"secret_access_key"`
+	Bucket          string              `toml:"bucket"`
+	Region          string              `toml:"region"`
+	Secure          bool                `toml:"secure"`
+	ForcePathStyle  bool                `toml:"force_path_style"`
+	SyncInterval    Duration            `toml:"sync_interval"`
+	Notify          StorageNotifyConfig `toml:"notify"`
 }
 
 type StorageNotifyConfig struct {
@@ -254,30 +231,145 @@ func (c StorageConfig) String() string {
 }
 
 type AuthConfig struct {
-	Secure               bool          `toml:"secure"`
-	Issuer               string        `toml:"issuer"`
-	ClientID             string        `toml:"client_id"`
-	ClientSecret         string        `toml:"client_secret"`
-	RedirectURL          string        `toml:"redirect_url"`
-	RefreshTokenLifespan time.Duration `toml:"refresh_token_lifespan"`
-	DefaultHome          string        `toml:"default_home"`
-	Groups               AuthGroups    `toml:"groups"`
+	Secure                bool       `toml:"secure"`
+	Issuer                string     `toml:"issuer"`
+	ClientID              string     `toml:"client_id"`
+	ClientSecret          string     `toml:"client_secret"`
+	RedirectURL           string     `toml:"redirect_url"`
+	SessionLifespan       Duration   `toml:"session_lifespan"`
+	RefreshTokenLifespan  Duration   `toml:"refresh_token_lifespan"`
+	EndSessionEndpoint    string     `toml:"end_session_endpoint"`
+	PostLogoutRedirectURL string     `toml:"post_logout_redirect_url"`
+	DefaultHome           string     `toml:"default_home"`
+	Groups                AuthGroups `toml:"groups"`
 }
 
 func (c AuthConfig) String() string {
-	return fmt.Sprintf("\n  Secure: %t\n  Issuer: %s\n  ClientID: %s\n  ClientSecret: %s\n  RedirectURL: %s\n  RefreshTokenLifespan: %s\n  DefaultHome: %s\n  Groups: %s",
-		c.Secure, c.Issuer, c.ClientID, strings.Repeat("*", len(c.ClientSecret)), c.RedirectURL, c.RefreshTokenLifespan, c.DefaultHome, c.Groups)
+	return fmt.Sprintf("\n  Secure: %t\n  Issuer: %s\n  ClientID: %s\n  ClientSecret: %s\n  RedirectURL: %s\n  SessionLifespan: %s\n  RefreshTokenLifespan: %s\n  DefaultHome: %s\n  Groups: %s",
+		c.Secure, c.Issuer, c.ClientID, strings.Repeat("*", len(c.ClientSecret)), c.RedirectURL, c.SessionLifespan.Duration, c.RefreshTokenLifespan.Duration, c.DefaultHome, c.Groups)
 }
 
 type AuthGroups struct {
-	Admin  string `toml:"admin"`
-	User   string `toml:"user"`
-	Viewer string `toml:"viewer"`
-	Guest  bool   `toml:"guest"`
+	Admin  string            `toml:"admin"`  // OIDC group that grants full access
+	Access string            `toml:"access"` // OIDC group required to use the app (admin also counts)
+	Guest  bool              `toml:"guest"`
+	Map    map[string]string `toml:"map"` // OIDC group → godrive group (ACL principals)
 }
 
 func (c AuthGroups) String() string {
-	return fmt.Sprintf("\n    Admin: %s\n    User: %s\n    Viewer: %s\n    Guest: %t", c.Admin, c.User, c.Viewer, c.Guest)
+	return fmt.Sprintf("\n    Admin: %s\n    Access: %s\n    Guest: %t\n    Map: %v", c.Admin, c.Access, c.Guest, c.Map)
+}
+
+// oidcMapping returns OIDC group → godrive group. admin and access identity-map
+// unless overridden in Map.
+func (c AuthGroups) oidcMapping() map[string]string {
+	m := map[string]string{}
+	if c.Admin != "" {
+		m[c.Admin] = c.Admin
+	}
+	if c.Access != "" {
+		m[c.Access] = c.Access
+	}
+	for oidc, gd := range c.Map {
+		oidc = strings.TrimSpace(oidc)
+		gd = strings.TrimSpace(gd)
+		if oidc == "" {
+			continue
+		}
+		m[oidc] = gd
+	}
+	return m
+}
+
+// MapOIDCGroups keeps only configured mappings, returning unique godrive names.
+// Names that are already godrive group values (stored after a previous login) are kept.
+func (c AuthGroups) MapOIDCGroups(oidcGroups []string) []string {
+	mapping := c.oidcMapping()
+	known := map[string]struct{}{}
+	for _, gd := range mapping {
+		if gd != "" {
+			known[gd] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(oidcGroups))
+	seen := map[string]struct{}{}
+	add := func(name string) {
+		if name == "" {
+			return
+		}
+		if _, dup := seen[name]; dup {
+			return
+		}
+		seen[name] = struct{}{}
+		out = append(out, name)
+	}
+	for _, g := range oidcGroups {
+		if mapped, ok := mapping[g]; ok {
+			add(mapped)
+			continue
+		}
+		if _, ok := known[g]; ok {
+			add(g)
+		}
+	}
+	return out
+}
+
+// AvailableGroups is the set of godrive group names usable in ACLs.
+func (c AuthGroups) AvailableGroups() []string {
+	seen := map[string]struct{}{}
+	var out []string
+	add := func(name string) {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			return
+		}
+		if _, ok := seen[name]; ok {
+			return
+		}
+		seen[name] = struct{}{}
+		out = append(out, name)
+	}
+	add(c.AdminGroup())
+	add(c.AccessGroup())
+	var extra []string
+	for _, v := range c.Map {
+		extra = append(extra, v)
+	}
+	sort.Strings(extra)
+	for _, v := range extra {
+		add(v)
+	}
+	return out
+}
+
+func (c AuthGroups) AdminGroup() string {
+	if c.Admin == "" {
+		return ""
+	}
+	if v, ok := c.oidcMapping()[c.Admin]; ok && v != "" {
+		return v
+	}
+	return c.Admin
+}
+
+func (c AuthGroups) AccessGroup() string {
+	if c.Access == "" {
+		return ""
+	}
+	if v, ok := c.oidcMapping()[c.Access]; ok && v != "" {
+		return v
+	}
+	return c.Access
+}
+
+func (c AuthGroups) IsAvailableGroup(name string) bool {
+	for _, g := range c.AvailableGroups() {
+		if g == name {
+			return true
+		}
+	}
+	return false
 }
 
 type OtelConfig struct {
@@ -324,4 +416,55 @@ func (d *Duration) UnmarshalText(text []byte) error {
 	}
 	d.Duration = parsed
 	return nil
+}
+
+// ByteSize wraps int64 for TOML sizes like "50GB", "16MB", "1024".
+type ByteSize struct {
+	Bytes int64
+}
+
+func (b *ByteSize) UnmarshalText(text []byte) error {
+	s := strings.TrimSpace(strings.ToUpper(string(text)))
+	if s == "" || s == "0" {
+		b.Bytes = 0
+		return nil
+	}
+	mult := int64(1)
+	switch {
+	case strings.HasSuffix(s, "KB"):
+		mult = 1000
+		s = strings.TrimSpace(strings.TrimSuffix(s, "KB"))
+	case strings.HasSuffix(s, "MB"):
+		mult = 1000 * 1000
+		s = strings.TrimSpace(strings.TrimSuffix(s, "MB"))
+	case strings.HasSuffix(s, "GB"):
+		mult = 1000 * 1000 * 1000
+		s = strings.TrimSpace(strings.TrimSuffix(s, "GB"))
+	case strings.HasSuffix(s, "TB"):
+		mult = 1000 * 1000 * 1000 * 1000
+		s = strings.TrimSpace(strings.TrimSuffix(s, "TB"))
+	case strings.HasSuffix(s, "KIB"):
+		mult = 1024
+		s = strings.TrimSpace(strings.TrimSuffix(s, "KIB"))
+	case strings.HasSuffix(s, "MIB"):
+		mult = 1024 * 1024
+		s = strings.TrimSpace(strings.TrimSuffix(s, "MIB"))
+	case strings.HasSuffix(s, "GIB"):
+		mult = 1024 * 1024 * 1024
+		s = strings.TrimSpace(strings.TrimSuffix(s, "GIB"))
+	}
+	n, err := strconv.ParseFloat(s, 64)
+	if err != nil || n < 0 {
+		return fmt.Errorf("invalid size %q", string(text))
+	}
+	b.Bytes = int64(n * float64(mult))
+	return nil
+}
+
+// UploadConfig controls resumable / large-file uploads.
+type UploadConfig struct {
+	MaxSize     ByteSize `toml:"max_size"`
+	ChunkSize   ByteSize `toml:"chunk_size"`
+	SessionTTL  Duration `toml:"session_ttl"`
+	MaxParallel int      `toml:"max_parallel"`
 }
