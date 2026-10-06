@@ -9,11 +9,12 @@ import (
 	"github.com/topi314/godrive/server/acl"
 	"github.com/topi314/godrive/server/config"
 	"github.com/topi314/godrive/server/database"
+	"github.com/topi314/godrive/server/database/dbq"
 	"github.com/topi314/godrive/server/storage"
 )
 
 func TestHasAccessRoles(t *testing.T) {
-	s := &Server{cfg: config.Config{Auth: &config.AuthConfig{Groups: config.AuthGroups{
+	s := &Server{cfg: config.Config{Auth: &config.AuthConfig{Enabled: true, Groups: config.AuthGroups{
 		Admin: "admin", Access: "godrive", Guest: true,
 	}}}}
 	admin := &UserInfo{Subject: "a", Groups: []string{"admin"}}
@@ -46,7 +47,7 @@ func TestResolveRenameTarget(t *testing.T) {
 func TestProvisionUserHome(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	store, err := database.NewStore(ctx, config.DatabaseConfig{Type: config.DatabaseTypeSQLite, Path: filepath.Join(dir, "t.db")}, database.Migrations)
+	store, err := database.NewStore(ctx, config.DatabaseConfig{Type: config.DatabaseTypeSQLite, SQLite: config.DatabaseSQLiteConfig{Path: filepath.Join(dir, "t.db")}}, database.Migrations)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,11 +56,11 @@ func TestProvisionUserHome(t *testing.T) {
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	st, err := storage.New(ctx, config.StorageConfig{Type: config.StorageTypeLocal, Path: root})
+	st, err := storage.New(ctx, config.StorageConfig{Type: config.StorageTypeLocal, Local: config.StorageLocalConfig{Path: root}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := &Server{store: store, storage: st, cfg: config.Config{Auth: &config.AuthConfig{}}}
+	s := &Server{store: store, storage: st, cfg: config.Config{Auth: &config.AuthConfig{Enabled: true}}}
 	info := &UserInfo{Subject: "u1", Username: "alice"}
 
 	if err := s.provisionUserHome(ctx, "/home/alice", info); err != nil {
@@ -98,5 +99,34 @@ func TestProvisionUserHome(t *testing.T) {
 	file, _ = store.Q.GetFile(ctx, "/home/alice")
 	if file.UserID.String != "u1" {
 		t.Fatalf("must not steal home: %#v", file)
+	}
+
+	// Other ACLs on the home path must not block the owner's grant.
+	if err := store.Q.DeleteACL(ctx, dbq.DeleteACLParams{
+		Path: "/home/alice", PrincipalType: acl.PrincipalUser, PrincipalID: "u1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Q.UpsertACL(ctx, dbq.UpsertACLParams{
+		Path: "/home/alice", PrincipalType: acl.PrincipalGuest, PrincipalID: acl.GuestID,
+		Allow: int64(acl.PermissionRead), Deny: 0,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.provisionUserHome(ctx, "/home/alice", info); err != nil {
+		t.Fatal(err)
+	}
+	rules, err = store.Q.ListACLByPath(ctx, "/home/alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gotUser bool
+	for _, row := range rules {
+		if row.PrincipalType == acl.PrincipalUser && row.PrincipalID == "u1" && row.Allow == int64(acl.PermissionsAll) {
+			gotUser = true
+		}
+	}
+	if !gotUser {
+		t.Fatalf("expected owner ACL alongside existing rules: %#v", rules)
 	}
 }

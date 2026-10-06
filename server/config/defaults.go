@@ -1,64 +1,57 @@
 package config
 
 import (
-	"net/url"
 	"path"
 	"strings"
 	"time"
 )
 
 const (
-	DefaultListenAddr   = ":80"
-	DefaultFrontendURL  = "http://localhost:3000"
-	DefaultSessionTTL   = 15 * time.Minute
-	DefaultRefreshTTL   = 30 * 24 * time.Hour
-	DefaultS3Region     = "us-east-1"
-	DefaultSQLitePath   = "godrive.db"
-	DefaultPostgresHost = "localhost"
-	DefaultPostgresPort = 5432
-	DefaultPostgresUser = "godrive"
-	DefaultPostgresDB   = "godrive"
-	DefaultPostgresSSL  = "disable"
-	DefaultStoragePath  = "/var/lib/godrive/storage"
-	DefaultLogFormat    = "text"
-	DefaultUploadMax    = int64(50_000_000_000) // 50GB
-	DefaultUploadChunk  = int64(16_000_000)     // 16MB
-	DefaultUploadTTL    = 72 * time.Hour
+	DefaultListenAddr     = ":80"
+	DefaultFrontendURL    = "http://localhost:3000"
+	DefaultSessionTTL     = 15 * time.Minute
+	DefaultRefreshTTL     = 30 * 24 * time.Hour
+	DefaultS3Region       = "us-east-1"
+	DefaultSQLitePath     = "godrive.db"
+	DefaultPostgresHost   = "localhost"
+	DefaultPostgresPort   = 5432
+	DefaultPostgresUser   = "godrive"
+	DefaultPostgresDB     = "godrive"
+	DefaultPostgresSSL    = "disable"
+	DefaultStoragePath    = "/var/lib/godrive/storage"
+	DefaultSyncInterval   = 15 * time.Minute
+	DefaultS3SyncInterval = 1 * time.Minute
+	DefaultLogFormat      = "text"
+	DefaultUploadMax      = int64(50_000_000_000) // 50GB
+	DefaultUploadChunk    = int64(16_000_000)     // 16MB
+	DefaultUploadTTL      = 72 * time.Hour
 	DefaultUploadParallel = 2
 )
 
 func applyDefaults(cfg *Config) {
-	if s := strings.TrimSpace(cfg.ListenAddr); s != "" {
-		cfg.ListenAddr = s
+	if s := strings.TrimSpace(cfg.Server.ListenAddr); s != "" {
+		cfg.Server.ListenAddr = s
 	} else {
-		cfg.ListenAddr = DefaultListenAddr
+		cfg.Server.ListenAddr = DefaultListenAddr
 	}
 
-	frontend := strings.TrimRight(strings.TrimSpace(cfg.FrontendURL), "/")
-	if cfg.Auth != nil {
+	if frontend := strings.TrimRight(strings.TrimSpace(cfg.Server.FrontendURL), "/"); frontend != "" {
+		cfg.Server.FrontendURL = frontend
+	} else {
+		cfg.Server.FrontendURL = DefaultFrontendURL
+	}
+
+	if cfg.AuthEnabled() {
 		if cfg.Auth.SessionLifespan.Duration <= 0 {
 			cfg.Auth.SessionLifespan.Duration = DefaultSessionTTL
 		}
 		if cfg.Auth.RefreshTokenLifespan.Duration <= 0 {
 			cfg.Auth.RefreshTokenLifespan.Duration = DefaultRefreshTTL
 		}
-		if post := strings.TrimSpace(cfg.Auth.PostLogoutRedirectURL); post != "" {
-			cfg.Auth.PostLogoutRedirectURL = post
-		} else if frontend != "" {
-			cfg.Auth.PostLogoutRedirectURL = frontend + "/"
-		} else if u, err := url.Parse(strings.TrimSpace(cfg.Auth.RedirectURL)); err == nil && strings.TrimSpace(cfg.Auth.RedirectURL) != "" {
-			u.Path = "/"
-			u.RawQuery = ""
-			u.Fragment = ""
-			cfg.Auth.PostLogoutRedirectURL = u.String()
-		} else {
-			cfg.Auth.PostLogoutRedirectURL = "/"
-		}
+		cfg.Auth.PostLogoutRedirectURL = strings.TrimSpace(cfg.Auth.PostLogoutRedirectURL)
+		cfg.Auth.RedirectURL = strings.TrimSpace(cfg.Auth.RedirectURL)
+		cfg.Auth.Issuer = strings.TrimSpace(cfg.Auth.Issuer)
 	}
-	if frontend == "" {
-		frontend = DefaultFrontendURL
-	}
-	cfg.FrontendURL = frontend
 
 	if s := strings.TrimSpace(cfg.Log.Format); s != "" {
 		cfg.Log.Format = strings.ToLower(s)
@@ -68,32 +61,39 @@ func applyDefaults(cfg *Config) {
 	if cfg.Database.Type == "" {
 		cfg.Database.Type = DatabaseTypeSQLite
 	}
-	if strings.TrimSpace(cfg.Database.Path) == "" {
-		cfg.Database.Path = DefaultSQLitePath
+	if strings.TrimSpace(cfg.Database.SQLite.Path) == "" {
+		cfg.Database.SQLite.Path = DefaultSQLitePath
 	}
-	if strings.TrimSpace(cfg.Database.Host) == "" {
-		cfg.Database.Host = DefaultPostgresHost
+	if strings.TrimSpace(cfg.Database.Postgres.Host) == "" {
+		cfg.Database.Postgres.Host = DefaultPostgresHost
 	}
-	if cfg.Database.Port == 0 {
-		cfg.Database.Port = DefaultPostgresPort
+	if cfg.Database.Postgres.Port == 0 {
+		cfg.Database.Postgres.Port = DefaultPostgresPort
 	}
-	if strings.TrimSpace(cfg.Database.Username) == "" {
-		cfg.Database.Username = DefaultPostgresUser
+	if strings.TrimSpace(cfg.Database.Postgres.Username) == "" {
+		cfg.Database.Postgres.Username = DefaultPostgresUser
 	}
-	if strings.TrimSpace(cfg.Database.Database) == "" {
-		cfg.Database.Database = DefaultPostgresDB
+	if strings.TrimSpace(cfg.Database.Postgres.Database) == "" {
+		cfg.Database.Postgres.Database = DefaultPostgresDB
 	}
-	if strings.TrimSpace(cfg.Database.SSLMode) == "" {
-		cfg.Database.SSLMode = DefaultPostgresSSL
+	if strings.TrimSpace(cfg.Database.Postgres.SSLMode) == "" {
+		cfg.Database.Postgres.SSLMode = DefaultPostgresSSL
 	}
 	if cfg.Storage.Type == "" {
 		cfg.Storage.Type = StorageTypeLocal
 	}
-	if strings.TrimSpace(cfg.Storage.Path) == "" {
-		cfg.Storage.Path = DefaultStoragePath
+	if strings.TrimSpace(cfg.Storage.Local.Path) == "" {
+		cfg.Storage.Local.Path = DefaultStoragePath
 	}
-	if cfg.Storage.Region == "" {
-		cfg.Storage.Region = DefaultS3Region
+	if cfg.Storage.S3.Region == "" {
+		cfg.Storage.S3.Region = DefaultS3Region
+	}
+	if cfg.Storage.SyncInterval == nil {
+		d := DefaultSyncInterval
+		if cfg.Storage.Type == StorageTypeS3 {
+			d = DefaultS3SyncInterval
+		}
+		cfg.Storage.SyncInterval = &Duration{Duration: d}
 	}
 	if cfg.Upload.MaxSize.Bytes <= 0 {
 		cfg.Upload.MaxSize.Bytes = DefaultUploadMax

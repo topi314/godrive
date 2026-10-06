@@ -69,7 +69,7 @@ func (s *Server) pathExists(ctx context.Context, p string) (bool, error) {
 
 func (s *Server) listDir(ctx context.Context, dir string, info *UserInfo) ([]FileEntry, error) {
 	dir = acl.NormalizePath(dir)
-	if s.cfg.Auth != nil {
+	if s.cfg.AuthEnabled() {
 		perms, err := s.EffectivePermissions(ctx, dir, info, nil)
 		if err != nil {
 			return nil, err
@@ -104,7 +104,7 @@ func (s *Server) listDir(ctx context.Context, dir string, info *UserInfo) ([]Fil
 		if err != nil {
 			continue
 		}
-		if s.cfg.Auth != nil && !eff.Has(acl.PermissionRead) {
+		if s.cfg.AuthEnabled() && !eff.Has(acl.PermissionRead) {
 			continue
 		}
 
@@ -189,7 +189,7 @@ func (s *Server) GetPath(w http.ResponseWriter, r *http.Request) {
 			owner = file.UserID.String
 		}
 		perms, _ := s.EffectivePermissions(r.Context(), p, info, nullableStr(owner))
-		canRead = s.cfg.Auth == nil || perms.Has(acl.PermissionRead)
+		canRead = !s.cfg.AuthEnabled() || perms.Has(acl.PermissionRead)
 		if !canRead {
 			canRead, _ = s.CanAnonymousRead(r.Context(), p)
 		}
@@ -212,7 +212,7 @@ func (s *Server) GetPath(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		perms, _ := s.EffectivePermissions(r.Context(), p, info, nil)
-		canRead = s.cfg.Auth == nil || perms.Has(acl.PermissionRead)
+		canRead = !s.cfg.AuthEnabled() || perms.Has(acl.PermissionRead)
 		if !canRead {
 			canRead, _ = s.CanAnonymousRead(r.Context(), p)
 		}
@@ -226,7 +226,7 @@ func (s *Server) GetPath(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if !canRead && info == nil && s.cfg.Auth != nil {
+	if !canRead && info == nil && s.cfg.AuthEnabled() {
 		// JSON/XHR clients cannot follow the OIDC redirect; return 401 so the SPA can send the browser to login.
 		if wantsJSON(r) || !wantsHTML(r) {
 			s.writeError(w, r, errors.New("unauthorized"), http.StatusUnauthorized)
@@ -373,7 +373,7 @@ func (s *Server) streamZip(w http.ResponseWriter, r *http.Request, root string, 
 		if row.UserID.Valid {
 			owner = row.UserID.String
 		}
-		if !skipACL && s.cfg.Auth != nil {
+		if !skipACL && s.cfg.AuthEnabled() {
 			perms, err := s.EffectivePermissions(r.Context(), row.Path, info, nullableStr(owner))
 			if err != nil || !perms.Has(acl.PermissionRead) {
 				continue
@@ -489,7 +489,7 @@ func (s *Server) UploadFileAPI(w http.ResponseWriter, r *http.Request) {
 	dir := s.filePathFromRequest(r)
 	info := GetUserInfo(r)
 	perms, err := s.EffectivePermissions(r.Context(), dir, info, nil)
-	if err != nil || (s.cfg.Auth != nil && !perms.Has(acl.PermissionCreate)) {
+	if err != nil || (s.cfg.AuthEnabled() && !perms.Has(acl.PermissionCreate)) {
 		s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
 		return
 	}
@@ -690,7 +690,7 @@ func (s *Server) ensureDir(ctx context.Context, destDir string, info *UserInfo) 
 	now := time.Now().UTC()
 	for i := len(missing) - 1; i >= 0; i-- {
 		p := missing[i]
-		if s.cfg.Auth != nil {
+		if s.cfg.AuthEnabled() {
 			perms, err := s.EffectivePermissions(ctx, path.Dir(p), info, nil)
 			if err != nil || !perms.Has(acl.PermissionCreate) {
 				return errForbidden
@@ -764,7 +764,7 @@ func (s *Server) ensureDirUnchecked(ctx context.Context, destDir, ownerSubject s
 }
 
 func (s *Server) authorizeRename(ctx context.Context, from, to string, info *UserInfo, srcOwner *string) error {
-	if s.cfg.Auth == nil {
+	if !s.cfg.AuthEnabled() {
 		return nil
 	}
 	srcPerms, err := s.EffectivePermissions(ctx, from, info, srcOwner)
@@ -969,7 +969,7 @@ func (s *Server) PatchFileAPI(w http.ResponseWriter, r *http.Request) {
 	descChanged := meta.Description != "" || r.FormValue("description") != ""
 	if replace != nil || descChanged || newPath == p {
 		perms, err := s.EffectivePermissions(r.Context(), p, info, nullableStr(owner))
-		if err != nil || (s.cfg.Auth != nil && !perms.Has(acl.PermissionUpdate)) {
+		if err != nil || (s.cfg.AuthEnabled() && !perms.Has(acl.PermissionUpdate)) {
 			s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
 			return
 		}
@@ -1044,7 +1044,7 @@ func (s *Server) MoveFilesAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	info := GetUserInfo(r)
 	createPerms, err := s.EffectivePermissions(r.Context(), dest, info, nil)
-	if err != nil || (s.cfg.Auth != nil && !createPerms.Has(acl.PermissionCreate)) {
+	if err != nil || (s.cfg.AuthEnabled() && !createPerms.Has(acl.PermissionCreate)) {
 		s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
 		return
 	}
@@ -1065,7 +1065,7 @@ func (s *Server) MoveFilesAPI(w http.ResponseWriter, r *http.Request) {
 			owner = file.UserID.String
 		}
 		delPerms, _ := s.EffectivePermissions(r.Context(), src, info, nullableStr(owner))
-		if s.cfg.Auth != nil && !delPerms.Has(acl.PermissionDelete) {
+		if s.cfg.AuthEnabled() && !delPerms.Has(acl.PermissionDelete) {
 			continue
 		}
 		target := acl.NormalizePath(path.Join(dest, path.Base(src)))
@@ -1097,7 +1097,7 @@ func (s *Server) DeleteFilesAPI(w http.ResponseWriter, r *http.Request) {
 			owner = file.UserID.String
 		}
 		perms, _ := s.EffectivePermissions(r.Context(), p, info, nullableStr(owner))
-		if s.cfg.Auth != nil && !perms.Has(acl.PermissionDelete) {
+		if s.cfg.AuthEnabled() && !perms.Has(acl.PermissionDelete) {
 			s.writeError(w, r, fmt.Errorf("forbidden: %s", p), http.StatusForbidden)
 			return
 		}

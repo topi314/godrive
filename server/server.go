@@ -17,6 +17,7 @@ import (
 	"github.com/topi314/godrive/server/database"
 	"github.com/topi314/godrive/server/oidc"
 	"github.com/topi314/godrive/server/storage"
+	"github.com/topi314/godrive/server/telemetry"
 	"golang.org/x/oauth2"
 )
 
@@ -29,6 +30,7 @@ type Server struct {
 	public    fs.FS
 	cancel    context.CancelFunc
 	http      *http.Server
+	telemetry *telemetry.Provider
 	refreshMu sync.Mutex
 }
 
@@ -37,23 +39,31 @@ func New(cfg config.Config, version string) (*Server, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	tel, err := telemetry.Setup(ctx, cfg.Otel, version)
+	if err != nil {
+		return nil, fmt.Errorf("otel: %w", err)
+	}
+
 	store, err := database.NewStore(ctx, cfg.Database, database.Migrations)
 	if err != nil {
+		_ = tel.Shutdown(context.Background())
 		return nil, fmt.Errorf("database: %w", err)
 	}
 
 	st, err := storage.New(context.Background(), cfg.Storage)
 	if err != nil {
 		_ = store.Close()
+		_ = tel.Shutdown(context.Background())
 		return nil, fmt.Errorf("storage: %w", err)
 	}
 
 	var auth *oidc.Client
-	if cfg.Auth != nil {
+	if cfg.AuthEnabled() {
 		provider, err := gooidc.NewProvider(context.Background(), cfg.Auth.Issuer)
 		if err != nil {
 			_ = st.Close()
 			_ = store.Close()
+			_ = tel.Shutdown(context.Background())
 			return nil, fmt.Errorf("oidc: %w", err)
 		}
 		auth = &oidc.Client{
@@ -77,25 +87,23 @@ func New(cfg config.Config, version string) (*Server, error) {
 
 	runCtx, runCancel := context.WithCancel(context.Background())
 	s := &Server{
-		version: version,
-		cfg:     cfg,
-		store:   store,
-		auth:    auth,
-		storage: st,
-		public:  publicFS,
-		cancel:  runCancel,
+		version:   version,
+		cfg:       cfg,
+		store:     store,
+		auth:      auth,
+		storage:   st,
+		public:    publicFS,
+		cancel:    runCancel,
+		telemetry: tel,
 	}
 	if s.auth != nil {
-		endSession := ""
-		if cfg.Auth != nil {
-			endSession = cfg.Auth.EndSessionEndpoint
-		}
-		s.auth.LoadDiscovery(endSession)
+		s.auth.LoadDiscovery()
 	}
 	if err := s.seedDefaultRootACL(ctx); err != nil {
 		runCancel()
 		_ = st.Close()
 		_ = store.Close()
+		_ = tel.Shutdown(context.Background())
 		return nil, fmt.Errorf("seed default ACL: %w", err)
 	}
 	s.startSync(runCtx)
@@ -103,12 +111,16 @@ func New(cfg config.Config, version string) (*Server, error) {
 }
 
 func (s *Server) Start() error {
+	handler := s.Routes()
+	if s.telemetry != nil {
+		handler = s.telemetry.WrapHTTP(handler)
+	}
 	s.http = &http.Server{
-		Addr:              s.cfg.ListenAddr,
-		Handler:           s.Routes(),
+		Addr:              s.cfg.Server.ListenAddr,
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	slog.Info("godrive listening", slog.String("addr", s.cfg.ListenAddr))
+	slog.Info("godrive listening", slog.String("addr", s.cfg.Server.ListenAddr))
 	return s.http.ListenAndServe()
 }
 
@@ -120,6 +132,11 @@ func (s *Server) Stop() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		_ = s.http.Shutdown(ctx)
+	}
+	if s.telemetry != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = s.telemetry.Shutdown(ctx)
 	}
 	if s.storage != nil {
 		_ = s.storage.Close()

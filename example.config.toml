@@ -1,91 +1,119 @@
+[server]
 listen_addr = ":80"
-dev_mode = false
-debug = false
-# Used when the API is built with -tags dev (no embedded UI):
-# frontend_url = "http://localhost:3000"
+# Nuxt origin when the API is built with -tags dev (no embedded UI).
+# default: "http://localhost:3000"
+frontend_url = "https://godrive.zip"
 
 [log]
+# DEBUG, INFO, WARN, ERROR
 level = "INFO"
+# "text" or "json"
 format = "text"
 add_source = false
 
 [database]
-# type can be "sqlite" or "postgres"
+# "sqlite" or "postgres"
 type = "sqlite"
-debug = false
+
+[database.sqlite]
 path = "godrive.db"
-# postgres fields:
-# host = "localhost"
-# port = 5432
-# username = "godrive"
-# password = "godrive"
-# database = "godrive"
-# ssl_mode = "disable"
+
+[database.postgres]
+host = "postgres"
+port = 5432
+username = "godrive"
+password = "godrive"
+database = "godrive"
+# "disable", "allow", "prefer", "require", "verify-ca", or "verify-full"
+ssl_mode = "disable"
 
 [storage]
-# type can be "local" or "s3"
+# "local" or "s3"
 type = "local"
-debug = false
-path = "storage"
-# sync_interval = "15m" # optional backstop reconcile; omit or "0" to disable
+# Periodic full reconcile as a backstop for missed events; "0" disables.
+# Defaults: 15m for local, 1m for s3 (when omitted).
+# sync_interval = "15m"
 
-# S3-compatible (AWS, R2, B2, Garage, MinIO, …):
-# type = "s3"
-# endpoint = "https://s3.amazonaws.com"
-# access_key_id = "..."
-# secret_access_key = "..."
-# bucket = "godrive"
-# region = "us-east-1"
-# secure = true
-# force_path_style = false
+[storage.local]
+path = "/var/lib/godrive/storage"
+# Unix file-mode mask applied to new files (0666&^umask) and dirs (0777&^umask).
+# e.g. 0o022 → files 0644, dirs 0755. Use 0o022 in TOML for octal.
+umask = 0
 
-[storage.notify]
-# webhook_secret = "..."
-# sqs_queue_url = ""
+[storage.s3]
+# MinIO (or any S3-compatible endpoint).
+endpoint = "https://s3.godrive.zip"
+access_key_id = "..."
+secret_access_key = "..."
+bucket = "godrive"
+region = "us-east-1"
+# Use TLS for S3/MinIO (rewrites endpoint scheme; DisableHTTPS when false).
+# default: false
+secure = true
+# Required for MinIO and most non-AWS S3 APIs.
+# default: false
+force_path_style = true
 
-# OIDC via Authelia (or any OIDC IdP). See example.production.toml for a live-shaped template.
-# jwt_secret from the old JSON config is unused (DB sessions).
-# [auth]
-# secure = false
-# issuer = "https://auth.example.com"
-# client_id = "godrive"
-# client_secret = "..."
-# redirect_url = "http://localhost:3000/api/callback"
-# session_lifespan = "15m"
-# refresh_token_lifespan = "720h" # 30 days
-# Optional RP logout when discovery has no end_session_endpoint:
-# end_session_endpoint = "https://auth.example.com/api/oidc/end-session"
-# post_logout_redirect_url = "http://localhost:3000/"
-# default_home = "/home/{user}"
+[storage.s3.notify]
+# MinIO notify_webhook auth_token (compare as Authorization: Bearer <token>).
+# In MinIO: auth_token="Bearer <same token>"
+auth_token = ""
+
+# OIDC via Authelia (or any OIDC IdP).
+# Set enabled = false to disable auth (all requests get full access, no ACL).
+[auth]
+# default: false
+enabled = true
+# Set true behind HTTPS so session cookies get the Secure flag.
+# default: false
+secure = true
+issuer = "https://auth.godrive.zip"
+client_id = "godrive"
+client_secret = "..."
+# Register this URI on the IdP client.
+redirect_url = "https://godrive.zip/api/callback"
+session_lifespan = "15m"
+refresh_token_lifespan = "720h" # 30 days
+post_logout_redirect_url = "https://godrive.zip/"
 # Placeholders: {user} / {username}, {email}, {id}. Applied on first login;
 # later logins keep the saved home path. Missing folders are created.
-#
-# [auth.groups]
-# admin = "admin"     # OIDC group: full access (bypasses ACLs)
-# access = "godrive"  # OIDC group required to use the app (admin also counts)
-# guest = true        # allow unauthenticated browsing (uses "guest" ACL, default read)
-#
+# Empty → "/".
+default_home = "/home/{user}"
+
+[auth.groups]
+# OIDC group with full access (bypasses ACLs).
+admin = "admin"
+# OIDC group required to use the app (admin also counts).
+access = "godrive"
+# Allow unauthenticated browsing (uses the "guest" ACL principal).
+guest = false
+
 # Map extra OIDC groups to godrive names used in ACLs. Unmapped IdP groups are ignored.
 # admin and access are included automatically (same name unless remapped here).
-# [auth.groups.map]
+[auth.groups.map]
 # "ldap-linux" = "linux"
 # family = "family"
-#
+
 # On first start with an empty ACL table, godrive seeds "/":
 #   everyone → all (logged-in users); guest → read.
-# With auth disabled, all requests get full access (no ACL).
 
+[upload]
+max_size = "50GB"   # global upload ceiling
+chunk_size = "16MB" # resumable PATCH body size
+session_ttl = "72h" # how long incomplete uploads can be resumed
+max_parallel = 2    # concurrent file uploads in the UI
 
-# [upload]
-# max_size = "50GB"      # global upload ceiling
-# chunk_size = "16MB"    # resumable PATCH body size
-# session_ttl = "72h"    # how long incomplete uploads can be resumed
-# max_parallel = 2       # concurrent file uploads in the UI
+[otel]
+# OTLP traces + Prometheus metrics scrape endpoint.
+enabled = false
+instance_id = "godrive"
 
-# [otel]
-# instance_id = "godrive"
-# [otel.trace]
-# endpoint = "http://otel-collector:4317"
-# insecure = true
-# [otel.metrics]
-# listen_addr = ":2112"
+[otel.trace]
+# OTLP gRPC collector (host:port; http(s):// scheme is stripped).
+endpoint = "http://otel-collector:4317"
+# default: false
+insecure = true
+
+[otel.metrics]
+# Prometheus scrape listen address (/metrics).
+listen_addr = ":2112"

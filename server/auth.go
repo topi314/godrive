@@ -95,7 +95,7 @@ func GetUserInfo(r *http.Request) *UserInfo {
 }
 
 func (s *Server) isAdmin(info *UserInfo) bool {
-	if s.cfg.Auth == nil {
+	if !s.cfg.AuthEnabled() {
 		return true
 	}
 	admin := s.cfg.Auth.Groups.AdminGroup()
@@ -103,7 +103,7 @@ func (s *Server) isAdmin(info *UserInfo) bool {
 }
 
 func (s *Server) isAccess(info *UserInfo) bool {
-	if info == nil || s.cfg.Auth == nil {
+	if info == nil || !s.cfg.AuthEnabled() {
 		return false
 	}
 	access := s.cfg.Auth.Groups.AccessGroup()
@@ -115,7 +115,7 @@ func (s *Server) isGuest(info *UserInfo) bool {
 }
 
 func (s *Server) hasAccess(info *UserInfo) bool {
-	if s.cfg.Auth == nil {
+	if !s.cfg.AuthEnabled() {
 		return true
 	}
 	if !s.cfg.Auth.Groups.Guest && s.isGuest(info) {
@@ -137,14 +137,14 @@ func parseGroupsJSON(raw string) []string {
 }
 
 func (s *Server) mappedGroups(groups []string) []string {
-	if s.cfg.Auth == nil {
+	if !s.cfg.AuthEnabled() {
 		return nil
 	}
 	return s.cfg.Auth.Groups.MapOIDCGroups(groups)
 }
 
 func (s *Server) availableGroups() []string {
-	if s.cfg.Auth == nil {
+	if !s.cfg.AuthEnabled() {
 		return nil
 	}
 	return s.cfg.Auth.Groups.AvailableGroups()
@@ -170,11 +170,11 @@ func (s *Server) userPublicJSON(ctx context.Context, u dbq.User) map[string]any 
 func (s *Server) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		info, sessExp := s.resolveUser(r)
-		if info == nil && s.cfg.Auth == nil {
+		if info == nil && !s.cfg.AuthEnabled() {
 			// Open mode: no OIDC — every request is a local admin.
 			info = &UserInfo{Subject: "local", Username: "local", Groups: []string{"admin"}, Home: "/"}
 		}
-		if info == nil && s.cfg.Auth != nil {
+		if info == nil && s.cfg.AuthEnabled() {
 			info, sessExp = s.tryRefresh(w, r)
 		}
 		if info != nil {
@@ -236,7 +236,7 @@ func (s *Server) userToInfo(u dbq.User) *UserInfo {
 
 func (s *Server) RequireAccess(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.cfg.Auth == nil {
+		if !s.cfg.AuthEnabled() {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -367,8 +367,10 @@ func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, fmt.Errorf("access denied (groups=%v)", groups), http.StatusForbidden)
 		return
 	}
-	if err := s.provisionUserHome(r.Context(), user.Home, info); err != nil {
-		slog.Warn("provision home failed", slog.String("path", user.Home), slog.Any("err", err))
+	if s.shouldProvisionHome(r.Context(), user.Home) {
+		if err := s.provisionUserHome(r.Context(), user.Home, info); err != nil {
+			slog.Warn("provision home failed", slog.String("path", user.Home), slog.Any("err", err))
+		}
 	}
 
 	sessionID := randomID(32)
@@ -436,7 +438,7 @@ func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) Me(w http.ResponseWriter, r *http.Request) {
 	info := GetUserInfo(r)
-	if s.cfg.Auth == nil {
+	if !s.cfg.AuthEnabled() {
 		// Open mode: no OIDC — treat the operator as a local admin.
 		s.writeJSON(w, map[string]any{
 			"authenticated":    true,
@@ -529,7 +531,7 @@ func userIsGuest(info *UserInfo) bool {
 }
 
 func (s *Server) rpLogoutURL(idToken string) string {
-	if s.auth == nil || s.cfg.Auth == nil {
+	if s.auth == nil || !s.cfg.AuthEnabled() {
 		return ""
 	}
 	return s.auth.LogoutURL(idToken, s.cfg.Auth.PostLogoutRedirectURL)

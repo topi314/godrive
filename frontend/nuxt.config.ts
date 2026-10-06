@@ -74,14 +74,11 @@ export default defineNuxtConfig({
   },
   routeRules: {
     '/api/**': { proxy: `${backend}/api/**` },
-    // Legacy OIDC redirect (pre-/api rewrite).
-    '/callback': { proxy: `${backend}/callback` },
   },
   vite: {
     server: {
       proxy: {
         '/api': { target: backend, changeOrigin: true },
-        '/callback': { target: backend, changeOrigin: true },
         // Share JSON + file bytes; leave HTML directory navigations to the Nuxt SPA.
         '/s': {
           target: backend,

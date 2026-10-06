@@ -1199,6 +1199,55 @@ input[type="checkbox"]:checked:hover {
   height: 1.1rem;
 }
 
+.btn-primary:disabled {
+  opacity: 0.55;
+  cursor: wait;
+  filter: none;
+}
+
+.load-error {
+  margin-top: 1.25rem;
+  padding: 2.25rem 1.5rem;
+  border: 1.5px dashed color-mix(in srgb, var(--text-error) 45%, var(--line));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--text-error) 8%, var(--bg-elev));
+  text-align: center;
+  display: grid;
+  justify-items: center;
+  gap: 0.55rem;
+}
+
+.load-error-icon {
+  width: 2rem;
+  height: 2rem;
+  color: var(--text-error);
+  margin-bottom: 0.25rem;
+}
+
+.load-error-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.load-error-detail {
+  margin: 0;
+  max-width: 32rem;
+  color: var(--ink);
+  opacity: 0.9;
+}
+
+.load-error-hint {
+  margin: 0 0 0.35rem;
+  max-width: 28rem;
+  font-size: 0.9rem;
+}
+
+.load-error-retry {
+  margin-top: 0.5rem;
+}
+
 .progress {
   height: 6px;
   background: var(--line);

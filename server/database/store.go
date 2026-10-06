@@ -32,7 +32,7 @@ func NewStore(ctx context.Context, cfg config.DatabaseConfig, migrations fs.FS) 
 
 	switch cfg.Type {
 	case config.DatabaseTypeSQLite:
-		sqlDB, err = sql.Open("sqlite", cfg.Path+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
+		sqlDB, err = sql.Open("sqlite", cfg.SQLite.Path+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
 		if err != nil {
 			return nil, fmt.Errorf("open sqlite: %w", err)
 		}

@@ -17,18 +17,51 @@ import (
 )
 
 type localStorage struct {
-	root string
+	root  string
+	umask int
 }
 
 func newLocalStorage(cfg config.StorageConfig) (*localStorage, error) {
-	root, err := filepath.Abs(cfg.Path)
+	root, err := filepath.Abs(cfg.Local.Path)
 	if err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(root, 0o755); err != nil {
+	s := &localStorage{root: root, umask: cfg.Local.Umask & 0o777}
+	if err := s.mkdirAll(root); err != nil {
 		return nil, err
 	}
-	return &localStorage{root: root}, nil
+	return s, nil
+}
+
+func (s *localStorage) dirPerm() os.FileMode {
+	return os.FileMode(0o777 &^ s.umask)
+}
+
+func (s *localStorage) filePerm() os.FileMode {
+	return os.FileMode(0o666 &^ s.umask)
+}
+
+// mkdirAll creates path and any missing parents, then forces the configured dir mode
+// (so the process umask does not override [storage.local].umask).
+func (s *localStorage) mkdirAll(path string) error {
+	if err := os.MkdirAll(path, s.dirPerm()); err != nil {
+		return err
+	}
+	return os.Chmod(path, s.dirPerm())
+}
+
+func (s *localStorage) openFile(path string, flag int) (*os.File, error) {
+	f, err := os.OpenFile(path, flag, s.filePerm())
+	if err != nil {
+		return nil, err
+	}
+	if flag&os.O_CREATE != 0 {
+		if err := f.Chmod(s.filePerm()); err != nil {
+			_ = f.Close()
+			return nil, err
+		}
+	}
+	return f, nil
 }
 
 func (s *localStorage) resolve(p string) (string, error) {
@@ -87,11 +120,11 @@ func (s *localStorage) PutObject(ctx context.Context, path string, size int64, r
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+	if err := s.mkdirAll(filepath.Dir(abs)); err != nil {
 		return err
 	}
 	tmp := abs + ".tmp"
-	f, err := os.Create(tmp)
+	f, err := s.openFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY)
 	if err != nil {
 		return err
 	}
@@ -112,7 +145,7 @@ func (s *localStorage) Mkdir(ctx context.Context, path string) error {
 	if err != nil {
 		return err
 	}
-	return os.MkdirAll(abs, 0o755)
+	return s.mkdirAll(abs)
 }
 
 func (s *localStorage) DeleteObject(ctx context.Context, path string) error {
@@ -151,7 +184,7 @@ func (s *localStorage) RenameObject(ctx context.Context, from, to string) error 
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+	if err := s.mkdirAll(filepath.Dir(dst)); err != nil {
 		return err
 	}
 	return os.Rename(src, dst)
@@ -303,7 +336,7 @@ func (s *localStorage) uploadAbs(tempKey string) (string, error) {
 		return "", fmt.Errorf("invalid upload key")
 	}
 	dir := filepath.Join(s.root, ".uploads")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := s.mkdirAll(dir); err != nil {
 		return "", err
 	}
 	return filepath.Join(dir, tempKey), nil
@@ -314,7 +347,7 @@ func (s *localStorage) CreateUpload(ctx context.Context, tempKey string, size in
 	if err != nil {
 		return "", err
 	}
-	f, err := os.OpenFile(abs, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+	f, err := s.openFile(abs, os.O_CREATE|os.O_TRUNC|os.O_WRONLY)
 	if err != nil {
 		return "", err
 	}
@@ -333,7 +366,7 @@ func (s *localStorage) WriteUpload(ctx context.Context, tempKey string, offset i
 	if err != nil {
 		return "", err
 	}
-	f, err := os.OpenFile(abs, os.O_RDWR, 0o644)
+	f, err := os.OpenFile(abs, os.O_RDWR, s.filePerm())
 	if err != nil {
 		return "", err
 	}
@@ -360,7 +393,7 @@ func (s *localStorage) CommitUpload(ctx context.Context, tempKey, destPath, cont
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+	if err := s.mkdirAll(filepath.Dir(dest)); err != nil {
 		return err
 	}
 	if err := os.Rename(abs, dest); err != nil {

@@ -22,7 +22,7 @@ func aclIdentity(info *UserInfo) *acl.Identity {
 }
 
 func (s *Server) EffectivePermissions(ctx context.Context, filePath string, info *UserInfo, ownerID *string) (acl.Permissions, error) {
-	if s.cfg.Auth == nil {
+	if !s.cfg.AuthEnabled() {
 		return acl.PermissionsAll, nil
 	}
 	if info != nil && s.isAdmin(info) {
@@ -51,7 +51,7 @@ func (s *Server) EffectivePermissions(ctx context.Context, filePath string, info
 }
 
 func (s *Server) CanAnonymousRead(ctx context.Context, filePath string) (bool, error) {
-	if s.cfg.Auth != nil && !s.cfg.Auth.Groups.Guest {
+	if s.cfg.AuthEnabled() && !s.cfg.Auth.Groups.Guest {
 		return false, nil
 	}
 	paths := acl.AncestorPathsRootFirst(filePath)
@@ -66,7 +66,7 @@ func (s *Server) CanAnonymousRead(ctx context.Context, filePath string) (bool, e
 // seedDefaultRootACL inserts a starter ACL on "/" when none exist yet:
 // authenticated users (everyone) get full access; guests get read.
 func (s *Server) seedDefaultRootACL(ctx context.Context) error {
-	if s.cfg.Auth == nil {
+	if !s.cfg.AuthEnabled() {
 		return nil
 	}
 	rows, err := s.store.Q.ListAllACL(ctx)
@@ -96,9 +96,25 @@ func (s *Server) seedDefaultRootACL(ctx context.Context) error {
 }
 
 // provisionUserHome creates the user's home folder (parents included) and grants
-// them owner-like ACL on that path. Existing ACLs and other owners are left alone.
+// them owner-like ACL on that path. Other principals' ACLs are left alone; the
+// owner's full-access ACL is added when missing.
+func (s *Server) shouldProvisionHome(ctx context.Context, home string) bool {
+	home = acl.NormalizePath(home)
+	if home == "/" {
+		return false
+	}
+	file, err := s.store.Q.GetFile(ctx, home)
+	if errors.Is(err, sql.ErrNoRows) {
+		return true
+	}
+	if err != nil {
+		return false
+	}
+	return !storage.IsDirectory(file.ContentType)
+}
+
 func (s *Server) provisionUserHome(ctx context.Context, home string, info *UserInfo) error {
-	if s.cfg.Auth == nil || info == nil || s.isGuest(info) || info.Subject == "" {
+	if !s.cfg.AuthEnabled() || info == nil || s.isGuest(info) || info.Subject == "" {
 		return nil
 	}
 	home = acl.NormalizePath(home)
@@ -180,8 +196,13 @@ func (s *Server) provisionUserHome(ctx context.Context, home string, info *UserI
 	}
 
 	existing, err := s.store.Q.ListACLByPath(ctx, home)
-	if err != nil || len(existing) > 0 {
+	if err != nil {
 		return err
+	}
+	for _, row := range existing {
+		if row.PrincipalType == acl.PrincipalUser && row.PrincipalID == info.Subject {
+			return nil
+		}
 	}
 	_, err = s.store.Q.UpsertACL(ctx, dbq.UpsertACLParams{
 		Path:          home,

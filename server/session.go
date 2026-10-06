@@ -24,14 +24,14 @@ func GetSessionExpiry(r *http.Request) time.Time {
 
 func (s *Server) refreshDeadline(sess dbq.Session) time.Time {
 	d := config.DefaultRefreshTTL
-	if s.cfg.Auth != nil {
+	if s.cfg.AuthEnabled() {
 		d = s.cfg.Auth.RefreshTokenLifespan.Duration
 	}
 	return sess.CreatedAt.Add(d)
 }
 
 func (s *Server) setAuthCookies(w http.ResponseWriter, sessionID string, sessionExp, refreshExp time.Time) {
-	secure := s.cfg.Auth != nil && s.cfg.Auth.Secure
+	secure := s.cfg.AuthEnabled() && s.cfg.Auth.Secure
 	http.SetCookie(w, &http.Cookie{
 		Name:     SessionCookieName,
 		Value:    sessionID,
@@ -59,7 +59,7 @@ func (s *Server) clearAuthCookies(w http.ResponseWriter) {
 
 func skipSessionRefresh(r *http.Request) bool {
 	p := r.URL.Path
-	return p == "/api/login" || p == "/api/logout" || p == "/api/callback" || p == "/callback" || p == "/api/refresh"
+	return p == "/api/login" || p == "/api/logout" || p == "/api/callback" || p == "/api/refresh"
 }
 
 func (s *Server) tryRefresh(w http.ResponseWriter, r *http.Request) (*UserInfo, time.Time) {
@@ -154,7 +154,7 @@ func (s *Server) rotateSession(ctx context.Context, w http.ResponseWriter, sessi
 
 	newID := randomID(32)
 	sessionTTL := config.DefaultSessionTTL
-	if s.cfg.Auth != nil {
+	if s.cfg.AuthEnabled() {
 		sessionTTL = s.cfg.Auth.SessionLifespan.Duration
 	}
 	sessionExp := now.Add(sessionTTL)
@@ -218,7 +218,7 @@ func (s *Server) syncUserFromOIDC(ctx context.Context, userID string, tok *oauth
 }
 
 func (s *Server) Refresh(w http.ResponseWriter, r *http.Request) {
-	if s.cfg.Auth == nil || s.auth == nil {
+	if !s.cfg.AuthEnabled() || s.auth == nil {
 		s.writeError(w, r, errors.New("auth not configured"), http.StatusNotImplemented)
 		return
 	}

@@ -8,7 +8,7 @@ import (
 func (s *Server) serveSPA(w http.ResponseWriter, r *http.Request) {
 	if s.public == nil {
 		// -tags dev: send the browser to the Nuxt origin instead of a dead end.
-		target := s.cfg.FrontendURL + r.URL.RequestURI()
+		target := s.cfg.Server.FrontendURL + r.URL.RequestURI()
 		http.Redirect(w, r, target, http.StatusTemporaryRedirect)
 		return
 	}

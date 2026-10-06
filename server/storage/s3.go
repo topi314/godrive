@@ -22,12 +22,13 @@ type s3Storage struct {
 }
 
 func newS3Storage(ctx context.Context, cfg config.StorageConfig) (*s3Storage, error) {
+	s3cfg := cfg.S3
 	loadOpts := []func(*awsconfig.LoadOptions) error{
-		awsconfig.WithRegion(cfg.Region),
+		awsconfig.WithRegion(s3cfg.Region),
 	}
-	if cfg.AccessKeyID != "" {
+	if s3cfg.AccessKeyID != "" {
 		loadOpts = append(loadOpts, awsconfig.WithCredentialsProvider(
-			credentials.NewStaticCredentialsProvider(cfg.AccessKeyID, cfg.SecretAccessKey, ""),
+			credentials.NewStaticCredentialsProvider(s3cfg.AccessKeyID, s3cfg.SecretAccessKey, ""),
 		))
 	}
 
@@ -37,13 +38,35 @@ func newS3Storage(ctx context.Context, cfg config.StorageConfig) (*s3Storage, er
 	}
 
 	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
-		if cfg.Endpoint != "" {
-			o.BaseEndpoint = aws.String(cfg.Endpoint)
+		if s3cfg.Endpoint != "" {
+			o.BaseEndpoint = aws.String(s3Endpoint(s3cfg.Endpoint, s3cfg.Secure))
 		}
-		o.UsePathStyle = cfg.ForcePathStyle || cfg.Endpoint != ""
+		o.EndpointOptions.DisableHTTPS = !s3cfg.Secure
+		o.UsePathStyle = s3cfg.ForcePathStyle || s3cfg.Endpoint != ""
 	})
 
-	return &s3Storage{client: client, bucket: cfg.Bucket}, nil
+	return &s3Storage{client: client, bucket: s3cfg.Bucket}, nil
+}
+
+// s3Endpoint normalizes a custom endpoint to http(s) based on [storage.s3].secure.
+func s3Endpoint(endpoint string, secure bool) string {
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		return ""
+	}
+	scheme := "http"
+	if secure {
+		scheme = "https"
+	}
+	lower := strings.ToLower(endpoint)
+	switch {
+	case strings.HasPrefix(lower, "https://"):
+		return scheme + "://" + endpoint[len("https://"):]
+	case strings.HasPrefix(lower, "http://"):
+		return scheme + "://" + endpoint[len("http://"):]
+	default:
+		return scheme + "://" + endpoint
+	}
 }
 
 func s3Key(path string) string {
@@ -224,7 +247,7 @@ func (s *s3Storage) List(ctx context.Context, prefix string) ([]ObjectInfo, erro
 }
 
 func (s *s3Storage) Watch(ctx context.Context, onChange func(Event)) error {
-	// Instant pickup for S3 is via webhook/SQS handlers on the server, not a local watcher.
+	// Instant pickup for S3 is via the storage-events webhook (S3 event JSON), not a local watcher.
 	return nil
 }
 

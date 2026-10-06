@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -19,7 +20,10 @@ func (s *Server) startSync(ctx context.Context) {
 		s.applyStorageEvent(context.Background(), ev)
 	})
 
-	interval := s.cfg.Storage.SyncInterval.Duration
+	interval := time.Duration(0)
+	if s.cfg.Storage.SyncInterval != nil {
+		interval = s.cfg.Storage.SyncInterval.Duration
+	}
 	if interval <= 0 {
 		return
 	}
@@ -56,21 +60,8 @@ func (s *Server) applyStorageEvent(ctx context.Context, ev storage.Event) {
 				return
 			}
 		}
-		now := time.Now().UTC()
-		ct := info.ContentType
-		if ct == "" {
-			ct = "application/octet-stream"
-		}
-		params := dbq.UpsertFileParams{
-			Path: path, Size: info.Size, ContentType: ct,
-			Description: "", CreatedAt: now, UpdatedAt: now,
-		}
-		if existing, err := s.store.Q.GetFile(ctx, path); err == nil {
-			params.Description = existing.Description
-			params.UserID = existing.UserID
-			params.CreatedAt = existing.CreatedAt
-		}
-		_, _ = s.store.Q.UpsertFile(ctx, params)
+		info.Path = path
+		s.upsertIndexedFile(ctx, info)
 	}
 }
 
@@ -80,20 +71,12 @@ func (s *Server) syncPrefix(ctx context.Context, prefix string) {
 		return
 	}
 	seen := map[string]struct{}{}
-	now := time.Now().UTC()
 	for _, obj := range objs {
 		if acl.IsReservedPath(obj.Path) {
 			continue
 		}
 		seen[obj.Path] = struct{}{}
-		ct := obj.ContentType
-		if ct == "" {
-			ct = "application/octet-stream"
-		}
-		_, _ = s.store.Q.UpsertFile(ctx, dbq.UpsertFileParams{
-			Path: obj.Path, Size: obj.Size, ContentType: ct,
-			Description: "", CreatedAt: now, UpdatedAt: now,
-		})
+		s.upsertIndexedFile(ctx, obj)
 	}
 	rows, err := s.store.Q.ListFilesUnder(ctx, dbq.ListFilesUnderParams{
 		Path: acl.NormalizePath(prefix), PathLike: acl.LikeUnder(prefix),
@@ -108,14 +91,51 @@ func (s *Server) syncPrefix(ctx context.Context, prefix string) {
 	}
 }
 
+// upsertIndexedFile indexes a storage object. Size is the change signal: list/sync
+// often returns a different MIME than the DB, and GetPath runs sync on every refresh,
+// so comparing content-type (or always writing UpdatedAt=now) would rewrite stamps.
+func (s *Server) upsertIndexedFile(ctx context.Context, info storage.ObjectInfo) {
+	path := acl.NormalizePath(info.Path)
+	if path == "" || acl.IsReservedPath(path) {
+		return
+	}
+	stamp := time.Now().UTC()
+	if !info.LastModified.IsZero() {
+		stamp = info.LastModified.UTC()
+	}
+	ct := info.ContentType
+	if ct == "" {
+		ct = "application/octet-stream"
+	}
+
+	existing, err := s.store.Q.GetFile(ctx, path)
+	if err == nil {
+		if existing.Size == info.Size {
+			return
+		}
+		if existing.ContentType != "" {
+			ct = existing.ContentType
+		}
+		_, _ = s.store.Q.UpsertFile(ctx, dbq.UpsertFileParams{
+			Path: path, Size: info.Size, ContentType: ct,
+			Description: existing.Description, UserID: existing.UserID,
+			CreatedAt: existing.CreatedAt, UpdatedAt: stamp,
+		})
+		return
+	}
+	_, _ = s.store.Q.UpsertFile(ctx, dbq.UpsertFileParams{
+		Path: path, Size: info.Size, ContentType: ct,
+		CreatedAt: stamp, UpdatedAt: stamp,
+	})
+}
+
 func (s *Server) reconcileAll(ctx context.Context) error {
 	s.syncPrefix(ctx, "/")
 	return nil
 }
 
 func (s *Server) StorageEventsWebhook(w http.ResponseWriter, r *http.Request) {
-	secret := s.cfg.Storage.Notify.WebhookSecret
-	if secret != "" && r.Header.Get("X-Godrive-Secret") != secret {
+	if !s.storageWebhookAuthorized(r) {
 		s.writeError(w, r, errors.New("unauthorized"), http.StatusUnauthorized)
 		return
 	}
@@ -146,4 +166,22 @@ func (s *Server) StorageEventsWebhook(w http.ResponseWriter, r *http.Request) {
 		s.applyStorageEvent(r.Context(), storage.Event{Type: storage.EventUpsert, Path: acl.NormalizePath("/" + body.Key)})
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// storageWebhookAuthorized matches MinIO notify_webhook auth_token:
+// Authorization is compared to "Bearer <auth_token>" (or the full auth_token if it already includes a scheme).
+func (s *Server) storageWebhookAuthorized(r *http.Request) bool {
+	token := strings.TrimSpace(s.cfg.Storage.S3.Notify.AuthToken)
+	if token == "" {
+		return true
+	}
+	want := token
+	if !strings.HasPrefix(strings.ToLower(token), "bearer ") {
+		want = "Bearer " + token
+	}
+	got := strings.TrimSpace(r.Header.Get("Authorization"))
+	if len(got) != len(want) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(got), []byte(want)) == 1
 }

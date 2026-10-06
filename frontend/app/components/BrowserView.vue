@@ -32,8 +32,18 @@
       <input ref="fileInput" type="file" multiple hidden @change="onPick" />
     </div>
 
-    <p v-if="error" class="error">{{ error }}</p>
+    <div v-if="error" class="load-error" role="alert">
+      <AppIcon name="alert" class="load-error-icon" />
+      <h2 class="load-error-title">{{ errorTitle }}</h2>
+      <p class="load-error-detail">{{ error }}</p>
+      <p v-if="errorHint" class="muted load-error-hint">{{ errorHint }}</p>
+      <button type="button" class="btn-primary load-error-retry" :disabled="loading" @click="load()">
+        <AppIcon name="refresh" />
+        {{ loading ? 'Retrying…' : 'Try again' }}
+      </button>
+    </div>
 
+    <template v-else>
     <table class="file-table browser-files">
       <thead>
         <tr>
@@ -174,6 +184,7 @@
     >
       Drop files here or click to upload
     </div>
+    </template>
 
     <PermissionsDialog v-model="aclOpen" v-model:path="aclPath" @saved="onACLSaved" />
     <UploadDialog
@@ -332,9 +343,45 @@ const files = ref<FileEntry[]>([])
 const dirPerms = ref(0)
 const selected = ref<string[]>([])
 const error = ref('')
+const errorStatus = ref(0)
+const loading = ref(false)
 /** Path currently shown in crumbs + list (updated together when a listing arrives). */
 const listedPath = ref(props.basePath || '/')
 let loadSeq = 0
+
+const errorTitle = computed(() => {
+  const s = errorStatus.value
+  if (s === 502 || s === 503 || s === 504) return 'Server unavailable'
+  if (s === 0 && /fetch|network|failed to fetch|ECONNREFUSED|502|Bad Gateway/i.test(error.value)) {
+    return 'Server unavailable'
+  }
+  if (s === 403) return 'Access denied'
+  if (s === 404) return 'Not found'
+  if (s >= 500) return 'Something went wrong'
+  return 'Couldn’t load this folder'
+})
+
+const errorHint = computed(() => {
+  const s = errorStatus.value
+  if (s === 502 || s === 503 || s === 504 || (s === 0 && /502|Bad Gateway|ECONNREFUSED|fetch/i.test(error.value))) {
+    return 'The API isn’t reachable right now. Check that godrive is running, then try again.'
+  }
+  if (s === 403) return 'You don’t have permission to view this path.'
+  if (s >= 500) return 'The server hit an error while loading this folder.'
+  return ''
+})
+
+function loadErrorMessage(e: any, status: number): string {
+  const raw = String(e?.data?.message || e?.statusMessage || e?.message || 'Failed to load')
+  if (status === 502 || /502\s*Bad Gateway/i.test(raw)) {
+    return 'Bad gateway — the frontend couldn’t reach the API.'
+  }
+  if (status === 503 || /503/i.test(raw)) return 'Service temporarily unavailable.'
+  if (status === 504 || /504/i.test(raw)) return 'The API timed out.'
+  // ofetch often formats as [GET] "/": 502 Bad Gateway
+  const m = raw.match(/^\[[A-Z]+\]\s+"[^"]*":\s*(.+)$/)
+  return m?.[1] || raw
+}
 const listingInflight = new Map<string, Promise<{ files: FileEntry[]; permissions: number }>>()
 
 function listingKey(path: string) {
@@ -565,6 +612,8 @@ async function load() {
   const path = props.basePath || '/'
   const seq = ++loadSeq
   error.value = ''
+  errorStatus.value = 0
+  loading.value = true
   selected.value = []
   menuPath.value = ''
   try {
@@ -575,17 +624,20 @@ async function load() {
     listedPath.value = path
   } catch (e: any) {
     if (seq !== loadSeq) return
-    const status = e?.statusCode || e?.status || e?.response?.status
+    const status = Number(e?.statusCode || e?.status || e?.response?.status || 0)
     if (!props.shareId && status === 404 && normalizePath(path) !== '/') {
       await navigateTo('/')
       return
     }
     if (status !== 401) {
-      error.value = e?.data?.message || e.message || 'Failed to load'
+      errorStatus.value = status
+      error.value = loadErrorMessage(e, status)
     }
     files.value = []
     dirPerms.value = 0
     listedPath.value = path
+  } finally {
+    if (seq === loadSeq) loading.value = false
   }
 }
 

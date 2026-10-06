@@ -58,7 +58,7 @@ type introspectResponse struct {
 	Sub    string `json:"sub"`
 }
 
-func (c *Client) LoadDiscovery(endSessionOverride string) {
+func (c *Client) LoadDiscovery() {
 	if c == nil || c.Provider == nil {
 		return
 	}
@@ -66,9 +66,6 @@ func (c *Client) LoadDiscovery(endSessionOverride string) {
 	if err := c.Provider.Claims(&disc); err != nil {
 		slog.Warn("oidc discovery claims", slog.Any("err", err))
 		return
-	}
-	if disc.EndSessionEndpoint == "" {
-		disc.EndSessionEndpoint = strings.TrimSpace(endSessionOverride)
 	}
 	c.Discovery = disc
 	slog.Info("oidc discovery",

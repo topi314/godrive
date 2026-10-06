@@ -10,7 +10,6 @@ import (
 
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.RealIP)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Recoverer)
 	r.Use(s.AuthMiddleware)
@@ -32,16 +31,11 @@ func (s *Server) Routes() http.Handler {
 		})
 	}
 
-	// Legacy OIDC redirect (pre-/api rewrite). Keep for existing IdP client configs.
-	if s.cfg.Auth != nil {
-		r.Get("/callback", s.Callback)
-	}
-
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/plain")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("."))
+			_, _ = w.Write([]byte("pong"))
 		})
 		r.Get("/version", func(w http.ResponseWriter, r *http.Request) {
 			s.writeJSON(w, map[string]string{"version": s.version}, http.StatusOK)
@@ -57,7 +51,7 @@ func (s *Server) Routes() http.Handler {
 		r.Post("/refresh", s.Refresh)
 		r.Get("/logout", s.Logout)
 		r.Post("/logout", s.Logout)
-		if s.cfg.Auth != nil {
+		if s.cfg.AuthEnabled() {
 			r.Get("/callback", s.Callback)
 		}
 
@@ -108,7 +102,7 @@ func (s *Server) Routes() http.Handler {
 	r.Group(func(r chi.Router) {
 		r.Use(func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if GetUserInfo(r) == nil && s.cfg.Auth != nil && s.cfg.Auth.Groups.Guest {
+				if GetUserInfo(r) == nil && s.cfg.AuthEnabled() && s.cfg.Auth.Groups.Guest {
 					info := &UserInfo{Subject: "guest", Username: "guest", Groups: []string{"guest"}, Home: "/"}
 					r = r.WithContext(context.WithValue(r.Context(), UserInfoKey, info))
 				}

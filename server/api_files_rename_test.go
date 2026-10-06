@@ -17,7 +17,7 @@ import (
 func TestRenamePathCarriesACL(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	store, err := database.NewStore(ctx, config.DatabaseConfig{Type: config.DatabaseTypeSQLite, Path: filepath.Join(dir, "t.db")}, database.Migrations)
+	store, err := database.NewStore(ctx, config.DatabaseConfig{Type: config.DatabaseTypeSQLite, SQLite: config.DatabaseSQLiteConfig{Path: filepath.Join(dir, "t.db")}}, database.Migrations)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +27,7 @@ func TestRenamePathCarriesACL(t *testing.T) {
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	st, err := storage.New(ctx, config.StorageConfig{Type: config.StorageTypeLocal, Path: root})
+	st, err := storage.New(ctx, config.StorageConfig{Type: config.StorageTypeLocal, Local: config.StorageLocalConfig{Path: root}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestRenamePathCarriesACL(t *testing.T) {
 func TestRenamePathMovesDeeperAndUp(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	store, err := database.NewStore(ctx, config.DatabaseConfig{Type: config.DatabaseTypeSQLite, Path: filepath.Join(dir, "t.db")}, database.Migrations)
+	store, err := database.NewStore(ctx, config.DatabaseConfig{Type: config.DatabaseTypeSQLite, SQLite: config.DatabaseSQLiteConfig{Path: filepath.Join(dir, "t.db")}}, database.Migrations)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestRenamePathMovesDeeperAndUp(t *testing.T) {
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	st, err := storage.New(ctx, config.StorageConfig{Type: config.StorageTypeLocal, Path: root})
+	st, err := storage.New(ctx, config.StorageConfig{Type: config.StorageTypeLocal, Local: config.StorageLocalConfig{Path: root}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -23,7 +23,7 @@ func (s *Server) GetPermissionsAPI(w http.ResponseWriter, r *http.Request) {
 	p := acl.NormalizePath(r.URL.Query().Get("path"))
 	info := GetUserInfo(r)
 	perms, err := s.EffectivePermissions(r.Context(), p, info, nil)
-	if err != nil || (s.cfg.Auth != nil && !perms.Has(acl.PermissionRead) && !perms.Has(acl.PermissionUpdatePermissions)) {
+	if err != nil || (s.cfg.AuthEnabled() && !perms.Has(acl.PermissionRead) && !perms.Has(acl.PermissionUpdatePermissions)) {
 		s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
 		return
 	}
@@ -77,7 +77,7 @@ func (s *Server) PutPermissionsAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	info := GetUserInfo(r)
 	perms, err := s.EffectivePermissions(r.Context(), p, info, nil)
-	if err != nil || (s.cfg.Auth != nil && !perms.Has(acl.PermissionUpdatePermissions) && !s.isAdmin(info)) {
+	if err != nil || (s.cfg.AuthEnabled() && !perms.Has(acl.PermissionUpdatePermissions) && !s.isAdmin(info)) {
 		s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
 		return
 	}
@@ -103,7 +103,7 @@ func (s *Server) PutPermissionsAPI(w http.ResponseWriter, r *http.Request) {
 			pid = acl.GuestID
 		}
 		if row.PrincipalType == acl.PrincipalGroup {
-			if pid == "" || (s.cfg.Auth != nil && !s.cfg.Auth.Groups.IsAvailableGroup(pid)) {
+			if pid == "" || (s.cfg.AuthEnabled() && !s.cfg.Auth.Groups.IsAvailableGroup(pid)) {
 				s.writeError(w, r, errors.New("unknown group"), http.StatusBadRequest)
 				return
 			}

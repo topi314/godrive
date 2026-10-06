@@ -6,7 +6,7 @@ Self-hosted file drive with path ACLs, share links (`/s/{id}`), API tokens, and 
 
 ```bash
 cp example.config.toml config.toml
-# edit listen_addr / database / storage / auth as needed
+# edit [server] / database / storage / auth as needed
 docker compose up --build
 ```
 
@@ -26,13 +26,13 @@ npm run dev
 
 Override the API target with `GODRIVE_API` (default `http://localhost:8090`).
 
-With `-tags dev`, HTML that hits Go is redirected to `frontend_url` — use the Nuxt dev server for the UI.
+With `-tags dev`, HTML that hits Go is redirected to `[server].frontend_url` — use the Nuxt dev server for the UI.
 
 ### Auth (Authelia / OIDC)
 
-Enable `[auth]` in `config.toml` pointing at your Authelia issuer (see `example.config.toml` / `example.production.toml`). Restart the Go API after changing it.
+Enable `[auth]` with `enabled = true` in `config.toml` pointing at your Authelia issuer (see `example.config.toml`). Restart the Go API after changing it.
 
-For local Nuxt (`http://localhost:3000`), register `http://localhost:3000/api/callback` as an allowed redirect URI on the Authelia client. Production can keep `https://godrive.zip/callback` — bare `/callback` is still registered alongside `/api/callback`.
+For local Nuxt (`http://localhost:3000`), register `http://localhost:3000/api/callback` as an allowed redirect URI on the Authelia client. Production uses `https://godrive.zip/api/callback`.
 
 ## Production build
 
@@ -73,7 +73,7 @@ Share URLs (`/s/{id}`) are capability links. Permissions come from `path_acl` ro
 - Path ACLs with inheritance; `everyone` = logged-in users, `guest` = anonymous (publish via `guest` + read); `share` = capability URL only
 - OIDC groups mapped to godrive groups in `[auth.groups.map]`; `admin` bypasses ACLs, `access` gates who can use the app
 - Short opaque sessions (`session_lifespan`, default 15m) plus a long-lived refresh cookie (`refresh_token_lifespan`, default 30d); groups refresh on renewal
-- OIDC authorization code + PKCE; PAR / introspection / revocation when the IdP advertises them; RP logout when `end_session_endpoint` is present
+- OIDC authorization code + PKCE; PAR / introspection / revocation / RP logout when the IdP advertises them
 - Short share links at `/s/{id}` with configurable share-principal ACL bits
 - Resumable large-file uploads via the upload dialog (chunked PATCH sessions)
 - Instant pickup of files dropped into local storage (fsnotify) or via S3 notifications

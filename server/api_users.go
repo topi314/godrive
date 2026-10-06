@@ -17,7 +17,7 @@ func (s *Server) PatchMeAPI(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, errors.New("unauthorized"), http.StatusUnauthorized)
 		return
 	}
-	if s.cfg.Auth == nil {
+	if !s.cfg.AuthEnabled() {
 		s.writeError(w, r, errors.New("profile settings require authentication"), http.StatusNotImplemented)
 		return
 	}
