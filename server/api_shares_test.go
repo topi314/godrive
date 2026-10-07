@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/topi314/godrive/server/acl"
 	"github.com/topi314/godrive/server/database/dbq"
 )
 
@@ -45,10 +46,13 @@ func TestJoinShareTarget(t *testing.T) {
 }
 
 func TestUnderShare(t *testing.T) {
-	if underShare("/home/docs", "/home") {
+	if acl.IsSelfOrUnder("/home", "/home/docs") {
 		t.Fatal("parent must not be under share")
 	}
-	if underShare("/home/docs", "/home/docs2") {
+	if acl.IsSelfOrUnder("/home/docs2", "/home/docs") {
 		t.Fatal("sibling prefix must not match")
+	}
+	if !acl.IsSelfOrUnder("/home/docs/a", "/home/docs") {
+		t.Fatal("child must be under share")
 	}
 }

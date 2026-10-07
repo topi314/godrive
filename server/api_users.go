@@ -21,33 +21,7 @@ func (s *Server) PatchMeAPI(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, errors.New("profile settings require authentication"), http.StatusNotImplemented)
 		return
 	}
-
-	var body struct {
-		Home *string `json:"home"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		s.writeError(w, r, err, http.StatusBadRequest)
-		return
-	}
-	if body.Home == nil {
-		s.writeError(w, r, errors.New("home is required"), http.StatusBadRequest)
-		return
-	}
-	home := acl.NormalizePath(*body.Home)
-	user, err := s.store.Q.UpdateUserHome(r.Context(), dbq.UpdateUserHomeParams{
-		ID:        info.Subject,
-		Home:      home,
-		UpdatedAt: time.Now().UTC(),
-	})
-	if err != nil {
-		s.writeError(w, r, err, http.StatusInternalServerError)
-		return
-	}
-	if err := s.provisionUserHome(r.Context(), user.Home, s.userToInfo(user)); err != nil {
-		s.writeError(w, r, err, http.StatusBadRequest)
-		return
-	}
-	s.writeJSON(w, s.userPublicJSON(r.Context(), user), http.StatusOK)
+	s.patchUserHome(w, r, info.Subject)
 }
 
 func (s *Server) PatchUserAPI(w http.ResponseWriter, r *http.Request) {
@@ -60,6 +34,10 @@ func (s *Server) PatchUserAPI(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, errors.New("missing user id"), http.StatusBadRequest)
 		return
 	}
+	s.patchUserHome(w, r, id)
+}
+
+func (s *Server) patchUserHome(w http.ResponseWriter, r *http.Request, userID string) {
 	var body struct {
 		Home *string `json:"home"`
 	}
@@ -73,7 +51,7 @@ func (s *Server) PatchUserAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	home := acl.NormalizePath(*body.Home)
 	user, err := s.store.Q.UpdateUserHome(r.Context(), dbq.UpdateUserHomeParams{
-		ID:        id,
+		ID:        userID,
 		Home:      home,
 		UpdatedAt: time.Now().UTC(),
 	})

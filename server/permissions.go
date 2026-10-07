@@ -41,26 +41,27 @@ func (s *Server) EffectivePermissions(ctx context.Context, filePath string, info
 	if info == nil && !s.cfg.Auth.Groups.Guest {
 		return 0, nil
 	}
-
-	paths := acl.AncestorPathsRootFirst(filePath)
-	rows, err := s.store.ListACLByPaths(ctx, paths)
-	if err != nil {
-		return 0, err
-	}
-	return acl.CalculatePermissions(paths, rows, aclIdentity(info)), nil
+	return s.aclPermsFor(ctx, filePath, aclIdentity(info))
 }
 
 func (s *Server) CanAnonymousRead(ctx context.Context, filePath string) (bool, error) {
 	if s.cfg.AuthEnabled() && !s.cfg.Auth.Groups.Guest {
 		return false, nil
 	}
-	paths := acl.AncestorPathsRootFirst(filePath)
-	rows, err := s.store.ListACLByPaths(ctx, paths)
+	perms, err := s.aclPermsFor(ctx, filePath, nil)
 	if err != nil {
 		return false, err
 	}
-	perms := acl.CalculatePermissions(paths, rows, nil)
 	return perms.Has(acl.PermissionRead), nil
+}
+
+func (s *Server) aclPermsFor(ctx context.Context, filePath string, id *acl.Identity) (acl.Permissions, error) {
+	paths := acl.AncestorPathsRootFirst(filePath)
+	rows, err := s.store.ListACLByPaths(ctx, paths)
+	if err != nil {
+		return 0, err
+	}
+	return acl.CalculatePermissions(paths, rows, id), nil
 }
 
 // seedDefaultRootACL inserts a starter ACL on "/" when none exist yet:
@@ -153,14 +154,11 @@ func (s *Server) provisionUserHome(ctx context.Context, home string, info *UserI
 		if err := s.storage.Mkdir(ctx, p); err != nil {
 			return err
 		}
-		params := dbq.UpsertFileParams{
-			Path: p, Size: 0, ContentType: storage.ContentTypeDirectory,
-			CreatedAt: now, UpdatedAt: now,
-		}
+		owner := ""
 		if p == home {
-			params.UserID = database.NullString(&info.Subject)
+			owner = info.Subject
 		}
-		if _, err := s.store.Q.UpsertFile(ctx, params); err != nil {
+		if _, err := s.store.Q.UpsertFile(ctx, dirFileParams(p, now, owner)); err != nil {
 			return err
 		}
 	}
@@ -170,10 +168,7 @@ func (s *Server) provisionUserHome(ctx context.Context, home string, info *UserI
 		if err := s.storage.Mkdir(ctx, home); err != nil {
 			return err
 		}
-		file, err = s.store.Q.UpsertFile(ctx, dbq.UpsertFileParams{
-			Path: home, Size: 0, ContentType: storage.ContentTypeDirectory,
-			UserID: database.NullString(&info.Subject), CreatedAt: now, UpdatedAt: now,
-		})
+		file, err = s.store.Q.UpsertFile(ctx, dirFileParams(home, now, info.Subject))
 	}
 	if err != nil {
 		return err

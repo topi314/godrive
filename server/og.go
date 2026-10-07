@@ -7,7 +7,6 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	"image/png"
-	_ "image/png"
 	"net/http"
 	"path"
 	"strings"
@@ -121,9 +120,6 @@ func isBot(r *http.Request) bool {
 }
 
 func (s *Server) serveImagePreview(w http.ResponseWriter, r *http.Request, filePath string) {
-	if r.URL.Query().Get("preview") != "1" && !strings.HasSuffix(r.URL.Path, "/preview") {
-		// also used via ?preview=1 on public paths
-	}
 	rc, info, err := s.storage.GetObject(r.Context(), filePath, 0, -1)
 	if err != nil {
 		http.NotFound(w, r)

@@ -127,35 +127,6 @@ export function useApi() {
     })
   }
 
-  async function upload(dir: string, file: File, description = '', onProgress?: (n: number) => void) {
-    const data = new FormData()
-    data.append('json', JSON.stringify({ name: file.name, description, size: file.size }))
-    data.append('file', file, file.name)
-    const url = publicFilePath(dir)
-
-    const send = () => new Promise<void>((resolve, reject) => {
-      const xhr = new XMLHttpRequest()
-      xhr.open('POST', url)
-      xhr.withCredentials = true
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100))
-      }
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) resolve()
-        else reject(Object.assign(new Error(xhr.responseText || 'upload failed'), { status: xhr.status }))
-      }
-      xhr.onerror = () => reject(new Error('upload failed'))
-      xhr.send(data)
-    })
-    try {
-      await send()
-    } catch (err: any) {
-      if (fetchStatus(err) !== 401) throw err
-      await refreshSession()
-      await send()
-    }
-  }
-
   async function mkdir(dir: string, name: string) {
     await apiFetch(publicFilePath(dir), {
       method: 'POST',
@@ -288,10 +259,6 @@ export function useApi() {
     })
   }
 
-  async function abortUpload(id: string) {
-    await apiFetch('/api/uploads/' + encodeURIComponent(id), { method: 'DELETE' })
-  }
-
   async function listShares() {
     return await apiFetch<any[]>('/api/shares')
   }
@@ -334,7 +301,6 @@ export function useApi() {
     me,
     updateMe,
     listPath,
-    upload,
     mkdir,
     rename,
     remove,
@@ -357,6 +323,5 @@ export function useApi() {
     getUploadSession,
     uploadChunk,
     completeUpload,
-    abortUpload,
   }
 }

@@ -45,11 +45,6 @@ func (s *Server) uploadIdentity(r *http.Request, shareID string) (*UserInfo, *ac
 		if share.ExpiresAt.Valid && !share.ExpiresAt.Time.After(time.Now().UTC()) {
 			return nil, nil, errors.New("share expired")
 		}
-		id := &acl.Identity{ShareID: shareID}
-		if info != nil && !s.isGuest(info) {
-			id.Subject = info.Subject
-			id.Groups = info.Groups
-		}
 		// Share-link evaluation uses ShareID only in CalculatePermissions.
 		return info, &acl.Identity{ShareID: shareID}, nil
 	}
@@ -61,12 +56,7 @@ func (s *Server) uploadIdentity(r *http.Request, shareID string) (*UserInfo, *ac
 
 func (s *Server) effectiveUploadPerms(ctx context.Context, filePath string, info *UserInfo, ident *acl.Identity, ownerID *string) (acl.Permissions, error) {
 	if ident != nil && ident.ShareID != "" {
-		paths := acl.AncestorPathsRootFirst(filePath)
-		rows, err := s.store.ListACLByPaths(ctx, paths)
-		if err != nil {
-			return 0, err
-		}
-		return acl.CalculatePermissions(paths, rows, ident), nil
+		return s.aclPermsFor(ctx, filePath, ident)
 	}
 	return s.EffectivePermissions(ctx, filePath, info, ownerID)
 }

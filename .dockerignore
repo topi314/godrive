@@ -1,4 +1,4 @@
-.git
+# Keep .git so `go build` can embed vcs.revision / vcs.time (runtime/debug).
 .github
 .idea
 .vscode

@@ -149,13 +149,6 @@ func (s *Server) Stop() {
 // Close is an alias for Stop for compatibility.
 func (s *Server) Close() { s.Stop() }
 
-func FormatBuildVersion(version, commit string, buildTime time.Time) string {
-	if buildTime.IsZero() {
-		return fmt.Sprintf("%s (%s)", version, commit)
-	}
-	return fmt.Sprintf("%s (%s) built %s", version, commit, buildTime.Format(time.RFC3339))
-}
-
 func (s *Server) newShareID() string {
 	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, 12)

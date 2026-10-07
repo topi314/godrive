@@ -113,6 +113,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '~/composables/format'
 import type { Me } from '~/composables/useApi'
 
 const open = defineModel<boolean>({ required: true })
@@ -147,12 +148,6 @@ function onKeydown(e: KeyboardEvent) {
 
 onMounted(() => document.addEventListener('keydown', onKeydown))
 onUnmounted(() => document.removeEventListener('keydown', onKeydown))
-
-function formatDate(v: string) {
-  if (!v) return '—'
-  const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? v : d.toLocaleString()
-}
 
 function formatExpiry(v: string | null | undefined) {
   if (!v) return 'Never'

@@ -6,9 +6,6 @@ SELECT * FROM files
 WHERE path = @path OR path LIKE @path_like
 ORDER BY path;
 
--- name: ListAllFilePaths :many
-SELECT path FROM files ORDER BY path;
-
 -- name: UpsertFile :one
 INSERT INTO files (path, size, content_type, description, user_id, created_at, updated_at)
 VALUES (@path, @size, @content_type, @description, @user_id, @created_at, @updated_at)

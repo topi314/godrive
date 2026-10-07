@@ -709,11 +709,6 @@ a.icon-btn:hover,
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
-.tip {
-  margin: 0.35rem 0 0.75rem;
-  font-size: 0.85rem;
-}
-
 .token-banner {
   display: flex;
   flex-wrap: wrap;
@@ -898,11 +893,6 @@ a.icon-btn:hover,
 .perm-letter.perm-a,
 .perm-letter.perm-s {
   color: var(--perm-tone);
-}
-
-.path-line {
-  margin: -0.35rem 0 0.75rem;
-  word-break: break-all;
 }
 
 .acl-path-field {
@@ -1339,11 +1329,6 @@ input[type="checkbox"]:checked:hover {
 
 .error {
   color: var(--text-error);
-  margin: 0.5rem 0;
-}
-
-.success {
-  color: #3dce7a;
   margin: 0.5rem 0;
 }
 

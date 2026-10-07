@@ -613,15 +613,11 @@ func (s *Server) mkdirAPI(w http.ResponseWriter, r *http.Request, dir string, in
 		s.writeError(w, r, err, http.StatusInternalServerError)
 		return
 	}
-	now := time.Now().UTC()
-	params := dbq.UpsertFileParams{
-		Path: target, Size: 0, ContentType: storage.ContentTypeDirectory,
-		CreatedAt: now, UpdatedAt: now,
+	owner := ""
+	if info != nil {
+		owner = info.Subject
 	}
-	if info != nil && info.Subject != "" && info.Subject != "guest" {
-		params.UserID = database.NullString(&info.Subject)
-	}
-	if _, err := s.store.Q.UpsertFile(r.Context(), params); err != nil {
+	if _, err := s.store.Q.UpsertFile(r.Context(), dirFileParams(target, time.Now().UTC(), owner)); err != nil {
 		s.writeError(w, r, err, http.StatusInternalServerError)
 		return
 	}
@@ -659,6 +655,30 @@ func resolveRenameTarget(from, spec string) (string, error) {
 var errForbidden = errors.New("forbidden")
 
 func (s *Server) ensureDir(ctx context.Context, destDir string, info *UserInfo) error {
+	return s.ensureDirWithOpts(ctx, destDir, info, true)
+}
+
+// ensureDirUnchecked creates missing parent directories without ACL checks (share upload finalize).
+func (s *Server) ensureDirUnchecked(ctx context.Context, destDir, ownerSubject string) error {
+	var info *UserInfo
+	if ownerSubject != "" {
+		info = &UserInfo{Subject: ownerSubject}
+	}
+	return s.ensureDirWithOpts(ctx, destDir, info, false)
+}
+
+func dirFileParams(p string, now time.Time, ownerSubject string) dbq.UpsertFileParams {
+	params := dbq.UpsertFileParams{
+		Path: p, Size: 0, ContentType: storage.ContentTypeDirectory,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	if ownerSubject != "" && ownerSubject != "guest" {
+		params.UserID = database.NullString(&ownerSubject)
+	}
+	return params
+}
+
+func (s *Server) ensureDirWithOpts(ctx context.Context, destDir string, info *UserInfo, checkACL bool) error {
 	destDir = acl.NormalizePath(destDir)
 	if destDir == "/" {
 		return nil
@@ -688,9 +708,13 @@ func (s *Server) ensureDir(ctx context.Context, destDir string, info *UserInfo) 
 		missing = append(missing, p)
 	}
 	now := time.Now().UTC()
+	owner := ""
+	if info != nil {
+		owner = info.Subject
+	}
 	for i := len(missing) - 1; i >= 0; i-- {
 		p := missing[i]
-		if s.cfg.AuthEnabled() {
+		if checkACL && s.cfg.AuthEnabled() {
 			perms, err := s.EffectivePermissions(ctx, path.Dir(p), info, nil)
 			if err != nil || !perms.Has(acl.PermissionCreate) {
 				return errForbidden
@@ -699,64 +723,7 @@ func (s *Server) ensureDir(ctx context.Context, destDir string, info *UserInfo) 
 		if err := s.storage.Mkdir(ctx, p); err != nil {
 			return err
 		}
-		params := dbq.UpsertFileParams{
-			Path: p, Size: 0, ContentType: storage.ContentTypeDirectory,
-			CreatedAt: now, UpdatedAt: now,
-		}
-		if info != nil && info.Subject != "" && info.Subject != "guest" {
-			params.UserID = database.NullString(&info.Subject)
-		}
-		if _, err := s.store.Q.UpsertFile(ctx, params); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// ensureDirUnchecked creates missing parent directories without ACL checks (share upload finalize).
-func (s *Server) ensureDirUnchecked(ctx context.Context, destDir, ownerSubject string) error {
-	destDir = acl.NormalizePath(destDir)
-	if destDir == "/" {
-		return nil
-	}
-	if acl.IsReservedPath(destDir) {
-		return errors.New("reserved path")
-	}
-	var missing []string
-	for p := destDir; p != "/"; p = path.Dir(p) {
-		file, err := s.store.Q.GetFile(ctx, p)
-		if err == nil {
-			if !storage.IsDirectory(file.ContentType) {
-				return errors.New("destination is not a folder")
-			}
-			break
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
-			return err
-		}
-		ok, err := s.pathExists(ctx, p)
-		if err != nil {
-			return err
-		}
-		if ok {
-			break
-		}
-		missing = append(missing, p)
-	}
-	now := time.Now().UTC()
-	for i := len(missing) - 1; i >= 0; i-- {
-		p := missing[i]
-		if err := s.storage.Mkdir(ctx, p); err != nil {
-			return err
-		}
-		params := dbq.UpsertFileParams{
-			Path: p, Size: 0, ContentType: storage.ContentTypeDirectory,
-			CreatedAt: now, UpdatedAt: now,
-		}
-		if ownerSubject != "" && ownerSubject != "guest" {
-			params.UserID = database.NullString(&ownerSubject)
-		}
-		if _, err := s.store.Q.UpsertFile(ctx, params); err != nil {
+		if _, err := s.store.Q.UpsertFile(ctx, dirFileParams(p, now, owner)); err != nil {
 			return err
 		}
 	}

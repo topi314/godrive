@@ -1,9 +1,10 @@
 package config
 
 import (
-	"path"
 	"strings"
 	"time"
+
+	"github.com/topi314/godrive/server/acl"
 )
 
 const (
@@ -130,7 +131,7 @@ func ExpandHome(tmpl, username, email, subject string) string {
 		"{email}", sanitizeHomeComponent(email),
 		"{id}", sanitizeHomeComponent(subject),
 	)
-	return normalizeHomePath(repl.Replace(tmpl))
+	return acl.NormalizePath(repl.Replace(tmpl))
 }
 
 func sanitizeHomeComponent(s string) string {
@@ -140,15 +141,4 @@ func sanitizeHomeComponent(s string) string {
 		return ""
 	}
 	return s
-}
-
-func normalizeHomePath(p string) string {
-	if p == "" {
-		return "/"
-	}
-	p = path.Clean("/" + strings.TrimPrefix(p, "/"))
-	if p == "." {
-		return "/"
-	}
-	return p
 }

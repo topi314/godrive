@@ -26,9 +26,9 @@ COPY --from=frontend /app/.output/public ./frontend/dist
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
-ARG VERSION=unknown
-ARG COMMIT=unknown
-ARG BUILD_TIME=unknown
+
+# git is required for Go to stamp vcs.revision / vcs.time into the binary.
+RUN apk add --no-cache git
 
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
@@ -36,7 +36,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     GOOS=$TARGETOS \
     GOARCH=$TARGETARCH \
     GOARM=${TARGETVARIANT#v} \
-    go build -ldflags="-X 'main.Version=$VERSION' -X 'main.Commit=$COMMIT' -X 'main.BuildTime=$BUILD_TIME'" -o godrive .
+    go build -trimpath -o godrive .
 
 FROM alpine:3.21
 

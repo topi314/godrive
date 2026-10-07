@@ -140,6 +140,8 @@
 </template>
 
 <script setup lang="ts">
+import { normalizeClientPath } from '~/composables/format'
+import { PERM_FLAGS, cycleAllowDeny, markClass as bitsMarkClass, markLabel as bitsMarkLabel } from '~/composables/permBits'
 import { hasPerm, Perm } from '~/composables/useApi'
 
 type ACLRow = {
@@ -167,14 +169,7 @@ const inherited = ref<ACLRow[]>([])
 const availableGroups = ref<string[]>([])
 const availableUsers = ref<{ id: string; username: string; email?: string }[]>([])
 
-const permFlags = [
-  { bit: Perm.Read, label: 'Read', short: 'R' },
-  { bit: Perm.Create, label: 'Create', short: 'C' },
-  { bit: Perm.Update, label: 'Update', short: 'U' },
-  { bit: Perm.Delete, label: 'Delete', short: 'D' },
-  { bit: Perm.UpdatePermissions, label: 'ACL', short: 'A' },
-  { bit: Perm.Share, label: 'Share', short: 'S' },
-]
+const permFlags = PERM_FLAGS
 
 const guestPublished = computed(() => {
   const local = rows.value.find(r => r.principal_type === 'guest')
@@ -245,28 +240,17 @@ function seedDefaultRow() {
 }
 
 function cyclePerm(row: ACLRow, bit: number) {
-  const allowed = hasPerm(row.allow, bit)
-  const denied = hasPerm(row.deny, bit)
-  if (!allowed && !denied) {
-    row.allow |= bit
-  } else if (allowed) {
-    row.allow &= ~bit
-    row.deny |= bit
-  } else {
-    row.deny &= ~bit
-  }
+  const next = cycleAllowDeny(row.allow, row.deny, bit)
+  row.allow = next.allow
+  row.deny = next.deny
 }
 
 function markClass(row: ACLRow, bit: number) {
-  if (hasPerm(row.deny, bit)) return 'deny'
-  if (hasPerm(row.allow, bit)) return 'allow'
-  return 'none'
+  return bitsMarkClass(row.allow, row.deny, bit)
 }
 
 function markLabel(row: ACLRow, bit: number) {
-  if (hasPerm(row.deny, bit)) return '−'
-  if (hasPerm(row.allow, bit)) return '+'
-  return '·'
+  return bitsMarkLabel(row.allow, row.deny, bit)
 }
 
 function toggleGuestPublish(on: boolean) {
@@ -295,15 +279,6 @@ function toggleGuestPublish(on: boolean) {
       deny: Perm.Read,
     })
   }
-}
-
-function normalizeClientPath(p: string) {
-  p = (p || '').trim()
-  if (!p) return '/'
-  if (!p.startsWith('/')) p = '/' + p
-  p = p.replace(/\/+/g, '/')
-  if (p.length > 1) p = p.replace(/\/+$/, '')
-  return p
 }
 
 function commitPath() {

@@ -10,16 +10,9 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/topi314/godrive/server"
 	"github.com/topi314/godrive/server/config"
-)
-
-var (
-	Version   = "unknown"
-	Commit    = "unknown"
-	BuildTime = "unknown"
 )
 
 func main() {
@@ -33,15 +26,16 @@ func main() {
 	}
 	setupLogger(cfg.Log)
 
-	buildTime, _ := time.Parse(time.RFC3339, BuildTime)
-	version := server.FormatBuildVersion(Version, Commit, buildTime)
+	bi := server.ReadBuildInfo()
 	slog.Info("Starting godrive...",
-		slog.String("version", Version),
-		slog.String("commit", Commit),
-		slog.Time("build_time", buildTime),
+		slog.String("version", bi.Version),
+		slog.String("commit", bi.Commit),
+		slog.Time("build_time", bi.BuildTime),
+		slog.Bool("dirty", bi.Modified),
+		slog.Any("config", cfg),
 	)
 
-	srv, err := server.New(cfg, version)
+	srv, err := server.New(cfg, bi.Format())
 	if err != nil {
 		slog.Error("Error while creating server", slog.Any("err", err))
 		os.Exit(1)

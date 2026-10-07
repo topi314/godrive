@@ -126,7 +126,8 @@
 </template>
 
 <script setup lang="ts">
-import { hasPerm, Perm, type Me } from '~/composables/useApi'
+import { PERM_FLAGS } from '~/composables/permBits'
+import { hasPerm, type Me } from '~/composables/useApi'
 
 const open = defineModel<boolean>({ required: true })
 const props = defineProps<{ me: Me | null }>()
@@ -192,17 +193,10 @@ function groupCountLabel(u: { groups?: string[] | string }) {
 }
 
 function permSummary(allow: number, deny: number) {
-  const flags = [
-    [Perm.Read, 'R', 'r'],
-    [Perm.Create, 'C', 'c'],
-    [Perm.Update, 'U', 'u'],
-    [Perm.Delete, 'D', 'd'],
-    [Perm.UpdatePermissions, 'A', 'a'],
-    [Perm.Share, 'S', 's'],
-  ] as const
-  return flags.flatMap(([bit, label, key]) => {
-    if (hasPerm(deny, bit)) return [{ key, label, sign: '-', tone: 'deny' as const }]
-    if (hasPerm(allow, bit)) return [{ key, label, sign: '+', tone: 'allow' as const }]
+  return PERM_FLAGS.flatMap(({ bit, short }) => {
+    const key = short.toLowerCase()
+    if (hasPerm(deny, bit)) return [{ key, label: short, sign: '-', tone: 'deny' as const }]
+    if (hasPerm(allow, bit)) return [{ key, label: short, sign: '+', tone: 'allow' as const }]
     return []
   })
 }

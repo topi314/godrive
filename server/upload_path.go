@@ -28,7 +28,7 @@ func resolveShareUploadDir(share dbq.Share, dir string) string {
 		return target
 	}
 	n := acl.NormalizePath(dir)
-	if underShare(root, n) {
+	if acl.IsSelfOrUnder(n, root) {
 		return n
 	}
 	// Relative to share root (e.g. "inbox").

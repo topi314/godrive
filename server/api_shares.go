@@ -159,16 +159,6 @@ func (s *Server) DeleteShareAPI(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// underShare reports whether target is exactly root or a descendant of root.
-func underShare(root, target string) bool {
-	root = acl.NormalizePath(root)
-	target = acl.NormalizePath(target)
-	if root == "/" {
-		return true
-	}
-	return target == root || strings.HasPrefix(target, root+"/")
-}
-
 func invalidShareSegment(seg string) bool {
 	if seg == "" || seg == "." || seg == ".." {
 		return false // handled by caller
@@ -217,7 +207,7 @@ func joinShareTarget(shareRoot, rest string) (string, error) {
 	if len(parts) > 0 {
 		target = acl.NormalizePath(path.Join(append([]string{root}, parts...)...))
 	}
-	if !underShare(root, target) {
+	if !acl.IsSelfOrUnder(target, root) {
 		return "", errors.New("forbidden")
 	}
 	return target, nil
@@ -249,7 +239,7 @@ func (s *Server) resolveShare(r *http.Request) (dbq.Share, string, error) {
 	if err != nil {
 		return share, "", err
 	}
-	if !underShare(share.Path, target) {
+	if !acl.IsSelfOrUnder(target, share.Path) {
 		return share, "", errors.New("forbidden")
 	}
 	return share, target, nil
@@ -260,7 +250,7 @@ func shareBrowsePath(share dbq.Share, storagePath string) string {
 	root := acl.NormalizePath(share.Path)
 	storagePath = acl.NormalizePath(storagePath)
 	base := "/s/" + share.ID
-	if !underShare(root, storagePath) {
+	if !acl.IsSelfOrUnder(storagePath, root) {
 		return base
 	}
 	if storagePath == root {
@@ -275,18 +265,13 @@ func shareBrowsePath(share dbq.Share, storagePath string) string {
 }
 
 func (s *Server) shareEffectivePerms(ctx context.Context, shareID, filePath string) (acl.Permissions, error) {
-	paths := acl.AncestorPathsRootFirst(filePath)
-	rows, err := s.store.ListACLByPaths(ctx, paths)
-	if err != nil {
-		return 0, err
-	}
-	return acl.CalculatePermissions(paths, rows, &acl.Identity{ShareID: shareID}), nil
+	return s.aclPermsFor(ctx, filePath, &acl.Identity{ShareID: shareID})
 }
 
 // listShareDir lists immediate children under target for a share capability URL.
 func (s *Server) listShareDir(ctx context.Context, share dbq.Share, target string, sharePerms acl.Permissions) ([]FileEntry, error) {
 	target = acl.NormalizePath(target)
-	if !underShare(share.Path, target) {
+	if !acl.IsSelfOrUnder(target, share.Path) {
 		return nil, errors.New("forbidden")
 	}
 	if !sharePerms.Has(acl.PermissionRead) {
@@ -307,10 +292,10 @@ func (s *Server) listShareDir(ctx context.Context, share dbq.Share, target strin
 	var files []FileEntry
 
 	for _, row := range rows {
-		if !underShare(share.Path, row.Path) {
+		if !acl.IsSelfOrUnder(row.Path, share.Path) {
 			continue
 		}
-		if row.Path != target && !underShare(target, row.Path) {
+		if row.Path != target && !acl.IsSelfOrUnder(row.Path, target) {
 			continue
 		}
 		owner := ""
@@ -399,7 +384,7 @@ func (s *Server) GetSharePage(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, err, status)
 		return
 	}
-	if !underShare(share.Path, target) {
+	if !acl.IsSelfOrUnder(target, share.Path) {
 		s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
 		return
 	}
@@ -473,7 +458,7 @@ func (s *Server) GetSharePage(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) GetSharePreview(w http.ResponseWriter, r *http.Request) {
 	share, target, err := s.resolveShare(r)
-	if err != nil || !underShare(share.Path, target) {
+	if err != nil || !acl.IsSelfOrUnder(target, share.Path) {
 		status := http.StatusNotFound
 		if errors.Is(err, errShareExpired) {
 			status = http.StatusGone

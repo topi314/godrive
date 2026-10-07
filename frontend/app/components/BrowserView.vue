@@ -280,7 +280,7 @@
               <thead>
                 <tr>
                   <th
-                    v-for="b in shareBitOptions"
+                    v-for="b in PERM_FLAGS"
                     :key="'h-' + b.bit"
                     class="perm-col"
                     :class="'perm-' + b.short.toLowerCase()"
@@ -289,14 +289,14 @@
               </thead>
               <tbody>
                 <tr>
-                  <td v-for="b in shareBitOptions" :key="'c-' + b.bit" class="perm-cell">
+                  <td v-for="b in PERM_FLAGS" :key="'c-' + b.bit" class="perm-cell">
                     <button
                       type="button"
                       class="perm-mark"
-                      :class="shareMarkClass(b.bit)"
+                      :class="markClass(shareAllow, shareDeny, b.bit)"
                       :title="b.label + ' (click to cycle allow / deny / none)'"
                       @click="cycleSharePerm(b.bit)"
-                    >{{ shareMarkLabel(b.bit) }}</button>
+                    >{{ markLabel(shareAllow, shareDeny, b.bit) }}</button>
                   </td>
                 </tr>
               </tbody>
@@ -324,6 +324,8 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate, formatSize, normalizeClientPath } from '~/composables/format'
+import { PERM_FLAGS, cycleAllowDeny, markClass, markLabel } from '~/composables/permBits'
 import {
   fileDownloadUrl,
   fileStreamUrl,
@@ -416,38 +418,10 @@ const shareCustomUnit = ref<'h' | 'd'>('h')
 const shareExpiresAt = ref<string | null>(null)
 const shareAllow = ref(Perm.Read)
 const shareDeny = ref(0)
-const shareBitOptions = [
-  { bit: Perm.Read, short: 'R', label: 'Read' },
-  { bit: Perm.Create, short: 'C', label: 'Create' },
-  { bit: Perm.Update, short: 'U', label: 'Update' },
-  { bit: Perm.Delete, short: 'D', label: 'Delete' },
-  { bit: Perm.UpdatePermissions, short: 'A', label: 'ACL' },
-  { bit: Perm.Share, short: 'S', label: 'Share' },
-]
-
 function cycleSharePerm(bit: number) {
-  const allowed = hasPerm(shareAllow.value, bit)
-  const denied = hasPerm(shareDeny.value, bit)
-  if (!allowed && !denied) {
-    shareAllow.value |= bit
-  } else if (allowed) {
-    shareAllow.value &= ~bit
-    shareDeny.value |= bit
-  } else {
-    shareDeny.value &= ~bit
-  }
-}
-
-function shareMarkClass(bit: number) {
-  if (hasPerm(shareDeny.value, bit)) return 'deny'
-  if (hasPerm(shareAllow.value, bit)) return 'allow'
-  return 'none'
-}
-
-function shareMarkLabel(bit: number) {
-  if (hasPerm(shareDeny.value, bit)) return '−'
-  if (hasPerm(shareAllow.value, bit)) return '+'
-  return '·'
+  const next = cycleAllowDeny(shareAllow.value, shareDeny.value, bit)
+  shareAllow.value = next.allow
+  shareDeny.value = next.deny
 }
 const uploadOpen = ref(false)
 const uploadInitialFiles = ref<File[]>([])
@@ -603,10 +577,7 @@ function downloadUrl(f: FileEntry) {
   return fileDownloadUrl(f.path)
 }
 
-function normalizePath(p: string) {
-  if (!p || p === '/') return '/'
-  return '/' + p.replace(/^\/+|\/+$/g, '')
-}
+const normalizePath = normalizeClientPath
 
 async function load() {
   const path = props.basePath || '/'
@@ -880,18 +851,6 @@ function validRenameSpec(spec: string) {
   if (!s) return false
   const base = s.split('/').filter(Boolean).at(-1) || ''
   return base !== '' && base !== '.' && base !== '..'
-}
-
-function formatSize(n: number) {
-  if (n < 1000) return n + ' B'
-  const u = ['KB', 'MB', 'GB', 'TB']
-  let i = -1
-  do { n /= 1000; i++ } while (n >= 1000 && i < u.length - 1)
-  return n.toFixed(1) + ' ' + u[i]
-}
-
-function formatDate(d: string) {
-  try { return new Date(d).toLocaleString() } catch { return d }
 }
 
 watch(() => props.basePath, () => load(), { immediate: true })
