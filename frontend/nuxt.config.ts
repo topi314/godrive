@@ -59,6 +59,7 @@ export default defineNuxtConfig({
       },
       link: [
         { rel: 'icon', type: 'image/png', href: '/favicon.png' },
+        { rel: 'icon', href: '/favicon.ico', sizes: 'any' },
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
         { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
         {

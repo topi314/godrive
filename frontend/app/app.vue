@@ -151,7 +151,9 @@ function applyTheme(next: 'dark' | 'light') {
   root.classList.remove('dark', 'light')
   root.classList.add(next)
   localStorage.setItem('godrive-theme', next)
-  const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
+  const icon =
+    document.querySelector<HTMLLinkElement>('link[rel="icon"][type="image/png"]') ||
+    document.querySelector<HTMLLinkElement>('link[rel="icon"]')
   if (icon) {
     icon.href = next === 'light' ? '/favicon-light.png' : '/favicon.png'
   }
