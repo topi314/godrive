@@ -1,6 +1,6 @@
 # godrive frontend
 
-Nuxt SPA (`ssr: false`). In development, `npm run dev` proxies API traffic to the Go server.
+[Nuxt](https://nuxt.com) SPA (`ssr: false`). In development, `npm run dev` proxies API traffic to the [Go](https://go.dev) server.
 
 ```bash
 npm install

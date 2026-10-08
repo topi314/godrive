@@ -1,38 +1,113 @@
 # godrive
 
-Self-hosted file drive with path ACLs, share links (`/s/{id}`), API tokens, and a Nuxt SPA embedded in a single Go binary.
+Self-hosted file drive: path ACLs, share links, API tokens, and a [Nuxt](https://nuxt.com) SPA in a single [Go](https://go.dev) binary.
 
-## Docker
+<details>
+<summary><strong>Contents</strong></summary>
+
+- [Features](#features)
+- [Quick start (Docker)](#quick-start-docker)
+- [Configuration](#configuration)
+  - [Auth (OIDC)](#auth-oidc)
+  - [Storage](#storage)
+  - [Uploads](#uploads)
+  - [Share links](#share-links)
+- [HTTP API](#http-api)
+- [Development](#development)
+- [Production build](#production-build)
+- [License](#license)
+- [Contributing](#contributing)
+- [Contact](#contact)
+
+</details>
+
+## Features
+
+- Path ACLs with inheritance (`everyone`, `guest`, `user`, `group`, `share`)
+- [OIDC](https://openid.net/developers/how-connect-works/) ([Authelia](https://www.authelia.com) and other IdPs): PKCE, optional PAR / introspection / RP logout
+- Group mapping; `admin` bypasses ACLs, `access` gates who can use the app
+- Short sessions plus long-lived refresh cookies; groups refresh on renewal
+- Capability share links at `/s/{id}` with share-principal ACL bits
+- Personal API tokens for scripted file management ([API.md](API.md))
+- Resumable chunked uploads; reverse proxies must allow bodies ≥ `chunk_size`
+- Local disk ([fsnotify](https://github.com/fsnotify/fsnotify)) or [S3](https://aws.amazon.com/s3/)-compatible storage ([MinIO](https://min.io) notify / poll sync)
+- [SQLite](https://www.sqlite.org) or [Postgres](https://www.postgresql.org); [Open Graph](https://ogp.me) cards for public paths
+
+## Quick start (Docker)
 
 ```bash
 cp example.config.toml config.toml
-# edit [server] / database / storage / auth as needed
+# edit listen addr, storage, and [auth] as needed
 docker compose up --build
 ```
 
-## Development
+See [`compose.yml`](compose.yml) and [`example.config.toml`](example.config.toml). Uses [Docker Compose](https://docs.docker.com/compose/).
 
-Run the Go API without embedding the SPA (`-tags dev`), and the Nuxt app with hot reload:
+## Configuration
+
+TOML only. Copy the example and point the binary at it:
 
 ```bash
-# terminal 1 — API (default http://localhost:8090)
+cp example.config.toml config.toml
+./godrive -config config.toml
+```
+
+Environment overrides use the `GODRIVE_` prefix (for example `GODRIVE_DATABASE_PASSWORD`).
+
+| Area | Notes |
+|------|--------|
+| `[server]` | `listen_addr`, `frontend_url` ([Nuxt](https://nuxt.com) origin in `-tags dev`) |
+| `[database]` | `sqlite` or `postgres` |
+| `[storage]` | `local` or `s3`; optional `sync_interval` (defaults 15m local / 1m s3) |
+| `[auth]` | [OIDC](https://openid.net/developers/how-connect-works/); `enabled = false` disables auth and ACLs (open admin mode) |
+| `[upload]` | `max_size`, `chunk_size`, `session_ttl`, `max_parallel` |
+| `[otel]` | Optional traces + [Prometheus](https://prometheus.io) `/metrics` |
+
+### Auth (OIDC)
+
+Set `[auth] enabled = true` with your issuer, client, and redirect URI (see the example config). Restart after changes.
+
+Register the callback on the IdP client:
+
+| Environment | Redirect URI |
+|-------------|--------------|
+| Production | `https://godrive.zip/api/callback` |
+| Local [Nuxt](https://nuxt.com) | `http://localhost:3000/api/callback` |
+
+`[auth.groups]`: `admin`, `access`, optional `guest` browsing, and `[auth.groups.map]` for extra OIDC → ACL group names. On first start with an empty ACL table, `/` is seeded with everyone → all and guest → read.
+
+### Storage
+
+- **Local** — files under `[storage.local].path`; [fsnotify](https://github.com/fsnotify/fsnotify) picks up drops; umask applies to new modes.
+- **[S3](https://aws.amazon.com/s3/)** — [MinIO](https://min.io) and other S3 APIs via [AWS SDK for Go v2](https://aws.github.io/aws-sdk-go-v2/); optional webhook notify (`Authorization: Bearer …`) or rely on `sync_interval`.
+
+### Uploads
+
+Defaults: `max_size = 50GB`, `chunk_size = 16MB`, `session_ttl = 72h`, `max_parallel = 2`. Proxies in front of godrive must allow request bodies at least as large as `chunk_size` and keep connections open for slow multi-GB transfers.
+
+### Share links
+
+`/s/{id}` URLs are capability links. Permissions come from `path_acl` rows with `principal_type = share` (not normal user/guest rules on the same path). Creating a share upserts a default Read grant; other allow/deny mixes work (for example Create without Read for drop-boxes).
+
+## HTTP API
+
+Token-authenticated list / upload / download / rename / move / delete and resumable uploads: **[API.md](API.md)**.
+
+## Development
+
+Run the API without embedding the SPA (`-tags dev`) and [Nuxt](https://nuxt.com) with hot reload:
+
+```bash
+# terminal 1 — API (http://localhost:8090)
 go run -tags dev . -config config.toml
 
-# terminal 2 — UI (http://localhost:3000, proxies API routes to Go)
+# terminal 2 — UI (http://localhost:3000, proxies API to Go)
 cd frontend
 npm install
 npm run dev
 ```
 
-Override the API target with `GODRIVE_API` (default `http://localhost:8090`).
-
-With `-tags dev`, HTML that hits Go is redirected to `[server].frontend_url` — use the Nuxt dev server for the UI.
-
-### Auth (Authelia / OIDC)
-
-Enable `[auth]` with `enabled = true` in `config.toml` pointing at your Authelia issuer (see `example.config.toml`). Restart the Go API after changing it.
-
-For local Nuxt (`http://localhost:3000`), register `http://localhost:3000/api/callback` as an allowed redirect URI on the Authelia client. Production uses `https://godrive.zip/api/callback`.
+Override the API proxy target with `GODRIVE_API` (default `http://localhost:8090`). HTML that hits Go in this mode redirects to `[server].frontend_url` — use the Nuxt origin for the UI.
 
 ## Production build
 
@@ -46,36 +121,24 @@ cd ..
 go build -o godrive .
 ```
 
-Docker builds the frontend, copies `.output/public` into `frontend/dist`, then embeds it (no `-tags dev`).
+[Docker](https://www.docker.com) builds the frontend, copies it into `frontend/dist`, then embeds it (no `-tags dev`).
 
-## Config
+---
 
-TOML only — see [`example.config.toml`](example.config.toml).
+## License
 
-```bash
-cp example.config.toml config.toml
-./godrive -config config.toml
-```
+godrive is licensed under the [Apache License 2.0](LICENSE).
 
-Env overrides use the `GODRIVE_` prefix (e.g. `GODRIVE_DATABASE_PASSWORD`).
+---
 
-### Uploads
+## Contributing
 
-Large files use resumable chunked sessions (`[upload]` in config). Defaults: `max_size = 50GB`, `chunk_size = 16MB`, `session_ttl = 72h`, `max_parallel = 2`. Reverse proxies in front of godrive must allow request bodies at least as large as `chunk_size` and keep connections open long enough for slow multi-GB transfers.
+Contributions are always welcome! Just open a pull request or discussion and I will take a look at it.
 
-### Share links
+---
 
-Share URLs (`/s/{id}`) are capability links. Permissions come from `path_acl` rows with `principal_type = share` (not from normal user/guest rules on the same path). Creating a share upserts a default Read grant for that share id; any allow/deny combination is valid (for example Create without Read for drop-box style links).
+## Contact
 
-## Features
-
-- SQLite or Postgres (sqlc + [gomigrate](https://github.com/topi314/gomigrate))
-- Path ACLs with inheritance; `everyone` = logged-in users, `guest` = anonymous (publish via `guest` + read); `share` = capability URL only
-- OIDC groups mapped to godrive groups in `[auth.groups.map]`; `admin` bypasses ACLs, `access` gates who can use the app
-- Short opaque sessions (`session_lifespan`, default 15m) plus a long-lived refresh cookie (`refresh_token_lifespan`, default 30d); groups refresh on renewal
-- OIDC authorization code + PKCE; PAR / introspection / revocation / RP logout when the IdP advertises them
-- Short share links at `/s/{id}` with configurable share-principal ACL bits
-- Resumable large-file uploads via the upload dialog (chunked PATCH sessions)
-- Instant pickup of files dropped into local storage (fsnotify) or via S3 notifications
-- Open Graph previews for public paths; private URLs get a generic teaser card
-- S3-compatible object storage via AWS SDK v2
+- [Discord](https://discord.gg/sD3ABd5)
+- [Twitter](https://twitter.com/topi314)
+- [Email](mailto:git@topi.wtf)
