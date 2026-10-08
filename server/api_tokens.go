@@ -3,7 +3,6 @@ package server
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
@@ -36,7 +35,7 @@ func (s *Server) CreateTokenAPI(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Description string `json:"description"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&body)
+	_ = decodeJSONOptional(r, &body)
 	raw := make([]byte, 32)
 	_, _ = rand.Read(raw)
 	token := base64.RawURLEncoding.EncodeToString(raw)

@@ -704,16 +704,23 @@ function onKeydown(e: KeyboardEvent) {
   menuPath.value = ''
 }
 
+function dropPaths(paths: string[]) {
+  const drop = new Set(paths)
+  files.value = files.value.filter(f => !drop.has(f.path))
+  selected.value = selected.value.filter(p => !drop.has(p))
+}
+
 async function deleteSelected() {
   if (!confirm('Delete selected?')) return
-  await api.remove(selected.value)
-  await load()
+  const paths = [...selected.value]
+  await api.remove(paths)
+  dropPaths(paths)
 }
 
 async function deleteOne(f: FileEntry) {
   if (!confirm(`Delete ${f.name}?`)) return
   await api.remove([f.path])
-  await load()
+  dropPaths([f.path])
 }
 
 function downloadSelected() {
@@ -809,10 +816,23 @@ async function createFolder() {
   }
   folderError.value = ''
   try {
-    await api.mkdir(listedPath.value || '/', name)
+    const created = await api.mkdir(listedPath.value || '/', name)
     folderOpen.value = false
     toast('Folder created')
-    await load()
+    const path = created.path
+    if (!files.value.some(f => f.path === path)) {
+      files.value = [
+        {
+          path,
+          name: path.split('/').filter(Boolean).at(-1) || name,
+          is_dir: true,
+          size: 0,
+          date: new Date().toISOString(),
+          permissions: dirPerms.value,
+        },
+        ...files.value,
+      ]
+    }
   } catch (e: any) {
     folderError.value = e?.data?.message || e.message || 'Failed to create folder'
   }
@@ -837,10 +857,23 @@ async function submitRename() {
   }
   renameError.value = ''
   try {
-    await api.rename(renamePath.value, spec)
+    const from = renamePath.value
+    await api.rename(from, spec)
     renameOpen.value = false
     toast('Renamed')
-    await load()
+    const parent = from === '/' ? '/' : from.replace(/\/[^/]+$/, '') || '/'
+    const base = spec.replaceAll('\\', '/').replace(/\/+$/, '').split('/').filter(Boolean).at(-1) || ''
+    const sameDir = !spec.includes('/') && !spec.includes('\\')
+    if (!sameDir || !base) {
+      await load()
+      return
+    }
+    const to = parent === '/' ? `/${base}` : `${parent}/${base}`
+    files.value = files.value.map((f) => {
+      if (f.path !== from) return f
+      return { ...f, path: to, name: base }
+    })
+    selected.value = selected.value.map(p => (p === from ? to : p))
   } catch (e: any) {
     renameError.value = e?.data?.message || e.message || 'Failed to rename'
   }
@@ -854,6 +887,11 @@ function validRenameSpec(spec: string) {
 }
 
 watch(() => props.basePath, () => load(), { immediate: true })
+
+watch(() => user.value?.sudo, () => {
+  if (props.shareId) return
+  load()
+})
 
 onMounted(() => {
   document.addEventListener('click', onDocClick)

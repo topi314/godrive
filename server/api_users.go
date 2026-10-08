@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -21,7 +22,39 @@ func (s *Server) PatchMeAPI(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, errors.New("profile settings require authentication"), http.StatusNotImplemented)
 		return
 	}
-	s.patchUserHome(w, r, info.Subject)
+	var body struct {
+		Home *string `json:"home"`
+		Sudo *bool   `json:"sudo"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		s.writeError(w, r, err, http.StatusBadRequest)
+		return
+	}
+	if body.Home == nil && body.Sudo == nil {
+		s.writeError(w, r, errors.New("home or sudo required"), http.StatusBadRequest)
+		return
+	}
+	if body.Sudo != nil {
+		if !s.isAdmin(info) {
+			s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
+			return
+		}
+		s.setSudoCookie(w, *body.Sudo)
+		info.Sudo = *body.Sudo
+	}
+	if body.Home != nil {
+		user, err := s.updateUserHome(r.Context(), info.Subject, *body.Home)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, errBadHome) {
+				status = http.StatusBadRequest
+			}
+			s.writeError(w, r, err, status)
+			return
+		}
+		info.Home = user.Home
+	}
+	s.writeJSON(w, s.meResponse(r, info), http.StatusOK)
 }
 
 func (s *Server) PatchUserAPI(w http.ResponseWriter, r *http.Request) {
@@ -34,10 +67,6 @@ func (s *Server) PatchUserAPI(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, errors.New("missing user id"), http.StatusBadRequest)
 		return
 	}
-	s.patchUserHome(w, r, id)
-}
-
-func (s *Server) patchUserHome(w http.ResponseWriter, r *http.Request, userID string) {
 	var body struct {
 		Home *string `json:"home"`
 	}
@@ -49,21 +78,34 @@ func (s *Server) patchUserHome(w http.ResponseWriter, r *http.Request, userID st
 		s.writeError(w, r, errors.New("home is required"), http.StatusBadRequest)
 		return
 	}
-	home := acl.NormalizePath(*body.Home)
-	user, err := s.store.Q.UpdateUserHome(r.Context(), dbq.UpdateUserHomeParams{
+	user, err := s.updateUserHome(r.Context(), id, *body.Home)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, errBadHome) {
+			status = http.StatusBadRequest
+		}
+		s.writeError(w, r, err, status)
+		return
+	}
+	s.writeJSON(w, s.userPublicJSON(r.Context(), user), http.StatusOK)
+}
+
+var errBadHome = errors.New("invalid home")
+
+func (s *Server) updateUserHome(ctx context.Context, userID, homeRaw string) (dbq.User, error) {
+	home := acl.NormalizePath(homeRaw)
+	user, err := s.store.Q.UpdateUserHome(ctx, dbq.UpdateUserHomeParams{
 		ID:        userID,
 		Home:      home,
 		UpdatedAt: time.Now().UTC(),
 	})
 	if err != nil {
-		s.writeError(w, r, err, http.StatusInternalServerError)
-		return
+		return dbq.User{}, err
 	}
-	if err := s.provisionUserHome(r.Context(), user.Home, s.userToInfo(user)); err != nil {
-		s.writeError(w, r, err, http.StatusBadRequest)
-		return
+	if err := s.provisionUserHome(ctx, user.Home, s.userToInfo(user)); err != nil {
+		return dbq.User{}, errors.Join(errBadHome, err)
 	}
-	s.writeJSON(w, s.userPublicJSON(r.Context(), user), http.StatusOK)
+	return user, nil
 }
 
 func (s *Server) DeleteUserAPI(w http.ResponseWriter, r *http.Request) {

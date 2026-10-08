@@ -26,3 +26,14 @@ DELETE FROM upload_sessions WHERE id = @id;
 DELETE FROM upload_sessions
 WHERE expires_at < @now
 RETURNING *;
+
+-- name: CountActiveUploadSessionsByUser :one
+SELECT COUNT(*) FROM upload_sessions
+WHERE user_id = @user_id
+  AND expires_at > @now
+  AND (share_id IS NULL OR share_id = '');
+
+-- name: CountActiveUploadSessionsByShare :one
+SELECT COUNT(*) FROM upload_sessions
+WHERE share_id = @share_id
+  AND expires_at > @now;

@@ -18,9 +18,9 @@ Base URL examples below use `https://godrive.zip` — replace with your instance
   - [List a directory](#list-a-directory)
   - [Download a file](#download-a-file)
   - [Create a folder](#create-a-folder)
-  - [Upload a small file (multipart)](#upload-a-small-file-multipart)
+  - [Upload a small file](#upload-a-small-file)
   - [Update / rename / move a file](#update--rename--move-a-file)
-  - [Move several entries into a folder](#move-several-entries-into-a-folder)
+  - [Move into a folder](#move-into-a-folder)
   - [Delete](#delete)
 - [Resumable uploads (large files)](#resumable-uploads-large-files)
   - [Upload config](#upload-config)
@@ -42,14 +42,19 @@ Send the raw token on every request:
 Authorization: Bearer <token>
 ```
 
-Tokens act as the issuing user (same home, groups, and ACL effective permissions). The user must have app access ([OIDC](https://openid.net/developers/how-connect-works/) `access` / `admin` group mapping). Owners and admins still get full access on their files / globally as in the UI.
+Tokens act as the issuing user (same home, groups, and ACL effective permissions). The user must have app access ([OIDC](https://openid.net/developers/how-connect-works/) `access` / `admin` group mapping). Owners get full access on their files. Admins bypass ACLs only in [sudo mode](#who-am-i).
 
 ### Create a token
 
 Log in to the web UI (or use an existing session cookie) and call `POST /api/tokens`. Store `token` securely — it is only returned once. List/revoke with `GET /api/tokens` and `DELETE /api/tokens/{token_hash}`.
 
 <details>
-<summary>Example request</summary>
+<summary>Example request (optional body)</summary>
+
+```http
+POST /api/tokens
+Cookie: X-Session-ID=<session>
+```
 
 ```http
 POST /api/tokens
@@ -114,6 +119,8 @@ Accept: application/json
   "session_expires_at": null
 }
 ```
+
+Admins also get `"sudo": false|true`. Sudo is **off by default**: without it, admins see only what ACL/ownership allows. Turn it on with `PATCH /api/me` `{"sudo": true}` (sets a session-only HttpOnly cookie; cleared on logout / browser close) or send `X-Godrive-Sudo: 1` on API requests. Not stored on the user. Admin settings APIs still work without sudo.
 
 </details>
 
@@ -304,21 +311,16 @@ curl -fsSL -H "Authorization: Bearer $TOKEN" \
 
 ### Create a folder
 
-`POST /{parent}` with JSON. Requires **Create** on the parent. Response `201`.
+`POST /{path}` with **no body** creates that directory (and missing parents). Requires **Create**. Response `201`.
+
+Multipart `POST` is still file upload into a parent directory — only non-multipart POSTs create folders.
 
 <details>
-<summary>Example request</summary>
+<summary>Example request (no body)</summary>
 
 ```http
-POST /home/alice
+POST /home/alice/docs
 Authorization: Bearer dGhpcy1pcy1hLXNhbXBsZS1yYXctdG9rZW4
-Content-Type: application/json
-Accept: application/json
-
-{
-  "name": "docs",
-  "mkdir": true
-}
 ```
 
 </details>
@@ -335,19 +337,44 @@ Accept: application/json
 
 </details>
 
-### Upload a small file (multipart)
+### Upload a small file
 
-Use when `size ≤ chunk_size` (see [Upload config](#upload-config)). Larger files must use the resumable session API.
+Use when `Content-Length ≤ chunk_size` (see [Upload config](#upload-config)). Larger files must use the resumable session API.
+
+`POST /{path}` with a **raw body** writes the file at that path. Set `Content-Type` to the MIME type (optional; sniffed from the name). Response `204`.
+
+Requires **Create** on the parent for new files, **Update** to overwrite. Empty body still means mkdir (see above).
+
+For a plain put this is enough. If you need extra fields (especially `description`), use **multipart** instead.
+
+<details>
+<summary>Example — raw body (simple)</summary>
+
+```http
+POST /home/alice/docs/hello.txt
+Authorization: Bearer dGhpcy1pcy1hLXNhbXBsZS1yYXctdG9rZW4
+Content-Type: text/plain; charset=utf-8
+Content-Length: 11
+
+hello world
+```
+
+```bash
+curl -fsS -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: text/plain" \
+  --data-binary @hello.txt \
+  "https://godrive.zip/home/alice/docs/hello.txt"
+```
+
+</details>
+
+<details>
+<summary>Example — multipart (with metadata)</summary>
 
 `POST /{parent}` as `multipart/form-data`:
 
-1. Part `json` — metadata (`Content-Type: application/json`)
-2. Part `file` — raw bytes (length should match `size`)
-
-Response `204`. Requires **Create** on the directory; overwriting an existing file via this `POST` also needs **Update** on that file (otherwise `409`). Prefer [`PATCH`](#update--rename--move-a-file) when you mean to replace an existing path.
-
-<details>
-<summary>Example request (multipart)</summary>
+1. Part `json` — `name`, `size`, optional `description`
+2. Part `file` — raw bytes (`size` must match)
 
 ```http
 POST /home/alice/docs
@@ -370,19 +397,6 @@ Content-Type: application/pdf
 %PDF-1.7 …
 ------godrive--
 ```
-
-`json` fields:
-
-| Field | Required | Notes |
-|-------|----------|--------|
-| `name` | yes | basename only (no `/` or `\`) |
-| `size` | yes | exact byte length of `file` |
-| `description` | no | stored on the file row |
-
-</details>
-
-<details>
-<summary>Example curl</summary>
 
 ```bash
 JSON='{"name":"report.pdf","size":248193,"description":"Q3 finance pack — confidential"}'
@@ -506,7 +520,7 @@ curl -fsS -X PATCH -H "Authorization: Bearer $TOKEN" \
 
 For files larger than `chunk_size`, use a [resumable upload](#create-session--patch-chunks--complete) with `"replace": true` instead of multipart `PATCH`.
 
-#### Metadata / rename / move (JSON only)
+#### Metadata / rename / move (JSON)
 
 <details>
 <summary>Example — rename in place</summary>
@@ -570,12 +584,25 @@ Content-Type: application/json
 
 </details>
 
-### Move several entries into a folder
+### Move into a folder
 
-`PUT /{srcDir}` with header `Destination: /target/dir` and a JSON array of **names relative to the request path**. Needs **Create** on the destination and **Delete** on each source. Response `204`.
+`PUT /{path}` with header `Destination: /target/dir`. Needs **Create** on the destination and **Delete** on each source. Response `204`.
 
 <details>
-<summary>Example request</summary>
+<summary>Example — move one path (no body)</summary>
+
+```http
+PUT /home/alice/note.txt
+Authorization: Bearer dGhpcy1pcy1hLXNhbXBsZS1yYXctdG9rZW4
+Destination: /home/alice/archive
+```
+
+Moves `/home/alice/note.txt` → `/home/alice/archive/note.txt`.
+
+</details>
+
+<details>
+<summary>Example — move several children (JSON body)</summary>
 
 ```http
 PUT /home/alice
@@ -590,27 +617,20 @@ Content-Type: application/json
 ]
 ```
 
-This moves:
-
-- `/home/alice/note.txt` → `/home/alice/archive/note.txt`
-- `/home/alice/docs` → `/home/alice/archive/docs`
-- `/home/alice/photo.jpg` → `/home/alice/archive/photo.jpg`
+Body names are relative to the request path.
 
 </details>
 
 ### Delete
 
-`DELETE /{path}` with a JSON array of relative names. Empty array (or `[]`) deletes the path itself. Non-empty array deletes `join(requestPath, name)` for each name. Cascades to children, ACL rows, and shares on that path. Needs **Delete**. Response `204`.
+`DELETE /{path}`. No body deletes that path. Optional JSON array of relative names deletes children instead. Cascades to children, ACL rows, and shares. Needs **Delete**. Response `204`.
 
 <details>
-<summary>Example — delete one file by path</summary>
+<summary>Example — delete one path (no body)</summary>
 
 ```http
 DELETE /home/alice/note.txt
 Authorization: Bearer dGhpcy1pcy1hLXNhbXBsZS1yYXctdG9rZW4
-Content-Type: application/json
-
-[]
 ```
 
 </details>
@@ -637,9 +657,13 @@ Content-Type: application/json
 
 ```bash
 curl -fsS -X DELETE -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '[]' \
   "https://godrive.zip/home/alice/note.txt"
+
+# batch-delete siblings in one request
+curl -fsS -X DELETE -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '["note.txt","photo.jpg","old-reports"]' \
+  "https://godrive.zip/home/alice/archive"
 ```
 
 </details>
@@ -650,7 +674,14 @@ curl -fsS -X DELETE -H "Authorization: Bearer $TOKEN" \
 
 ### Upload config
 
-`GET /api/upload/config` (no auth required).
+`GET /api/upload/config` (no auth required). All values are enforced by the server:
+
+| Field | Enforcement |
+|-------|-------------|
+| `max_size` | Total file size on create / simple `POST` |
+| `chunk_size` | Max `Content-Length` per resumable `PATCH`; also the simple-upload ceiling |
+| `session_ttl` | Session `expires_at`; expired sessions cannot continue |
+| `max_parallel` | Max concurrent active sessions per user (or per share for share uploads); create returns `429` when exceeded |
 
 <details>
 <summary>Example response <code>200</code></summary>
@@ -659,8 +690,8 @@ curl -fsS -X DELETE -H "Authorization: Bearer $TOKEN" \
 {
   "max_size": 53687091200,
   "chunk_size": 16777216,
-  "session_ttl": "72h0m0s",
-  "max_parallel": 2
+  "session_ttl": "2h0m0s",
+  "max_parallel": 6
 }
 ```
 
@@ -789,7 +820,7 @@ Requires **Update** on the existing file (and **Create** on the parent). Then `P
 
 #### Upload a chunk
 
-`Upload-Offset` must equal the session’s current `offset`. Response includes the new `offset`. Mismatch → `409`.
+`Upload-Offset` must equal the session’s current `offset`. Response includes the new `offset`. Mismatch → `409`. Chunk body larger than `chunk_size` → `413`.
 
 <details>
 <summary>Example request</summary>
@@ -834,7 +865,17 @@ Content-Length: 16777216
 Optional `acl` on complete (same shape as [permission rules](#get--set-acl-on-a-path)) if the user may set ACLs. Abort with `DELETE /api/uploads/{id}`. Poll with `GET /api/uploads/{id}`.
 
 <details>
-<summary>Example request — complete without ACL</summary>
+<summary>Example request — complete (no body)</summary>
+
+```http
+POST /api/uploads/u_01JABC9XYZUPLOADSESS/complete
+Authorization: Bearer dGhpcy1pcy1hLXNhbXBsZS1yYXctdG9rZW4
+```
+
+</details>
+
+<details>
+<summary>Example request — complete with description</summary>
 
 ```http
 POST /api/uploads/u_01JABC9XYZUPLOADSESS/complete
@@ -896,8 +937,9 @@ Same token auth. Useful when automating publish/share flows.
 
 ### Get / set ACL on a path
 
-`GET /api/permissions?path=…` needs **Read** or **UpdatePermissions**.  
-`PUT /api/permissions?path=…` needs **UpdatePermissions** (or admin) and **replaces** local rules on that path.
+`GET /api/acl/{path}` needs **Read** or **UpdatePermissions**.  
+`PUT /api/acl/{path}` needs **UpdatePermissions** (or admin sudo) and **replaces** local rules on that path.  
+`PATCH /api/acl/{path}` needs **UpdatePermissions** (or admin sudo) and **merges**: `upsert` rules and/or `remove` principals; other local rules stay. Root is `GET/PUT/PATCH /api/acl`.
 
 Principal types: `user`, `group`, `everyone`, `guest`, `share`.
 
@@ -905,7 +947,7 @@ Principal types: `user`, `group`, `everyone`, `guest`, `share`.
 <summary>Example — get permissions</summary>
 
 ```http
-GET /api/permissions?path=/home/alice/docs
+GET /api/acl/home/alice/docs
 Authorization: Bearer dGhpcy1pcy1hLXNhbXBsZS1yYXctdG9rZW4
 Accept: application/json
 ```
@@ -953,7 +995,7 @@ Accept: application/json
 <summary>Example — set ACL (replace local rules)</summary>
 
 ```http
-PUT /api/permissions?path=/home/alice/docs
+PUT /api/acl/home/alice/docs
 Authorization: Bearer dGhpcy1pcy1hLXNhbXBsZS1yYXctdG9rZW4
 Content-Type: application/json
 
@@ -1008,7 +1050,48 @@ Notes:
 - For `everyone` / `guest`, `principal_id` is normalized to `*`
 - `share` rules need an existing share id
 
-Response `204`.
+Response `204`. Replace runs in a transaction (invalid rules leave the previous ACL intact).
+
+</details>
+
+<details>
+<summary>Example — patch ACL (upsert / remove)</summary>
+
+```http
+PATCH /api/acl/home/alice/docs
+Authorization: Bearer dGhpcy1pcy1hLXNhbXBsZS1yYXctdG9rZW4
+Content-Type: application/json
+
+{
+  "upsert": [
+    {
+      "principal_type": "user",
+      "principal_id": "oidc-sub-bob",
+      "allow": 5,
+      "deny": 0
+    },
+    {
+      "principal_type": "guest",
+      "principal_id": "*",
+      "allow": 1,
+      "deny": 0
+    }
+  ],
+  "remove": [
+    {
+      "principal_type": "user",
+      "principal_id": "oidc-sub-carol"
+    }
+  ]
+}
+```
+
+Notes:
+
+- At least one of `upsert` or `remove` is required
+- `remove` is idempotent (missing rules are fine)
+- Other local rules on the path are left unchanged
+- Response `204`
 
 </details>
 
@@ -1083,16 +1166,16 @@ Public URL: `https://godrive.zip/s/AbCdEfGhIjKl`.
 |--------|--------|-----|
 | List | `GET` | `/{path}` + `Accept: application/json` |
 | Download | `GET` | `/{path}` or `?dl=1` |
-| Mkdir | `POST` | `/{parent}` JSON `mkdir` |
-| Upload (small) | `POST` | `/{parent}` multipart |
-| Patch / rename / replace content | `PATCH` | `/{path}` (JSON or multipart) |
-| Move many | `PUT` | `/{srcDir}` + `Destination` |
-| Delete | `DELETE` | `/{path}` |
+| Mkdir | `POST` | `/{path}` (no body) |
+| Upload (small) | `POST` | `/{path}` + raw body |
+| Patch / rename / replace | `PATCH` | `/{path}` (JSON or multipart) |
+| Move | `PUT` | `/{path}` + `Destination` (no body) |
+| Delete | `DELETE` | `/{path}` (no body) |
 | Upload config | `GET` | `/api/upload/config` |
 | Resumable upload | `POST/PATCH/POST` | `/api/uploads…` |
-| Me | `GET` | `/api/me` |
+| Me | `GET` / `PATCH` | `/api/me` (`home`, admin `sudo`) |
 | Tokens | `GET/POST/DELETE` | `/api/tokens` |
-| Permissions | `GET/PUT` | `/api/permissions?path=` |
+| ACL | `GET/PUT/PATCH` | `/api/acl/{path}` |
 | Shares | `GET/POST/DELETE` | `/api/shares` |
 
 ## curl cookbook
@@ -1108,49 +1191,44 @@ export TOKEN=…
 curl -fsS -H "Authorization: Bearer $TOKEN" -H "Accept: application/json" "$BASE/home/alice"
 
 # mkdir
-curl -fsS -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"name":"inbox","mkdir":true}' "$BASE/home/alice"
+curl -fsS -X POST -H "Authorization: Bearer $TOKEN" "$BASE/home/alice/inbox"
 
 # upload small file
-SIZE=$(wc -c < ./hello.txt)
-curl -fsS -H "Authorization: Bearer $TOKEN" \
-  -F "json={\"name\":\"hello.txt\",\"size\":$SIZE,\"description\":\"hi\"};type=application/json" \
-  -F "file=@hello.txt" \
-  "$BASE/home/alice/inbox"
+curl -fsS -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: text/plain" \
+  --data-binary @hello.txt \
+  "$BASE/home/alice/inbox/hello.txt"
 
 # rename
 curl -fsS -X PATCH -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"name":"hello-renamed.txt"}' "$BASE/home/alice/inbox/hello.txt"
 
-# replace file contents (small)
-SIZE=$(wc -c < ./hello-v2.txt)
-curl -fsS -X PATCH -H "Authorization: Bearer $TOKEN" \
-  -F "json={\"size\":$SIZE,\"description\":\"v2\"};type=application/json" \
-  -F "file=@hello-v2.txt" \
+# replace file contents (small) — POST again also works with Update
+curl -fsS -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: text/plain" \
+  --data-binary @hello-v2.txt \
   "$BASE/home/alice/inbox/hello-renamed.txt"
 
-# move many into archive
+# move into archive
 curl -fsS -X PUT -H "Authorization: Bearer $TOKEN" \
   -H "Destination: /home/alice/archive" \
-  -H "Content-Type: application/json" \
-  -d '["inbox"]' "$BASE/home/alice"
+  "$BASE/home/alice/inbox"
 
 # download
 curl -fsSL -H "Authorization: Bearer $TOKEN" -o hello.txt \
   "$BASE/home/alice/archive/inbox/hello-renamed.txt?dl=1"
 
 # delete
-curl -fsS -X DELETE -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '[]' "$BASE/home/alice/archive/inbox/hello-renamed.txt"
+curl -fsS -X DELETE -H "Authorization: Bearer $TOKEN" \
+  "$BASE/home/alice/archive/inbox/hello-renamed.txt"
 
-# set ACL (publish read-only to guests)
-curl -fsS -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+# grant guest read (leave other local rules alone)
+curl -fsS -X PATCH -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{
-    "acl": [
-      {"principal_type":"user","principal_id":"oidc-sub-alice","allow":63,"deny":0},
+    "upsert": [
       {"principal_type":"guest","principal_id":"*","allow":1,"deny":0}
     ]
-  }' "$BASE/api/permissions?path=/home/alice/published"
+  }' "$BASE/api/acl/home/alice/published"
 
 # create share
 curl -fsS -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \

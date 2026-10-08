@@ -20,30 +20,38 @@
       </nav>
 
       <p v-if="error" class="error">{{ error }}</p>
-      <p v-if="loading" class="muted">Loading…</p>
 
-      <template v-if="!loading">
-        <section v-show="tab === 'account'" class="settings-section">
-          <h3>Account</h3>
-          <div class="account-card">
-            <img v-if="me?.avatar" class="account-avatar" :src="me.avatar" alt="">
-            <div class="account-meta">
-              <strong>{{ me?.username || '—' }}</strong>
-              <span class="muted">{{ me?.email || '—' }}</span>
-              <span v-if="me?.is_admin" class="badge">admin</span>
-            </div>
+      <section v-show="tab === 'account'" class="settings-section">
+        <h3>Account</h3>
+        <div class="account-card">
+          <img v-if="me?.avatar" class="account-avatar" :src="me.avatar" alt="">
+          <div class="account-meta">
+            <strong>{{ me?.username || '—' }}</strong>
+            <span class="muted">{{ me?.email || '—' }}</span>
+            <span v-if="me?.is_admin" class="badge">admin</span>
+            <span v-if="me?.is_admin && me?.sudo" class="badge">sudo</span>
           </div>
-          <label>
-            Home directory
-            <input v-model="homeDraft" placeholder="/" @keydown.enter.prevent="saveHome">
-          </label>
-          <p class="muted tip">Used as your default landing path after login.</p>
-          <div class="dialog-actions">
-            <IconBtn name="check" label="Save home" variant="primary" :disabled="savingHome" @click="saveHome" />
-          </div>
-        </section>
+        </div>
+        <label v-if="me?.auth_enabled && me?.is_admin" class="quick-publish">
+          <input type="checkbox" :checked="!!me?.sudo" @change="toggleSudo">
+          Sudo mode — browse all paths (bypass ACLs)
+        </label>
+        <p v-if="me?.auth_enabled && me?.is_admin" class="muted tip">
+          Off by default so other users’ private folders stay out of your listings.
+        </p>
+        <label>
+          Home directory
+          <input v-model="homeDraft" placeholder="/" @keydown.enter.prevent="saveHome">
+        </label>
+        <p class="muted tip">Used as your default landing path after login.</p>
+        <div class="dialog-actions">
+          <IconBtn name="check" label="Save home" variant="primary" :disabled="savingHome" @click="saveHome" />
+        </div>
+      </section>
 
-        <section v-show="tab === 'tokens'" class="settings-section">
+      <section v-show="tab === 'tokens'" class="settings-section">
+        <p v-if="loadingTokens" class="muted">Loading…</p>
+        <template v-else>
           <h3>API tokens</h3>
           <div class="toolbar">
             <input v-model="tokenDesc" placeholder="Description" @keydown.enter.prevent="createToken">
@@ -77,9 +85,12 @@
               </tr>
             </tbody>
           </table>
-        </section>
+        </template>
+      </section>
 
-        <section v-show="tab === 'shares'" class="settings-section">
+      <section v-show="tab === 'shares'" class="settings-section">
+        <p v-if="loadingShares" class="muted">Loading…</p>
+        <template v-else>
           <h3>Your shares</h3>
           <table class="file-table">
             <thead>
@@ -106,8 +117,8 @@
               </tr>
             </tbody>
           </table>
-        </section>
-      </template>
+        </template>
+      </section>
     </div>
   </div>
 </template>
@@ -118,18 +129,21 @@ import type { Me } from '~/composables/useApi'
 
 const open = defineModel<boolean>({ required: true })
 const props = defineProps<{ me: Me | null }>()
-const emit = defineEmits<{ updated: [] }>()
+const emit = defineEmits<{ updated: [Me] }>()
 
 const api = useApi()
 const { toast } = useToast()
 const tab = ref<'account' | 'tokens' | 'shares'>('account')
 const tokens = ref<any[]>([])
 const shares = ref<any[]>([])
+const tokensLoaded = ref(false)
+const sharesLoaded = ref(false)
 const tokenDesc = ref('')
 const newToken = ref('')
 const homeDraft = ref('/')
 const error = ref('')
-const loading = ref(false)
+const loadingTokens = ref(false)
+const loadingShares = ref(false)
 const savingHome = ref(false)
 
 const tabs = [
@@ -157,16 +171,31 @@ function formatExpiry(v: string | null | undefined) {
   return d.toLocaleString()
 }
 
-async function refresh() {
-  loading.value = true
+async function ensureTokens() {
+  if (tokensLoaded.value || loadingTokens.value) return
+  loadingTokens.value = true
   error.value = ''
   try {
-    ;[tokens.value, shares.value] = await Promise.all([api.listTokens(), api.listShares()])
-    homeDraft.value = props.me?.home || '/'
+    tokens.value = await api.listTokens()
+    tokensLoaded.value = true
   } catch (e: any) {
-    error.value = e?.data?.message || e.message || 'Failed to load settings'
+    error.value = e?.data?.message || e.message || 'Failed to load tokens'
   } finally {
-    loading.value = false
+    loadingTokens.value = false
+  }
+}
+
+async function ensureShares() {
+  if (sharesLoaded.value || loadingShares.value) return
+  loadingShares.value = true
+  error.value = ''
+  try {
+    shares.value = await api.listShares()
+    sharesLoaded.value = true
+  } catch (e: any) {
+    error.value = e?.data?.message || e.message || 'Failed to load shares'
+  } finally {
+    loadingShares.value = false
   }
 }
 
@@ -174,8 +203,7 @@ async function saveHome() {
   savingHome.value = true
   error.value = ''
   try {
-    await api.updateMe({ home: homeDraft.value || '/' })
-    emit('updated')
+    emit('updated', await api.updateMe({ home: homeDraft.value || '/' }))
     toast('Settings saved')
   } catch (e: any) {
     error.value = e?.data?.message || e.message || 'Failed to save home'
@@ -184,12 +212,32 @@ async function saveHome() {
   }
 }
 
+async function toggleSudo(ev: Event) {
+  const on = (ev.target as HTMLInputElement).checked
+  error.value = ''
+  try {
+    emit('updated', await api.updateMe({ sudo: on }))
+    toast(on ? 'Sudo mode on' : 'Sudo mode off')
+  } catch (e: any) {
+    error.value = e?.data?.message || e.message || 'Failed to update sudo'
+  }
+}
+
 async function createToken() {
   try {
     const res = await api.createToken(tokenDesc.value)
     newToken.value = res.token
     tokenDesc.value = ''
-    await refresh()
+    tokens.value = [
+      {
+        token_hash: res.token_hash,
+        token_prefix: res.token_prefix,
+        description: res.description,
+        created_at: res.created_at,
+      },
+      ...tokens.value,
+    ]
+    tokensLoaded.value = true
     toast('Token created')
   } catch (e: any) {
     error.value = e?.data?.message || e.message || 'Failed to create token'
@@ -205,7 +253,7 @@ async function copyToken() {
 async function delToken(hash: string) {
   try {
     await api.deleteToken(hash)
-    await refresh()
+    tokens.value = tokens.value.filter(t => t.token_hash !== hash)
     toast('Token deleted')
   } catch (e: any) {
     error.value = e?.data?.message || e.message || 'Failed to delete token'
@@ -227,8 +275,18 @@ watch(open, (v) => {
     newToken.value = ''
     error.value = ''
     tab.value = 'account'
-    refresh()
+    homeDraft.value = props.me?.home || '/'
+    tokensLoaded.value = false
+    sharesLoaded.value = false
+    tokens.value = []
+    shares.value = []
   }
+})
+
+watch(tab, (t) => {
+  if (!open.value) return
+  if (t === 'tokens') void ensureTokens()
+  if (t === 'shares') void ensureShares()
 })
 
 watch(() => props.me?.home, (h) => {

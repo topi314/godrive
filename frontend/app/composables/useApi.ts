@@ -25,6 +25,8 @@ export type Me = {
   is_admin?: boolean
   is_access?: boolean
   is_guest?: boolean
+  /** Admin ACL bypass; omitted for non-admins. Default off. */
+  sudo?: boolean
   session_expires_at?: string | null
 }
 
@@ -80,15 +82,16 @@ function fetchStatus(err: any) {
   return err?.status || err?.response?.status || err?.statusCode || 0
 }
 
-let refreshInflight: Promise<void> | null = null
+let refreshInflight: Promise<{ ok?: boolean; session_expires_at?: string | null }> | null = null
+let uploadConfigCache: { chunk_size: number; max_parallel: number; max_size: number } | null = null
 
 export async function refreshSession() {
   if (!refreshInflight) {
-    refreshInflight = $fetch('/api/refresh', { method: 'POST' })
-      .then(() => undefined)
-      .finally(() => {
-        refreshInflight = null
-      })
+    refreshInflight = $fetch<{ ok?: boolean; session_expires_at?: string | null }>('/api/refresh', {
+      method: 'POST',
+    }).finally(() => {
+      refreshInflight = null
+    })
   }
   return refreshInflight
 }
@@ -114,8 +117,8 @@ export function useApi() {
     return await apiFetch<Me>('/api/me')
   }
 
-  async function updateMe(body: { home: string }) {
-    return await apiFetch<{ id: string; home: string }>('/api/me', {
+  async function updateMe(body: { home?: string; sudo?: boolean }) {
+    return await apiFetch<Me>('/api/me', {
       method: 'PATCH',
       body,
     })
@@ -128,10 +131,9 @@ export function useApi() {
   }
 
   async function mkdir(dir: string, name: string) {
-    await apiFetch(publicFilePath(dir), {
-      method: 'POST',
-      body: { name, mkdir: true },
-    })
+    const base = publicFilePath(dir)
+    const target = base === '/' ? `/${name}` : `${base}/${name}`
+    return await apiFetch<{ path: string; is_dir: boolean }>(target, { method: 'POST' })
   }
 
   async function rename(path: string, name: string) {
@@ -142,9 +144,34 @@ export function useApi() {
   }
 
   async function remove(paths: string[]) {
-    for (const p of paths) {
-      await apiFetch(publicFilePath(p), { method: 'DELETE', body: [] })
+    const unique = [...new Set(paths.map(publicFilePath).filter(p => p && p !== '/'))]
+    if (!unique.length) return
+
+    const byParent = new Map<string, string[]>()
+    for (const full of unique) {
+      const parts = full.split('/').filter(Boolean)
+      const name = parts.at(-1)!
+      const parent = parts.length <= 1 ? '/' : '/' + parts.slice(0, -1).join('/')
+      const list = byParent.get(parent) || []
+      list.push(name)
+      byParent.set(parent, list)
     }
+
+    await Promise.all([...byParent.entries()].map(([parent, names]) => {
+      if (names.length === 1) {
+        const target = parent === '/' ? `/${names[0]}` : `${parent}/${names[0]}`
+        return apiFetch(target, { method: 'DELETE' })
+      }
+      return apiFetch(parent === '/' ? '/' : parent, {
+        method: 'DELETE',
+        body: names,
+      })
+    }))
+  }
+
+  function aclApiPath(path: string) {
+    const p = publicFilePath(path)
+    return p === '/' ? '/api/acl' : '/api/acl' + p
   }
 
   async function getPermissions(path: string) {
@@ -155,21 +182,31 @@ export function useApi() {
       inherited?: ACLEntry[]
       available_groups?: string[]
       available_users?: { id: string; username: string; email?: string }[]
-    }>('/api/permissions', {
-      query: { path },
-    })
+    }>(aclApiPath(path))
   }
 
   async function putPermissions(path: string, acl: ACLEntry[]) {
-    await apiFetch('/api/permissions', {
+    await apiFetch(aclApiPath(path), {
       method: 'PUT',
-      query: { path },
       body: { acl },
     })
   }
 
+  async function patchPermissions(
+    path: string,
+    body: {
+      upsert?: Pick<ACLEntry, 'principal_type' | 'principal_id' | 'allow' | 'deny'>[]
+      remove?: Pick<ACLEntry, 'principal_type' | 'principal_id'>[]
+    },
+  ) {
+    await apiFetch(aclApiPath(path), {
+      method: 'PATCH',
+      body,
+    })
+  }
+
   async function listAllPermissions() {
-    return await apiFetch<ACLEntry[]>('/api/settings/permissions')
+    return await apiFetch<ACLEntry[]>('/api/settings/acl')
   }
 
   async function createShare(path: string, opts?: { expires_in?: string; allow?: number; deny?: number }) {
@@ -184,7 +221,16 @@ export function useApi() {
   }
 
   async function uploadConfig() {
-    return await apiFetch<{ max_size: number; chunk_size: number; session_ttl: string; max_parallel: number }>('/api/upload/config')
+    if (uploadConfigCache) {
+      return { session_ttl: '', ...uploadConfigCache }
+    }
+    const cfg = await apiFetch<{ max_size: number; chunk_size: number; session_ttl: string; max_parallel: number }>('/api/upload/config')
+    uploadConfigCache = {
+      max_size: cfg.max_size,
+      chunk_size: cfg.chunk_size,
+      max_parallel: cfg.max_parallel,
+    }
+    return cfg
   }
 
   async function preflightUpload(body: {
@@ -272,7 +318,13 @@ export function useApi() {
   }
 
   async function createToken(description: string) {
-    return await apiFetch<{ token: string }>('/api/tokens', {
+    return await apiFetch<{
+      token: string
+      token_prefix: string
+      token_hash: string
+      description?: string
+      created_at: string
+    }>('/api/tokens', {
       method: 'POST',
       body: { description },
     })
@@ -306,6 +358,7 @@ export function useApi() {
     remove,
     getPermissions,
     putPermissions,
+    patchPermissions,
     listAllPermissions,
     createShare,
     listShares,

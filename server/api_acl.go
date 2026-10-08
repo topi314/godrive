@@ -1,13 +1,27 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/topi314/godrive/server/acl"
 	"github.com/topi314/godrive/server/database/dbq"
 )
+
+type aclRuleBody struct {
+	PrincipalType string `json:"principal_type"`
+	PrincipalID   string `json:"principal_id"`
+	Allow         int64  `json:"allow"`
+	Deny          int64  `json:"deny"`
+}
+
+type aclPrincipalBody struct {
+	PrincipalType string `json:"principal_type"`
+	PrincipalID   string `json:"principal_id"`
+}
 
 func aclJSON(row dbq.PathAcl) map[string]any {
 	return map[string]any{
@@ -19,12 +33,90 @@ func aclJSON(row dbq.PathAcl) map[string]any {
 	}
 }
 
+func aclPath(r *http.Request) string {
+	p := chi.URLParam(r, "*")
+	if p == "" {
+		return "/"
+	}
+	return acl.NormalizePath(p)
+}
+
+func (s *Server) canReadPermissions(ctx context.Context, p string, info *UserInfo) bool {
+	perms, err := s.EffectivePermissions(ctx, p, info, nil)
+	if err != nil {
+		return false
+	}
+	if !s.cfg.AuthEnabled() {
+		return true
+	}
+	return perms.Has(acl.PermissionRead) || perms.Has(acl.PermissionUpdatePermissions)
+}
+
+func (s *Server) canUpdatePermissions(ctx context.Context, p string, info *UserInfo) bool {
+	perms, err := s.EffectivePermissions(ctx, p, info, nil)
+	if err != nil {
+		return false
+	}
+	if !s.cfg.AuthEnabled() {
+		return true
+	}
+	return perms.Has(acl.PermissionUpdatePermissions) || s.adminSudo(info)
+}
+
+func normalizeACLPrincipalID(principalType, principalID string) (string, string, error) {
+	pid := principalID
+	switch principalType {
+	case acl.PrincipalEveryone:
+		pid = acl.EveryoneID
+	case acl.PrincipalGuest:
+		pid = acl.GuestID
+	case acl.PrincipalGroup, acl.PrincipalUser, acl.PrincipalShare:
+		if pid == "" {
+			return "", "", errors.New(principalType + " rules need a principal id")
+		}
+	default:
+		return "", "", errors.New("unknown principal type")
+	}
+	return principalType, pid, nil
+}
+
+func (s *Server) validateACLRule(ctx context.Context, row aclRuleBody) (dbq.UpsertACLParams, error) {
+	pt, pid, err := normalizeACLPrincipalID(row.PrincipalType, row.PrincipalID)
+	if err != nil {
+		return dbq.UpsertACLParams{}, err
+	}
+	switch pt {
+	case acl.PrincipalGroup:
+		if s.cfg.AuthEnabled() && !s.cfg.Auth.Groups.IsAvailableGroup(pid) {
+			return dbq.UpsertACLParams{}, errors.New("unknown group")
+		}
+	case acl.PrincipalUser:
+		if _, err := s.store.Q.GetUser(ctx, pid); err != nil {
+			return dbq.UpsertACLParams{}, errors.New("unknown user")
+		}
+	case acl.PrincipalShare:
+		if _, err := s.store.Q.GetShare(ctx, pid); err != nil {
+			return dbq.UpsertACLParams{}, errors.New("unknown share")
+		}
+	}
+	return dbq.UpsertACLParams{
+		PrincipalType: pt,
+		PrincipalID:   pid,
+		Allow:         row.Allow,
+		Deny:          row.Deny,
+	}, nil
+}
+
 func (s *Server) GetPermissionsAPI(w http.ResponseWriter, r *http.Request) {
-	p := acl.NormalizePath(r.URL.Query().Get("path"))
+	p := aclPath(r)
 	info := GetUserInfo(r)
-	perms, err := s.EffectivePermissions(r.Context(), p, info, nil)
-	if err != nil || (s.cfg.AuthEnabled() && !perms.Has(acl.PermissionRead) && !perms.Has(acl.PermissionUpdatePermissions)) {
+	if !s.canReadPermissions(r.Context(), p, info) {
 		s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
+		return
+	}
+	perms, err := s.EffectivePermissions(r.Context(), p, info, nil)
+	if err != nil {
+		s.writeError(w, r, err, http.StatusInternalServerError)
 		return
 	}
 	paths := acl.AncestorPathsRootFirst(p)
@@ -70,72 +162,126 @@ func (s *Server) GetPermissionsAPI(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) PutPermissionsAPI(w http.ResponseWriter, r *http.Request) {
-	p := acl.NormalizePath(r.URL.Query().Get("path"))
+	p := aclPath(r)
 	if acl.IsReservedPath(p) {
 		s.writeError(w, r, errors.New("reserved path"), http.StatusBadRequest)
 		return
 	}
 	info := GetUserInfo(r)
-	perms, err := s.EffectivePermissions(r.Context(), p, info, nil)
-	if err != nil || (s.cfg.AuthEnabled() && !perms.Has(acl.PermissionUpdatePermissions) && !s.isAdmin(info)) {
+	if !s.canUpdatePermissions(r.Context(), p, info) {
 		s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
 		return
 	}
 	var body struct {
-		ACL []struct {
-			PrincipalType string `json:"principal_type"`
-			PrincipalID   string `json:"principal_id"`
-			Allow         int64  `json:"allow"`
-			Deny          int64  `json:"deny"`
-		} `json:"acl"`
+		ACL []aclRuleBody `json:"acl"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		s.writeError(w, r, err, http.StatusBadRequest)
 		return
 	}
-	_ = s.store.Q.DeleteACLForPath(r.Context(), p)
+	rules := make([]dbq.UpsertACLParams, 0, len(body.ACL))
 	for _, row := range body.ACL {
-		pid := row.PrincipalID
-		switch row.PrincipalType {
-		case acl.PrincipalEveryone:
-			pid = acl.EveryoneID
-		case acl.PrincipalGuest:
-			pid = acl.GuestID
-		}
-		if row.PrincipalType == acl.PrincipalGroup {
-			if pid == "" || (s.cfg.AuthEnabled() && !s.cfg.Auth.Groups.IsAvailableGroup(pid)) {
-				s.writeError(w, r, errors.New("unknown group"), http.StatusBadRequest)
-				return
-			}
-		}
-		if row.PrincipalType == acl.PrincipalUser {
-			if pid == "" {
-				s.writeError(w, r, errors.New("user rules need a user id"), http.StatusBadRequest)
-				return
-			}
-			if _, err := s.store.Q.GetUser(r.Context(), pid); err != nil {
-				s.writeError(w, r, errors.New("unknown user"), http.StatusBadRequest)
-				return
-			}
-		}
-		if row.PrincipalType == acl.PrincipalShare {
-			if pid == "" {
-				s.writeError(w, r, errors.New("share rules need a share id"), http.StatusBadRequest)
-				return
-			}
-			if _, err := s.store.Q.GetShare(r.Context(), pid); err != nil {
-				s.writeError(w, r, errors.New("unknown share"), http.StatusBadRequest)
-				return
-			}
-		}
-		_, err := s.store.Q.UpsertACL(r.Context(), dbq.UpsertACLParams{
-			Path: p, PrincipalType: row.PrincipalType, PrincipalID: pid,
-			Allow: row.Allow, Deny: row.Deny,
-		})
+		rule, err := s.validateACLRule(r.Context(), row)
 		if err != nil {
+			s.writeError(w, r, err, http.StatusBadRequest)
+			return
+		}
+		rule.Path = p
+		rules = append(rules, rule)
+	}
+
+	tx, err := s.store.DB.BeginTx(r.Context(), nil)
+	if err != nil {
+		s.writeError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+	q := dbq.New(tx)
+	if err := q.DeleteACLForPath(r.Context(), p); err != nil {
+		s.writeError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+	for _, rule := range rules {
+		if _, err := q.UpsertACL(r.Context(), rule); err != nil {
 			s.writeError(w, r, err, http.StatusInternalServerError)
 			return
 		}
+	}
+	if err := tx.Commit(); err != nil {
+		s.writeError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) PatchPermissionsAPI(w http.ResponseWriter, r *http.Request) {
+	p := aclPath(r)
+	if acl.IsReservedPath(p) {
+		s.writeError(w, r, errors.New("reserved path"), http.StatusBadRequest)
+		return
+	}
+	info := GetUserInfo(r)
+	if !s.canUpdatePermissions(r.Context(), p, info) {
+		s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
+		return
+	}
+	var body struct {
+		Upsert []aclRuleBody      `json:"upsert"`
+		Remove []aclPrincipalBody `json:"remove"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		s.writeError(w, r, err, http.StatusBadRequest)
+		return
+	}
+	if len(body.Upsert) == 0 && len(body.Remove) == 0 {
+		s.writeError(w, r, errors.New("upsert or remove required"), http.StatusBadRequest)
+		return
+	}
+
+	removes := make([]dbq.DeleteACLParams, 0, len(body.Remove))
+	for _, row := range body.Remove {
+		pt, pid, err := normalizeACLPrincipalID(row.PrincipalType, row.PrincipalID)
+		if err != nil {
+			s.writeError(w, r, err, http.StatusBadRequest)
+			return
+		}
+		removes = append(removes, dbq.DeleteACLParams{
+			Path: p, PrincipalType: pt, PrincipalID: pid,
+		})
+	}
+	upserts := make([]dbq.UpsertACLParams, 0, len(body.Upsert))
+	for _, row := range body.Upsert {
+		rule, err := s.validateACLRule(r.Context(), row)
+		if err != nil {
+			s.writeError(w, r, err, http.StatusBadRequest)
+			return
+		}
+		rule.Path = p
+		upserts = append(upserts, rule)
+	}
+
+	tx, err := s.store.DB.BeginTx(r.Context(), nil)
+	if err != nil {
+		s.writeError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+	q := dbq.New(tx)
+	for _, del := range removes {
+		if err := q.DeleteACL(r.Context(), del); err != nil {
+			s.writeError(w, r, err, http.StatusInternalServerError)
+			return
+		}
+	}
+	for _, rule := range upserts {
+		if _, err := q.UpsertACL(r.Context(), rule); err != nil {
+			s.writeError(w, r, err, http.StatusInternalServerError)
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		s.writeError(w, r, err, http.StatusInternalServerError)
+		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

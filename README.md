@@ -83,7 +83,7 @@ Register the callback on the IdP client:
 
 ### Uploads
 
-Defaults: `max_size = 50GB`, `chunk_size = 16MB`, `session_ttl = 72h`, `max_parallel = 2`. Proxies in front of godrive must allow request bodies at least as large as `chunk_size` and keep connections open for slow multi-GB transfers.
+Defaults: `max_size = 50GB`, `chunk_size = 16MB`, `session_ttl = 2h`, `max_parallel = 6`. Proxies in front of godrive must allow request bodies at least as large as `chunk_size` and keep connections open for slow multi-GB transfers.
 
 ### Share links
 

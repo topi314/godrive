@@ -109,7 +109,7 @@ const description = ref('')
 const busy = ref(false)
 const picker = ref<HTMLInputElement | null>(null)
 const chunkSize = ref(16_000_000)
-const maxParallel = ref(2)
+const maxParallel = ref(6)
 const maxSize = ref(50_000_000_000)
 
 function uid() {
@@ -210,12 +210,15 @@ async function recheck(item: QueueItem) {
 }
 
 async function uploadOne(item: QueueItem) {
-  item.status = 'uploading'
   item.error = ''
   item.progress = Math.round((item.offset / (item.file.size || 1)) * 100)
   try {
-    await recheck(item)
-    if (item.status === 'declined') return
+    // Already validated via preflight when queued; only recheck pending/failed.
+    if (item.status !== 'queued') {
+      await recheck(item)
+      if (item.status === 'declined') return
+    }
+    item.status = 'uploading'
 
     let sessionId = item.sessionId
     let offset = item.offset

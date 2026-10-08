@@ -20,10 +20,10 @@
       </nav>
 
       <p v-if="error" class="error">{{ error }}</p>
-      <p v-if="loading" class="muted">Loading…</p>
 
-      <template v-if="!loading">
-        <section v-show="tab === 'users'" class="settings-section">
+      <section v-show="tab === 'users'" class="settings-section">
+          <p v-if="loadingUsers" class="muted">Loading…</p>
+          <template v-else>
           <p class="muted user-list-count">{{ users.length }} {{ users.length === 1 ? 'user' : 'users' }}</p>
           <ul class="user-list">
             <li v-for="u in users" :key="u.id">
@@ -66,9 +66,12 @@
             </li>
             <li v-if="!users.length" class="muted user-list-empty">No users</li>
           </ul>
+          </template>
         </section>
 
         <section v-show="tab === 'access'" class="settings-section">
+          <p v-if="loadingACL" class="muted">Loading…</p>
+          <template v-else>
           <p class="muted user-list-count">{{ aclGroups.length }} {{ aclGroups.length === 1 ? 'path' : 'paths' }}</p>
           <table class="file-table">
             <thead>
@@ -112,8 +115,8 @@
               </tr>
             </tbody>
           </table>
+          </template>
         </section>
-      </template>
     </div>
   </div>
 
@@ -142,7 +145,10 @@ const aclEditorOpen = ref(false)
 const aclEditorPath = ref('/')
 const aclSelectPath = ref(false)
 const error = ref('')
-const loading = ref(false)
+const loadingUsers = ref(false)
+const loadingACL = ref(false)
+const usersLoaded = ref(false)
+const aclLoaded = ref(false)
 
 const tabs = [
   { id: 'users' as const, label: 'Users' },
@@ -208,22 +214,38 @@ function editACL(path: string, selectPath = false) {
 }
 
 async function onACLSaved() {
-  await refresh()
+  await loadACL(true)
   toast('Permissions saved')
 }
 
-async function refresh() {
-  loading.value = true
+async function loadUsers(force = false) {
+  if (usersLoaded.value && !force) return
+  loadingUsers.value = true
   error.value = ''
   try {
-    ;[users.value, allACL.value] = await Promise.all([api.listUsers(), api.listAllPermissions()])
+    users.value = await api.listUsers()
+    usersLoaded.value = true
     for (const u of users.value) {
       if (userHomeDraft[u.id] == null) userHomeDraft[u.id] = u.home
     }
   } catch (e: any) {
-    error.value = e?.data?.message || e.message || 'Failed to load admin data'
+    error.value = e?.data?.message || e.message || 'Failed to load users'
   } finally {
-    loading.value = false
+    loadingUsers.value = false
+  }
+}
+
+async function loadACL(force = false) {
+  if (aclLoaded.value && !force) return
+  loadingACL.value = true
+  error.value = ''
+  try {
+    allACL.value = await api.listAllPermissions()
+    aclLoaded.value = true
+  } catch (e: any) {
+    error.value = e?.data?.message || e.message || 'Failed to load ACL'
+  } finally {
+    loadingACL.value = false
   }
 }
 
@@ -256,7 +278,17 @@ watch(open, (v) => {
   if (v) {
     tab.value = 'users'
     error.value = ''
-    refresh()
+    usersLoaded.value = false
+    aclLoaded.value = false
+    users.value = []
+    allACL.value = []
+    void loadUsers()
   }
+})
+
+watch(tab, (t) => {
+  if (!open.value) return
+  if (t === 'users') void loadUsers()
+  if (t === 'access') void loadACL()
 })
 </script>

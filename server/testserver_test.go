@@ -60,6 +60,10 @@ func newTestEnv(t *testing.T, guest bool) *testEnv {
 					Map:    map[string]string{"editors": "editors"},
 				},
 			},
+			Upload: config.UploadConfig{
+				MaxSize:   config.ByteSize{Bytes: 50 << 30},
+				ChunkSize: config.ByteSize{Bytes: 16 << 20},
+			},
 		},
 	}
 	return &testEnv{s: s, ctx: ctx}

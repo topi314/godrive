@@ -25,7 +25,7 @@ func (s *Server) EffectivePermissions(ctx context.Context, filePath string, info
 	if !s.cfg.AuthEnabled() {
 		return acl.PermissionsAll, nil
 	}
-	if info != nil && s.isAdmin(info) {
+	if s.adminSudo(info) {
 		return acl.PermissionsAll, nil
 	}
 	if info != nil && info.Subject != "" && info.Subject != "guest" {

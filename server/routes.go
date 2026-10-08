@@ -69,8 +69,12 @@ func (s *Server) Routes() http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(s.RequireAccess)
 
-			r.Get("/permissions", s.GetPermissionsAPI)
-			r.Put("/permissions", s.PutPermissionsAPI)
+			r.Get("/acl", s.GetPermissionsAPI)
+			r.Get("/acl/*", s.GetPermissionsAPI)
+			r.Put("/acl", s.PutPermissionsAPI)
+			r.Put("/acl/*", s.PutPermissionsAPI)
+			r.Patch("/acl", s.PatchPermissionsAPI)
+			r.Patch("/acl/*", s.PatchPermissionsAPI)
 
 			r.Get("/shares", s.ListSharesAPI)
 			r.Post("/shares", s.CreateShareAPI)
@@ -85,7 +89,7 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/settings/users", s.ListUsersAPI)
 			r.Patch("/settings/users/{id}", s.PatchUserAPI)
 			r.Delete("/settings/users/{id}", s.DeleteUserAPI)
-			r.Get("/settings/permissions", s.ListAllPermissionsAPI)
+			r.Get("/settings/acl", s.ListAllPermissionsAPI)
 		})
 	})
 

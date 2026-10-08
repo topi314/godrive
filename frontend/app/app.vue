@@ -16,6 +16,13 @@
       </div>
       <div class="topbar-actions">
         <IconBtn
+          v-if="user?.authenticated && user.auth_enabled && user.is_admin"
+          name="shield"
+          :label="user.sudo ? 'Sudo on — see all paths' : 'Sudo off — ACL view'"
+          :variant="user.sudo ? 'primary' : ''"
+          @click="toggleSudo"
+        />
+        <IconBtn
           :name="theme === 'dark' ? 'sun' : 'moon'"
           :label="theme === 'dark' ? 'Light mode' : 'Dark mode'"
           @click="toggleTheme"
@@ -97,7 +104,7 @@
       v-if="user?.authenticated"
       v-model="settingsOpen"
       :me="user"
-      @updated="refreshMe"
+      @updated="applyMe"
     />
     <AdminDialog
       v-if="user?.authenticated && user.is_admin"
@@ -163,6 +170,20 @@ function toggleTheme() {
   applyTheme(theme.value === 'dark' ? 'light' : 'dark')
 }
 
+async function toggleSudo() {
+  if (!user.value?.is_admin) return
+  const next = !user.value.sudo
+  try {
+    applyMe(await api.updateMe({ sudo: next }))
+  } catch {
+    /* keep current */
+  }
+}
+
+function applyMe(me: Me) {
+  user.value = me
+}
+
 function openSettings() {
   userMenuOpen.value = false
   settingsOpen.value = true
@@ -199,8 +220,10 @@ function scheduleSessionRefresh() {
   const delay = Math.max(5_000, at - Date.now() - 60_000)
   sessionRefreshTimer = setTimeout(async () => {
     try {
-      await api.refreshSession()
-      await refreshMe()
+      const res = await api.refreshSession()
+      if (user.value && res?.session_expires_at) {
+        user.value = { ...user.value, session_expires_at: res.session_expires_at }
+      }
     } catch {
       /* session will be retried on the next 401 */
     }

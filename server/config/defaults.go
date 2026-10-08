@@ -25,8 +25,8 @@ const (
 	DefaultLogFormat      = "text"
 	DefaultUploadMax      = int64(50_000_000_000) // 50GB
 	DefaultUploadChunk    = int64(16_000_000)     // 16MB
-	DefaultUploadTTL      = 72 * time.Hour
-	DefaultUploadParallel = 2
+	DefaultUploadTTL      = 2 * time.Hour
+	DefaultUploadParallel = 6
 )
 
 func applyDefaults(cfg *Config) {

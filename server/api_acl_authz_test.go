@@ -43,8 +43,8 @@ func TestPermissionsAPIAuthz(t *testing.T) {
 	admin := &UserInfo{Subject: "admin", Groups: []string{"admin"}}
 
 	t.Run("get forbidden without read", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/permissions?path=/docs", nil)
-		req = withUser(req, stranger)
+		req := httptest.NewRequest(http.MethodGet, "/api/acl/docs", nil)
+		req = withChiStar(withUser(req, stranger), "docs")
 		rec := httptest.NewRecorder()
 		e.s.GetPermissionsAPI(rec, req)
 		if rec.Code != http.StatusForbidden {
@@ -53,8 +53,8 @@ func TestPermissionsAPIAuthz(t *testing.T) {
 	})
 
 	t.Run("get ok with read", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/permissions?path=/docs", nil)
-		req = withUser(req, reader)
+		req := httptest.NewRequest(http.MethodGet, "/api/acl/docs", nil)
+		req = withChiStar(withUser(req, reader), "docs")
 		rec := httptest.NewRecorder()
 		e.s.GetPermissionsAPI(rec, req)
 		if rec.Code != http.StatusOK {
@@ -64,8 +64,8 @@ func TestPermissionsAPIAuthz(t *testing.T) {
 
 	t.Run("put forbidden without update-permissions", func(t *testing.T) {
 		body := `{"acl":[{"principal_type":"user","principal_id":"reader","allow":1,"deny":0}]}`
-		req := httptest.NewRequest(http.MethodPut, "/api/permissions?path=/docs", strings.NewReader(body))
-		req = withUser(req, reader)
+		req := httptest.NewRequest(http.MethodPut, "/api/acl/docs", strings.NewReader(body))
+		req = withChiStar(withUser(req, reader), "docs")
 		rec := httptest.NewRecorder()
 		e.s.PutPermissionsAPI(rec, req)
 		if rec.Code != http.StatusForbidden {
@@ -83,8 +83,8 @@ func TestPermissionsAPIAuthz(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		req := httptest.NewRequest(http.MethodPut, "/api/permissions?path=/docs", bytes.NewReader(payload))
-		req = withUser(req, editor)
+		req := httptest.NewRequest(http.MethodPut, "/api/acl/docs", bytes.NewReader(payload))
+		req = withChiStar(withUser(req, editor), "docs")
 		rec := httptest.NewRecorder()
 		e.s.PutPermissionsAPI(rec, req)
 		if rec.Code != http.StatusNoContent {
@@ -94,8 +94,10 @@ func TestPermissionsAPIAuthz(t *testing.T) {
 
 	t.Run("put reserved path", func(t *testing.T) {
 		body := `{"acl":[]}`
-		req := httptest.NewRequest(http.MethodPut, "/api/permissions?path=/api/me", strings.NewReader(body))
-		req = withUser(req, admin)
+		sudoAdmin := *admin
+		sudoAdmin.Sudo = true
+		req := httptest.NewRequest(http.MethodPut, "/api/acl/api/me", strings.NewReader(body))
+		req = withChiStar(withUser(req, &sudoAdmin), "api/me")
 		rec := httptest.NewRecorder()
 		e.s.PutPermissionsAPI(rec, req)
 		if rec.Code != http.StatusBadRequest {
@@ -103,8 +105,77 @@ func TestPermissionsAPIAuthz(t *testing.T) {
 		}
 	})
 
+	t.Run("put invalid does not wipe existing", func(t *testing.T) {
+		before, err := e.s.store.Q.ListACLByPath(e.ctx, "/docs")
+		if err != nil || len(before) == 0 {
+			t.Fatalf("setup ACL: %v %#v", err, before)
+		}
+		body := `{"acl":[{"principal_type":"user","principal_id":"missing-user","allow":1,"deny":0}]}`
+		req := httptest.NewRequest(http.MethodPut, "/api/acl/docs", strings.NewReader(body))
+		req = withChiStar(withUser(req, editor), "docs")
+		rec := httptest.NewRecorder()
+		e.s.PutPermissionsAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		after, err := e.s.store.Q.ListACLByPath(e.ctx, "/docs")
+		if err != nil || len(after) != len(before) {
+			t.Fatalf("ACL wiped on failed put: before=%d after=%d err=%v", len(before), len(after), err)
+		}
+	})
+
+	t.Run("patch forbidden without update-permissions", func(t *testing.T) {
+		body := `{"upsert":[{"principal_type":"user","principal_id":"reader","allow":1,"deny":0}]}`
+		req := httptest.NewRequest(http.MethodPatch, "/api/acl/docs", strings.NewReader(body))
+		req = withChiStar(withUser(req, reader), "docs")
+		rec := httptest.NewRecorder()
+		e.s.PatchPermissionsAPI(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("patch upsert and remove", func(t *testing.T) {
+		payload, err := json.Marshal(map[string]any{
+			"upsert": []map[string]any{
+				{"principal_type": "user", "principal_id": "stranger", "allow": int64(acl.PermissionRead), "deny": 0},
+			},
+			"remove": []map[string]any{
+				{"principal_type": "user", "principal_id": "reader"},
+			},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPatch, "/api/acl/docs", bytes.NewReader(payload))
+		req = withChiStar(withUser(req, editor), "docs")
+		rec := httptest.NewRecorder()
+		e.s.PatchPermissionsAPI(rec, req)
+		if rec.Code != http.StatusNoContent {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		rows, err := e.s.store.Q.ListACLByPath(e.ctx, "/docs")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var hasReader, hasStranger, hasEditor bool
+		for _, row := range rows {
+			switch row.PrincipalID {
+			case "reader":
+				hasReader = true
+			case "stranger":
+				hasStranger = true
+			case "editor":
+				hasEditor = true
+			}
+		}
+		if hasReader || !hasStranger || !hasEditor {
+			t.Fatalf("patch merge wrong: reader=%v stranger=%v editor=%v rows=%#v", hasReader, hasStranger, hasEditor, rows)
+		}
+	})
+
 	t.Run("list all forbidden for non-admin", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/permissions/all", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/settings/acl", nil)
 		req = withUser(req, editor)
 		rec := httptest.NewRecorder()
 		e.s.ListAllPermissionsAPI(rec, req)
@@ -114,7 +185,7 @@ func TestPermissionsAPIAuthz(t *testing.T) {
 	})
 
 	t.Run("list all ok for admin", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/permissions/all", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/settings/acl", nil)
 		req = withUser(req, admin)
 		rec := httptest.NewRecorder()
 		e.s.ListAllPermissionsAPI(rec, req)

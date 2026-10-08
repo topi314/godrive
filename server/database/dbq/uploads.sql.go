@@ -11,6 +11,43 @@ import (
 	"time"
 )
 
+const countActiveUploadSessionsByShare = `-- name: CountActiveUploadSessionsByShare :one
+SELECT COUNT(*) FROM upload_sessions
+WHERE share_id = ?1
+  AND expires_at > ?2
+`
+
+type CountActiveUploadSessionsByShareParams struct {
+	ShareID sql.NullString `json:"share_id"`
+	Now     time.Time      `json:"now"`
+}
+
+func (q *Queries) CountActiveUploadSessionsByShare(ctx context.Context, arg CountActiveUploadSessionsByShareParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countActiveUploadSessionsByShare, arg.ShareID, arg.Now)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countActiveUploadSessionsByUser = `-- name: CountActiveUploadSessionsByUser :one
+SELECT COUNT(*) FROM upload_sessions
+WHERE user_id = ?1
+  AND expires_at > ?2
+  AND (share_id IS NULL OR share_id = '')
+`
+
+type CountActiveUploadSessionsByUserParams struct {
+	UserID string    `json:"user_id"`
+	Now    time.Time `json:"now"`
+}
+
+func (q *Queries) CountActiveUploadSessionsByUser(ctx context.Context, arg CountActiveUploadSessionsByUserParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countActiveUploadSessionsByUser, arg.UserID, arg.Now)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createUploadSession = `-- name: CreateUploadSession :one
 INSERT INTO upload_sessions (
     id, user_id, share_id, path, size, content_type, description, offset, replace_file,

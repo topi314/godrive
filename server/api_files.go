@@ -486,19 +486,107 @@ func (s *Server) streamFile(w http.ResponseWriter, r *http.Request, p, contentTy
 }
 
 func (s *Server) UploadFileAPI(w http.ResponseWriter, r *http.Request) {
-	dir := s.filePathFromRequest(r)
+	p := s.filePathFromRequest(r)
 	info := GetUserInfo(r)
-	perms, err := s.EffectivePermissions(r.Context(), dir, info, nil)
-	if err != nil || (s.cfg.AuthEnabled() && !perms.Has(acl.PermissionCreate)) {
-		s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
+	ct := r.Header.Get("Content-Type")
+
+	// Multipart into a directory (browser form: json name + file part).
+	if strings.Contains(ct, "multipart/") {
+		s.uploadMultipartIntoDir(w, r, p, info)
 		return
 	}
 
-	if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
-		s.mkdirAPI(w, r, dir, info)
+	// Raw body → small file at this path. Empty body → mkdir at this path.
+	if r.ContentLength > 0 {
+		s.putRawFile(w, r, p, info, r.ContentLength, r.Body, ct, "")
+		return
+	}
+	s.mkdirPath(w, r, p, info)
+}
+
+func (s *Server) putRawFile(w http.ResponseWriter, r *http.Request, target string, info *UserInfo, size int64, body io.Reader, contentType, description string) {
+	target = acl.NormalizePath(target)
+	if target == "/" || acl.IsReservedPath(target) {
+		s.writeError(w, r, errors.New("invalid path"), http.StatusBadRequest)
+		return
+	}
+	if size < 0 {
+		s.writeError(w, r, errors.New("content-length required"), http.StatusBadRequest)
+		return
+	}
+	if size > s.cfg.Upload.MaxSize.Bytes {
+		s.writeError(w, r, errors.New("file too large"), http.StatusBadRequest)
+		return
+	}
+	if size > s.cfg.Upload.ChunkSize.Bytes {
+		s.writeError(w, r, errors.New("use resumable upload for large files"), http.StatusBadRequest)
 		return
 	}
 
+	parent := path.Dir(target)
+	existing, getErr := s.store.Q.GetFile(r.Context(), target)
+	switch {
+	case getErr == nil:
+		owner := ""
+		if existing.UserID.Valid {
+			owner = existing.UserID.String
+		}
+		up, uerr := s.EffectivePermissions(r.Context(), target, info, nullableStr(owner))
+		if uerr != nil || (s.cfg.AuthEnabled() && !up.Has(acl.PermissionUpdate)) {
+			s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
+			return
+		}
+	case errors.Is(getErr, sql.ErrNoRows):
+		parentPerms, err := s.EffectivePermissions(r.Context(), parent, info, nil)
+		if err != nil {
+			s.writeError(w, r, err, http.StatusInternalServerError)
+			return
+		}
+		if s.cfg.AuthEnabled() && !parentPerms.Has(acl.PermissionCreate) {
+			s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
+			return
+		}
+	default:
+		s.writeError(w, r, getErr, http.StatusInternalServerError)
+		return
+	}
+
+	if err := s.ensureDir(r.Context(), parent, info); err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, errForbidden) {
+			status = http.StatusForbidden
+		}
+		s.writeError(w, r, err, status)
+		return
+	}
+
+	ct := sniffContentType(path.Base(target), contentType)
+	if err := s.storage.PutObject(r.Context(), target, size, body, ct); err != nil {
+		s.writeError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+	now := time.Now().UTC()
+	params := dbq.UpsertFileParams{
+		Path: target, Size: size, ContentType: ct, Description: description,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	if getErr == nil {
+		params.CreatedAt = existing.CreatedAt
+		params.UserID = existing.UserID
+		if description == "" {
+			params.Description = existing.Description
+		}
+	} else if info != nil && info.Subject != "" && info.Subject != "guest" {
+		params.UserID = database.NullString(&info.Subject)
+	}
+	if _, err := s.store.Q.UpsertFile(r.Context(), params); err != nil {
+		s.writeError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) uploadMultipartIntoDir(w http.ResponseWriter, r *http.Request, dir string, info *UserInfo) {
 	mr, err := r.MultipartReader()
 	if err != nil {
 		s.writeError(w, r, err, http.StatusBadRequest)
@@ -539,75 +627,53 @@ func (s *Server) UploadFileAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	defer filePart.Close()
 
-	if meta.Size > s.cfg.Upload.MaxSize.Bytes {
-		s.writeError(w, r, errors.New("file too large"), http.StatusBadRequest)
-		return
-	}
-	if meta.Size > s.cfg.Upload.ChunkSize.Bytes {
-		s.writeError(w, r, errors.New("use resumable upload for large files"), http.StatusBadRequest)
-		return
-	}
 	target, err := resolveUploadTarget(dir, meta.Name)
 	if err != nil {
 		s.writeError(w, r, err, http.StatusBadRequest)
 		return
 	}
-	if existing, err := s.store.Q.GetFile(r.Context(), target); err == nil {
-		owner := ""
-		if existing.UserID.Valid {
-			owner = existing.UserID.String
-		}
-		up, uerr := s.EffectivePermissions(r.Context(), target, info, nullableStr(owner))
-		if uerr != nil || !up.Has(acl.PermissionUpdate) {
-			s.writeError(w, r, errors.New("file exists"), http.StatusConflict)
-			return
-		}
-	} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		s.writeError(w, r, err, http.StatusInternalServerError)
-		return
-	}
-	ct := sniffContentType(path.Base(target), filePart.Header.Get("Content-Type"))
-	if err := s.storage.PutObject(r.Context(), target, meta.Size, filePart, ct); err != nil {
-		s.writeError(w, r, err, http.StatusInternalServerError)
-		return
-	}
-	now := time.Now().UTC()
-	params := dbq.UpsertFileParams{
-		Path: target, Size: meta.Size, ContentType: ct, Description: meta.Description,
-		CreatedAt: now, UpdatedAt: now,
-	}
-	if info != nil && info.Subject != "" && info.Subject != "guest" {
-		params.UserID = database.NullString(&info.Subject)
-	}
-	if _, err := s.store.Q.UpsertFile(r.Context(), params); err != nil {
-		s.writeError(w, r, err, http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	s.putRawFile(w, r, target, info, meta.Size, filePart, filePart.Header.Get("Content-Type"), meta.Description)
 }
 
-func (s *Server) mkdirAPI(w http.ResponseWriter, r *http.Request, dir string, info *UserInfo) {
-	var body struct {
-		Name  string `json:"name"`
-		Mkdir bool   `json:"mkdir"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		s.writeError(w, r, err, http.StatusBadRequest)
-		return
-	}
-	name := strings.TrimSpace(body.Name)
-	if !body.Mkdir || name == "" || name == "." || name == ".." || strings.ContainsAny(name, "/\\") {
+func (s *Server) mkdirPath(w http.ResponseWriter, r *http.Request, target string, info *UserInfo) {
+	target = acl.NormalizePath(target)
+	if target == "/" {
 		s.writeError(w, r, errors.New("invalid folder name"), http.StatusBadRequest)
 		return
 	}
-	target := acl.NormalizePath(path.Join(dir, name))
 	if acl.IsReservedPath(target) {
 		s.writeError(w, r, errors.New("reserved path"), http.StatusBadRequest)
+		return
+	}
+	perms, err := s.EffectivePermissions(r.Context(), path.Dir(target), info, nil)
+	if err != nil {
+		s.writeError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+	if s.cfg.AuthEnabled() && !perms.Has(acl.PermissionCreate) {
+		s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
 		return
 	}
 	if _, err := s.store.Q.GetFile(r.Context(), target); err == nil {
 		s.writeError(w, r, errors.New("already exists"), http.StatusConflict)
 		return
+	}
+	now := time.Now().UTC()
+	for _, anc := range acl.AncestorPathsRootFirst(target) {
+		if anc == "/" || anc == target {
+			continue
+		}
+		if _, err := s.store.Q.GetFile(r.Context(), anc); err == nil {
+			continue
+		}
+		if err := s.storage.Mkdir(r.Context(), anc); err != nil {
+			s.writeError(w, r, err, http.StatusInternalServerError)
+			return
+		}
+		if _, err := s.store.Q.UpsertFile(r.Context(), dirFileParams(anc, now, "")); err != nil {
+			s.writeError(w, r, err, http.StatusInternalServerError)
+			return
+		}
 	}
 	if err := s.storage.Mkdir(r.Context(), target); err != nil {
 		s.writeError(w, r, err, http.StatusInternalServerError)
@@ -617,7 +683,7 @@ func (s *Server) mkdirAPI(w http.ResponseWriter, r *http.Request, dir string, in
 	if info != nil {
 		owner = info.Subject
 	}
-	if _, err := s.store.Q.UpsertFile(r.Context(), dirFileParams(target, time.Now().UTC(), owner)); err != nil {
+	if _, err := s.store.Q.UpsertFile(r.Context(), dirFileParams(target, now, owner)); err != nil {
 		s.writeError(w, r, err, http.StatusInternalServerError)
 		return
 	}
@@ -881,7 +947,7 @@ func (s *Server) PatchFileAPI(w http.ResponseWriter, r *http.Request) {
 	var replace io.ReadCloser
 	ctHeader := r.Header.Get("Content-Type")
 	if strings.Contains(ctHeader, "application/json") {
-		if err := json.NewDecoder(r.Body).Decode(&meta); err != nil {
+		if err := decodeJSONOptional(r, &meta); err != nil {
 			s.writeError(w, r, err, http.StatusBadRequest)
 			return
 		}
@@ -1016,13 +1082,25 @@ func (s *Server) MoveFilesAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var names []string
-	if err := json.NewDecoder(r.Body).Decode(&names); err != nil {
+	if err := decodeJSONOptional(r, &names); err != nil {
 		s.writeError(w, r, err, http.StatusBadRequest)
 		return
 	}
 	base := s.filePathFromRequest(r)
-	for _, name := range names {
-		src := acl.NormalizePath(path.Join(base, name))
+	// No body → move the request path itself into Destination.
+	var srcs []string
+	if len(names) == 0 {
+		if base == "/" {
+			s.writeError(w, r, errors.New("cannot move root"), http.StatusBadRequest)
+			return
+		}
+		srcs = []string{base}
+	} else {
+		for _, name := range names {
+			srcs = append(srcs, acl.NormalizePath(path.Join(base, name)))
+		}
+	}
+	for _, src := range srcs {
 		file, err := s.store.Q.GetFile(r.Context(), src)
 		if err != nil {
 			continue
@@ -1048,7 +1126,7 @@ func (s *Server) DeleteFilesAPI(w http.ResponseWriter, r *http.Request) {
 	info := GetUserInfo(r)
 	base := s.filePathFromRequest(r)
 	var names []string
-	_ = json.NewDecoder(r.Body).Decode(&names)
+	_ = decodeJSONOptional(r, &names)
 	targets := names
 	if len(targets) == 0 {
 		targets = []string{""}

@@ -67,7 +67,11 @@ func (s *stringList) UnmarshalJSON(b []byte) error {
 
 func (s stringList) Strings() []string { return []string(s) }
 
-const SessionCookieName = "X-Session-ID"
+const (
+	SessionCookieName = "X-Session-ID"
+	SudoCookieName    = "godrive_sudo"
+	SudoHeaderName    = "X-Godrive-Sudo"
+)
 
 type authKey struct{}
 
@@ -87,6 +91,47 @@ type UserInfo struct {
 	Home     string   `json:"home"`
 	Groups   []string `json:"groups"`
 	Username string   `json:"preferred_username"`
+	// Sudo is set per-request for admins (cookie or X-Godrive-Sudo). When true,
+	// EffectivePermissions bypasses ACLs. Default is off.
+	Sudo bool `json:"-"`
+}
+
+func requestWantsSudo(r *http.Request) bool {
+	if v := strings.TrimSpace(r.Header.Get(SudoHeaderName)); v == "1" || strings.EqualFold(v, "true") {
+		return true
+	}
+	if c, err := r.Cookie(SudoCookieName); err == nil {
+		v := strings.TrimSpace(c.Value)
+		return v == "1" || strings.EqualFold(v, "true")
+	}
+	return false
+}
+
+func (s *Server) adminSudo(info *UserInfo) bool {
+	return info != nil && info.Sudo && s.isAdmin(info)
+}
+
+func (s *Server) setSudoCookie(w http.ResponseWriter, on bool) {
+	secure := s.cfg.AuthEnabled() && s.cfg.Auth.Secure
+	c := &http.Cookie{
+		Name:     SudoCookieName,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   secure,
+	}
+	if on {
+		// Session cookie only — cleared when the browser session ends (and on logout).
+		c.Value = "1"
+	} else {
+		c.Value = ""
+		c.MaxAge = -1
+	}
+	http.SetCookie(w, c)
+}
+
+func (s *Server) clearSudoCookie(w http.ResponseWriter) {
+	s.setSudoCookie(w, false)
 }
 
 func GetUserInfo(r *http.Request) *UserInfo {
@@ -178,6 +223,9 @@ func (s *Server) AuthMiddleware(next http.Handler) http.Handler {
 			info, sessExp = s.tryRefresh(w, r)
 		}
 		if info != nil {
+			if s.isAdmin(info) && requestWantsSudo(r) {
+				info.Sudo = true
+			}
 			ctx := context.WithValue(r.Context(), UserInfoKey, info)
 			if !sessExp.IsZero() {
 				ctx = context.WithValue(ctx, sessionExpiryKey{}, sessExp)
@@ -425,6 +473,7 @@ func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.clearAuthCookies(w)
+	s.clearSudoCookie(w)
 	if r.Method == http.MethodGet {
 		if loc := s.rpLogoutURL(idToken); loc != "" {
 			http.Redirect(w, r, loc, http.StatusFound)
@@ -436,11 +485,12 @@ func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) Me(w http.ResponseWriter, r *http.Request) {
-	info := GetUserInfo(r)
+func (s *Server) meResponse(r *http.Request, info *UserInfo) map[string]any {
 	if !s.cfg.AuthEnabled() {
-		// Open mode: no OIDC — treat the operator as a local admin.
-		s.writeJSON(w, map[string]any{
+		if info == nil {
+			info = &UserInfo{Subject: "local", Username: "local", Groups: []string{"admin"}, Home: "/"}
+		}
+		return map[string]any{
 			"authenticated":    true,
 			"auth_enabled":     false,
 			"id":               info.Subject,
@@ -449,10 +499,10 @@ func (s *Server) Me(w http.ResponseWriter, r *http.Request) {
 			"is_admin":         true,
 			"is_access":        true,
 			"is_guest":         false,
+			"sudo":             true,
 			"groups":           []string{"admin"},
 			"available_groups": []string{"admin"},
-		}, http.StatusOK)
-		return
+		}
 	}
 	if info == nil {
 		out := map[string]any{
@@ -464,14 +514,13 @@ func (s *Server) Me(w http.ResponseWriter, r *http.Request) {
 			out["is_guest"] = true
 			out["home"] = "/"
 		}
-		s.writeJSON(w, out, http.StatusOK)
-		return
+		return out
 	}
 	home := info.Home
 	if s.isGuest(info) {
 		home = "/"
 	}
-	s.writeJSON(w, map[string]any{
+	out := map[string]any{
 		"authenticated":      true,
 		"auth_enabled":       true,
 		"guests_allowed":     s.cfg.Auth.Groups.Guest,
@@ -486,7 +535,15 @@ func (s *Server) Me(w http.ResponseWriter, r *http.Request) {
 		"is_access":          s.isAccess(info),
 		"is_guest":           s.isGuest(info),
 		"session_expires_at": sessionExpiryJSON(GetSessionExpiry(r)),
-	}, http.StatusOK)
+	}
+	if s.isAdmin(info) {
+		out["sudo"] = info.Sudo
+	}
+	return out
+}
+
+func (s *Server) Me(w http.ResponseWriter, r *http.Request) {
+	s.writeJSON(w, s.meResponse(r, GetUserInfo(r)), http.StatusOK)
 }
 
 func sessionExpiryJSON(t time.Time) any {

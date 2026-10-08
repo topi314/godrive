@@ -29,8 +29,17 @@ func TestEffectivePermissions(t *testing.T) {
 		}
 	})
 
-	t.Run("admin bypass", func(t *testing.T) {
+	t.Run("admin without sudo uses ACL", func(t *testing.T) {
 		got, err := e.s.EffectivePermissions(e.ctx, "/private", admin, nil)
+		if err != nil || got != 0 {
+			t.Fatalf("got %#x err=%v", got, err)
+		}
+	})
+
+	t.Run("admin sudo bypass", func(t *testing.T) {
+		sudo := *admin
+		sudo.Sudo = true
+		got, err := e.s.EffectivePermissions(e.ctx, "/private", &sudo, nil)
 		if err != nil || got != acl.PermissionsAll {
 			t.Fatalf("got %#x err=%v", got, err)
 		}

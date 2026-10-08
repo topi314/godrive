@@ -10,6 +10,8 @@ import (
 )
 
 type Querier interface {
+	CountActiveUploadSessionsByShare(ctx context.Context, arg CountActiveUploadSessionsByShareParams) (int64, error)
+	CountActiveUploadSessionsByUser(ctx context.Context, arg CountActiveUploadSessionsByUserParams) (int64, error)
 	CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) (ApiToken, error)
 	CreateShare(ctx context.Context, arg CreateShareParams) (Share, error)
 	CreateUploadSession(ctx context.Context, arg CreateUploadSessionParams) (UploadSession, error)

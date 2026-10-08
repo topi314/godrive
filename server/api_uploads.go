@@ -103,6 +103,37 @@ func (s *Server) validateUploadTarget(ctx context.Context, baseDir, name string,
 	return target, errs
 }
 
+func (s *Server) enforceUploadParallel(ctx context.Context, userID, shareID string, now time.Time) error {
+	limit := int64(s.cfg.Upload.MaxParallel)
+	if limit <= 0 {
+		return nil
+	}
+	var (
+		n   int64
+		err error
+	)
+	if shareID != "" {
+		n, err = s.store.Q.CountActiveUploadSessionsByShare(ctx, dbq.CountActiveUploadSessionsByShareParams{
+			ShareID: database.NullString(&shareID),
+			Now:     now,
+		})
+	} else if userID != "" {
+		n, err = s.store.Q.CountActiveUploadSessionsByUser(ctx, dbq.CountActiveUploadSessionsByUserParams{
+			UserID: userID,
+			Now:    now,
+		})
+	} else {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if n >= limit {
+		return errors.New("too many concurrent uploads")
+	}
+	return nil
+}
+
 func (s *Server) PreflightUploadAPI(w http.ResponseWriter, r *http.Request) {
 	var body uploadPreflightBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -181,9 +212,13 @@ func (s *Server) CreateUploadSessionAPI(w http.ResponseWriter, r *http.Request) 
 		s.writeJSON(w, map[string]any{"ok": false, "errors": errs}, http.StatusBadRequest)
 		return
 	}
+	now := time.Now().UTC()
+	if err := s.enforceUploadParallel(r.Context(), ownerSubject, body.ShareID, now); err != nil {
+		s.writeError(w, r, err, http.StatusTooManyRequests)
+		return
+	}
 	id := randomID(24)
 	tempKey := id
-	now := time.Now().UTC()
 	uploadID, err := s.storage.CreateUpload(r.Context(), tempKey, body.Size)
 	if err != nil {
 		s.writeError(w, r, err, http.StatusInternalServerError)
@@ -287,6 +322,10 @@ func (s *Server) PatchUploadSessionAPI(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, errors.New("content-length required"), http.StatusBadRequest)
 		return
 	}
+	if n > s.cfg.Upload.ChunkSize.Bytes {
+		s.writeError(w, r, errors.New("chunk too large"), http.StatusRequestEntityTooLarge)
+		return
+	}
 	if sess.Offset+n > sess.Size {
 		s.writeError(w, r, errors.New("chunk exceeds size"), http.StatusBadRequest)
 		return
@@ -347,9 +386,7 @@ func (s *Server) CompleteUploadSessionAPI(w http.ResponseWriter, r *http.Request
 			Deny          int64  `json:"deny"`
 		} `json:"acl"`
 	}
-	if r.Body != nil && r.ContentLength != 0 {
-		_ = json.NewDecoder(r.Body).Decode(&body)
-	}
+	_ = decodeJSONOptional(r, &body)
 	desc := sess.Description
 	if body.Description != "" {
 		desc = body.Description
@@ -398,7 +435,7 @@ func (s *Server) CompleteUploadSessionAPI(w http.ResponseWriter, r *http.Request
 	info := GetUserInfo(r)
 	if len(body.ACL) > 0 && info != nil && !s.isGuest(info) {
 		perms, _ := s.EffectivePermissions(r.Context(), sess.Path, info, nullableStr(sess.UserID))
-		if perms.Has(acl.PermissionUpdatePermissions) || s.isAdmin(info) || info.Subject == sess.UserID {
+		if perms.Has(acl.PermissionUpdatePermissions) || s.adminSudo(info) || info.Subject == sess.UserID {
 			_ = s.store.Q.DeleteACLForPath(r.Context(), sess.Path)
 			for _, row := range body.ACL {
 				_, _ = s.store.Q.UpsertACL(r.Context(), dbq.UpsertACLParams{

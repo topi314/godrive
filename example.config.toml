@@ -100,8 +100,8 @@ guest = false
 [upload]
 max_size = "50GB"   # global upload ceiling
 chunk_size = "16MB" # resumable PATCH body size
-session_ttl = "72h" # how long incomplete uploads can be resumed
-max_parallel = 2    # concurrent file uploads in the UI
+session_ttl = "2h" # how long incomplete uploads can be resumed
+max_parallel = 6    # concurrent resumable upload sessions per user/share
 
 [otel]
 # OTLP traces + Prometheus metrics scrape endpoint.
