@@ -162,7 +162,7 @@ All bits combined = `63`.
 
 ## Errors
 
-Common statuses: `400` bad input, `401` missing/invalid auth, `403` ACL denied, `404` missing, `409` conflict (exists / upload offset).
+Common statuses: `400` bad input, `401` missing/invalid auth, `403` ACL denied, `404` missing, `409` conflict (exists / upload_offset).
 
 <details>
 <summary>Example error bodies</summary>
@@ -810,7 +810,7 @@ Requires **Update** on the existing file (and **Create** on the parent). Then `P
   "id": "u_01JABC9XYZUPLOADSESS",
   "path": "/home/alice/docs/dataset-2026-10.parquet",
   "size": 8589934592,
-  "offset": 0,
+  "upload_offset": 0,
   "chunk_size": 16777216,
   "expires_at": "2026-10-11T00:00:00Z"
 }
@@ -820,7 +820,7 @@ Requires **Update** on the existing file (and **Create** on the parent). Then `P
 
 #### Upload a chunk
 
-`Upload-Offset` must equal the session’s current `offset`. Response includes the new `offset`. Mismatch → `409`. Chunk body larger than `chunk_size` → `413`.
+`Upload-Offset` must equal the session’s current `upload_offset`. Response includes the new `upload_offset`. Mismatch → `409`. Chunk body larger than `chunk_size` → `413`.
 
 <details>
 <summary>Example request</summary>
@@ -854,7 +854,7 @@ Content-Length: 16777216
 
 ```json
 {
-  "offset": 16777216
+  "upload_offset": 16777216
 }
 ```
 

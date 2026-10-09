@@ -271,7 +271,7 @@ func (s *s3Storage) CreateUpload(ctx context.Context, tempKey string, size int64
 	return *out.UploadId, nil
 }
 
-func (s *s3Storage) WriteUpload(ctx context.Context, tempKey string, offset int64, r io.Reader, n int64, uploadID string, partNumber int32) (string, error) {
+func (s *s3Storage) WriteUpload(ctx context.Context, tempKey string, uploadOffset int64, r io.Reader, n int64, uploadID string, partNumber int32) (string, error) {
 	out, err := s.client.UploadPart(ctx, &s3.UploadPartInput{
 		Bucket:        aws.String(s.bucket),
 		Key:           aws.String(s.uploadKey(tempKey)),

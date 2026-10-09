@@ -3,12 +3,10 @@
 //   sqlc v1.31.1
 // source: shares.sql
 
-package dbq
+package sqlite
 
 import (
 	"context"
-	"database/sql"
-	"time"
 )
 
 const createShare = `-- name: CreateShare :one
@@ -16,14 +14,6 @@ INSERT INTO shares (id, path, user_id, created_at, expires_at)
 VALUES (?1, ?2, ?3, ?4, ?5)
 RETURNING id, path, user_id, created_at, expires_at
 `
-
-type CreateShareParams struct {
-	ID        string       `json:"id"`
-	Path      string       `json:"path"`
-	UserID    string       `json:"user_id"`
-	CreatedAt time.Time    `json:"created_at"`
-	ExpiresAt sql.NullTime `json:"expires_at"`
-}
 
 func (q *Queries) CreateShare(ctx context.Context, arg CreateShareParams) (Share, error) {
 	row := q.db.QueryRowContext(ctx, createShare,
@@ -82,11 +72,6 @@ func (q *Queries) GetShare(ctx context.Context, id string) (Share, error) {
 const listSharesByPath = `-- name: ListSharesByPath :many
 SELECT id, path, user_id, created_at, expires_at FROM shares WHERE path = ?1 OR path LIKE ?2 ORDER BY created_at DESC
 `
-
-type ListSharesByPathParams struct {
-	Path     string `json:"path"`
-	PathLike string `json:"path_like"`
-}
 
 func (q *Queries) ListSharesByPath(ctx context.Context, arg ListSharesByPathParams) ([]Share, error) {
 	rows, err := q.db.QueryContext(ctx, listSharesByPath, arg.Path, arg.PathLike)
@@ -153,11 +138,6 @@ func (q *Queries) ListSharesByUser(ctx context.Context, userID string) ([]Share,
 const updateSharePath = `-- name: UpdateSharePath :exec
 UPDATE shares SET path = ?1 WHERE id = ?2
 `
-
-type UpdateSharePathParams struct {
-	Path string `json:"path"`
-	ID   string `json:"id"`
-}
 
 func (q *Queries) UpdateSharePath(ctx context.Context, arg UpdateSharePathParams) error {
 	_, err := q.db.ExecContext(ctx, updateSharePath, arg.Path, arg.ID)

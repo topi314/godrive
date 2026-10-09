@@ -20,7 +20,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/topi314/godrive/server/acl"
 	"github.com/topi314/godrive/server/database"
-	"github.com/topi314/godrive/server/database/dbq"
 	"github.com/topi314/godrive/server/storage"
 )
 
@@ -57,7 +56,7 @@ func (s *Server) pathExists(ctx context.Context, p string) (bool, error) {
 	} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return false, err
 	}
-	rows, err := s.store.Q.ListFilesUnder(ctx, dbq.ListFilesUnderParams{
+	rows, err := s.store.Q.ListFilesUnder(ctx, database.ListFilesUnderParams{
 		Path:     p,
 		PathLike: acl.LikeUnder(p),
 	})
@@ -83,7 +82,7 @@ func (s *Server) listDir(ctx context.Context, dir string, info *UserInfo) ([]Fil
 		}
 	}
 
-	rows, err := s.store.Q.ListFilesUnder(ctx, dbq.ListFilesUnderParams{
+	rows, err := s.store.Q.ListFilesUnder(ctx, database.ListFilesUnderParams{
 		Path:     dir,
 		PathLike: acl.LikeUnder(dir),
 	})
@@ -153,7 +152,7 @@ func (s *Server) listDir(ctx context.Context, dir string, info *UserInfo) ([]Fil
 	return out, nil
 }
 
-func (s *Server) fileEntryFromRow(ctx context.Context, row dbq.File, owner string, eff acl.Permissions) FileEntry {
+func (s *Server) fileEntryFromRow(ctx context.Context, row database.File, owner string, eff acl.Permissions) FileEntry {
 	entry := FileEntry{
 		Path: row.Path, Name: path.Base(row.Path), IsDir: storage.IsDirectory(row.ContentType),
 		Size: row.Size, ContentType: row.ContentType, Description: row.Description,
@@ -347,7 +346,7 @@ func zipEntryName(root, filePath string, isDir bool) string {
 
 func (s *Server) streamZip(w http.ResponseWriter, r *http.Request, root string, info *UserInfo, skipACL bool) {
 	root = acl.NormalizePath(root)
-	rows, err := s.store.Q.ListFilesUnder(r.Context(), dbq.ListFilesUnderParams{
+	rows, err := s.store.Q.ListFilesUnder(r.Context(), database.ListFilesUnderParams{
 		Path:     root,
 		PathLike: acl.LikeUnder(root),
 	})
@@ -566,7 +565,7 @@ func (s *Server) putRawFile(w http.ResponseWriter, r *http.Request, target strin
 		return
 	}
 	now := time.Now().UTC()
-	params := dbq.UpsertFileParams{
+	params := database.UpsertFileParams{
 		Path: target, Size: size, ContentType: ct, Description: description,
 		CreatedAt: now, UpdatedAt: now,
 	}
@@ -733,8 +732,8 @@ func (s *Server) ensureDirUnchecked(ctx context.Context, destDir, ownerSubject s
 	return s.ensureDirWithOpts(ctx, destDir, info, false)
 }
 
-func dirFileParams(p string, now time.Time, ownerSubject string) dbq.UpsertFileParams {
-	params := dbq.UpsertFileParams{
+func dirFileParams(p string, now time.Time, ownerSubject string) database.UpsertFileParams {
+	params := database.UpsertFileParams{
 		Path: p, Size: 0, ContentType: storage.ContentTypeDirectory,
 		CreatedAt: now, UpdatedAt: now,
 	}
@@ -825,7 +824,7 @@ func (s *Server) authorizeRename(ctx context.Context, from, to string, info *Use
 
 func (s *Server) remapPrefix(ctx context.Context, from, to string) error {
 	now := time.Now().UTC()
-	files, err := s.store.Q.ListFilesUnder(ctx, dbq.ListFilesUnderParams{Path: from, PathLike: acl.LikeUnder(from)})
+	files, err := s.store.Q.ListFilesUnder(ctx, database.ListFilesUnderParams{Path: from, PathLike: acl.LikeUnder(from)})
 	if err != nil {
 		return err
 	}
@@ -835,14 +834,14 @@ func (s *Server) remapPrefix(ctx context.Context, from, to string) error {
 		if newPath == f.Path {
 			continue
 		}
-		if _, err := s.store.Q.UpdateFileMeta(ctx, dbq.UpdateFileMetaParams{
+		if _, err := s.store.Q.UpdateFileMeta(ctx, database.UpdateFileMetaParams{
 			Path: f.Path, NewPath: newPath, Size: f.Size, ContentType: f.ContentType,
 			Description: f.Description, UpdatedAt: now,
 		}); err != nil {
 			return err
 		}
 	}
-	acls, err := s.store.Q.ListACLUnder(ctx, dbq.ListACLUnderParams{Path: from, PathLike: acl.LikeUnder(from)})
+	acls, err := s.store.Q.ListACLUnder(ctx, database.ListACLUnderParams{Path: from, PathLike: acl.LikeUnder(from)})
 	if err != nil {
 		return err
 	}
@@ -851,17 +850,17 @@ func (s *Server) remapPrefix(ctx context.Context, from, to string) error {
 		if newPath == row.Path {
 			continue
 		}
-		if _, err := s.store.Q.UpsertACL(ctx, dbq.UpsertACLParams{
+		if _, err := s.store.Q.UpsertACL(ctx, database.UpsertACLParams{
 			Path: newPath, PrincipalType: row.PrincipalType, PrincipalID: row.PrincipalID,
 			Allow: row.Allow, Deny: row.Deny,
 		}); err != nil {
 			return err
 		}
-		_ = s.store.Q.DeleteACL(ctx, dbq.DeleteACLParams{
+		_ = s.store.Q.DeleteACL(ctx, database.DeleteACLParams{
 			Path: row.Path, PrincipalType: row.PrincipalType, PrincipalID: row.PrincipalID,
 		})
 	}
-	shares, err := s.store.Q.ListSharesByPath(ctx, dbq.ListSharesByPathParams{Path: from, PathLike: acl.LikeUnder(from)})
+	shares, err := s.store.Q.ListSharesByPath(ctx, database.ListSharesByPathParams{Path: from, PathLike: acl.LikeUnder(from)})
 	if err != nil {
 		return err
 	}
@@ -870,7 +869,7 @@ func (s *Server) remapPrefix(ctx context.Context, from, to string) error {
 		if newPath == sh.Path {
 			continue
 		}
-		if err := s.store.Q.UpdateSharePath(ctx, dbq.UpdateSharePathParams{ID: sh.ID, Path: newPath}); err != nil {
+		if err := s.store.Q.UpdateSharePath(ctx, database.UpdateSharePathParams{ID: sh.ID, Path: newPath}); err != nil {
 			return err
 		}
 	}
@@ -894,7 +893,7 @@ func (s *Server) renamePath(ctx context.Context, from, to string, info *UserInfo
 	if err := s.ensureDir(ctx, path.Dir(to), info); err != nil {
 		return err
 	}
-	existing, err := s.store.Q.ListFilesUnder(ctx, dbq.ListFilesUnderParams{Path: to, PathLike: acl.LikeUnder(to)})
+	existing, err := s.store.Q.ListFilesUnder(ctx, database.ListFilesUnderParams{Path: to, PathLike: acl.LikeUnder(to)})
 	if err != nil {
 		return err
 	}
@@ -1036,7 +1035,7 @@ func (s *Server) PatchFileAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		now := time.Now().UTC()
-		if _, err := s.store.Q.UpdateFileMeta(r.Context(), dbq.UpdateFileMetaParams{
+		if _, err := s.store.Q.UpdateFileMeta(r.Context(), database.UpdateFileMetaParams{
 			Path: newPath, NewPath: newPath, Size: size, ContentType: ct, Description: desc, UpdatedAt: now,
 		}); err != nil {
 			s.writeError(w, r, err, http.StatusInternalServerError)
@@ -1055,7 +1054,7 @@ func (s *Server) PatchFileAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	if desc != file.Description {
 		now := time.Now().UTC()
-		if _, err := s.store.Q.UpdateFileMeta(r.Context(), dbq.UpdateFileMetaParams{
+		if _, err := s.store.Q.UpdateFileMeta(r.Context(), database.UpdateFileMetaParams{
 			Path: p, NewPath: p, Size: size, ContentType: ct, Description: desc, UpdatedAt: now,
 		}); err != nil {
 			s.writeError(w, r, err, http.StatusInternalServerError)
@@ -1146,12 +1145,12 @@ func (s *Server) DeleteFilesAPI(w http.ResponseWriter, r *http.Request) {
 			s.writeError(w, r, fmt.Errorf("forbidden: %s", p), http.StatusForbidden)
 			return
 		}
-		rows, _ := s.store.Q.ListFilesUnder(r.Context(), dbq.ListFilesUnderParams{Path: p, PathLike: acl.LikeUnder(p)})
+		rows, _ := s.store.Q.ListFilesUnder(r.Context(), database.ListFilesUnderParams{Path: p, PathLike: acl.LikeUnder(p)})
 		for _, row := range rows {
 			_ = s.storage.DeleteObject(r.Context(), row.Path)
 		}
 		_ = s.storage.DeleteObject(r.Context(), p)
-		_ = s.store.Q.DeleteFilesUnder(r.Context(), dbq.DeleteFilesUnderParams{Path: p, PathLike: acl.LikeUnder(p)})
+		_ = s.store.Q.DeleteFilesUnder(r.Context(), database.DeleteFilesUnderParams{Path: p, PathLike: acl.LikeUnder(p)})
 		_ = s.store.Q.DeleteACLForPath(r.Context(), p)
 		_ = s.store.Q.DeleteSharesForPath(r.Context(), p)
 	}

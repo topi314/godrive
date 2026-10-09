@@ -3,11 +3,10 @@
 //   sqlc v1.31.1
 // source: tokens.sql
 
-package dbq
+package sqlite
 
 import (
 	"context"
-	"time"
 )
 
 const createAPIToken = `-- name: CreateAPIToken :one
@@ -15,14 +14,6 @@ INSERT INTO api_tokens (token_hash, token_prefix, user_id, description, created_
 VALUES (?1, ?2, ?3, ?4, ?5)
 RETURNING token_hash, token_prefix, user_id, description, created_at
 `
-
-type CreateAPITokenParams struct {
-	TokenHash   string    `json:"token_hash"`
-	TokenPrefix string    `json:"token_prefix"`
-	UserID      string    `json:"user_id"`
-	Description string    `json:"description"`
-	CreatedAt   time.Time `json:"created_at"`
-}
 
 func (q *Queries) CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) (ApiToken, error) {
 	row := q.db.QueryRowContext(ctx, createAPIToken,
@@ -46,11 +37,6 @@ func (q *Queries) CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) 
 const deleteAPIToken = `-- name: DeleteAPIToken :exec
 DELETE FROM api_tokens WHERE token_hash = ?1 AND user_id = ?2
 `
-
-type DeleteAPITokenParams struct {
-	TokenHash string `json:"token_hash"`
-	UserID    string `json:"user_id"`
-}
 
 func (q *Queries) DeleteAPIToken(ctx context.Context, arg DeleteAPITokenParams) error {
 	_, err := q.db.ExecContext(ctx, deleteAPIToken, arg.TokenHash, arg.UserID)

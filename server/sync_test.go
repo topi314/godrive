@@ -9,7 +9,6 @@ import (
 
 	"github.com/topi314/godrive/server/config"
 	"github.com/topi314/godrive/server/database"
-	"github.com/topi314/godrive/server/database/dbq"
 	"github.com/topi314/godrive/server/storage"
 )
 
@@ -43,7 +42,7 @@ func TestSyncPrefixPreservesUpdatedAt(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Deliberately different MIME than list/stat will report — refresh must not rewrite.
-	if _, err := store.Q.UpsertFile(ctx, dbq.UpsertFileParams{
+	if _, err := store.Q.UpsertFile(ctx, database.UpsertFileParams{
 		Path: "/a.txt", Size: 2, ContentType: "application/x-custom", CreatedAt: stamp, UpdatedAt: stamp,
 	}); err != nil {
 		t.Fatal(err)

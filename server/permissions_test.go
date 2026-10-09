@@ -9,7 +9,6 @@ import (
 	"github.com/topi314/godrive/server/acl"
 	"github.com/topi314/godrive/server/config"
 	"github.com/topi314/godrive/server/database"
-	"github.com/topi314/godrive/server/database/dbq"
 	"github.com/topi314/godrive/server/storage"
 )
 
@@ -102,12 +101,12 @@ func TestProvisionUserHome(t *testing.T) {
 	}
 
 	// Other ACLs on the home path must not block the owner's grant.
-	if err := store.Q.DeleteACL(ctx, dbq.DeleteACLParams{
+	if err := store.Q.DeleteACL(ctx, database.DeleteACLParams{
 		Path: "/home/alice", PrincipalType: acl.PrincipalUser, PrincipalID: "u1",
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Q.UpsertACL(ctx, dbq.UpsertACLParams{
+	if _, err := store.Q.UpsertACL(ctx, database.UpsertACLParams{
 		Path: "/home/alice", PrincipalType: acl.PrincipalGuest, PrincipalID: acl.GuestID,
 		Allow: int64(acl.PermissionRead), Deny: 0,
 	}); err != nil {

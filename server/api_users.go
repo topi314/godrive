@@ -9,7 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/topi314/godrive/server/acl"
-	"github.com/topi314/godrive/server/database/dbq"
+	"github.com/topi314/godrive/server/database"
 )
 
 func (s *Server) PatchMeAPI(w http.ResponseWriter, r *http.Request) {
@@ -92,18 +92,18 @@ func (s *Server) PatchUserAPI(w http.ResponseWriter, r *http.Request) {
 
 var errBadHome = errors.New("invalid home")
 
-func (s *Server) updateUserHome(ctx context.Context, userID, homeRaw string) (dbq.User, error) {
+func (s *Server) updateUserHome(ctx context.Context, userID, homeRaw string) (database.User, error) {
 	home := acl.NormalizePath(homeRaw)
-	user, err := s.store.Q.UpdateUserHome(ctx, dbq.UpdateUserHomeParams{
+	user, err := s.store.Q.UpdateUserHome(ctx, database.UpdateUserHomeParams{
 		ID:        userID,
 		Home:      home,
 		UpdatedAt: time.Now().UTC(),
 	})
 	if err != nil {
-		return dbq.User{}, err
+		return database.User{}, err
 	}
 	if err := s.provisionUserHome(ctx, user.Home, s.userToInfo(user)); err != nil {
-		return dbq.User{}, errors.Join(errBadHome, err)
+		return database.User{}, errors.Join(errBadHome, err)
 	}
 	return user, nil
 }

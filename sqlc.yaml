@@ -1,12 +1,23 @@
 version: "2"
 sql:
   - engine: "sqlite"
-    queries: "server/database/queries"
+    queries: "server/database/sqlite/queries"
     schema: "server/database/migrations/sqlite"
     gen:
       go:
-        package: "dbq"
-        out: "server/database/dbq"
+        package: "sqlite"
+        out: "server/database/sqlite"
+        emit_json_tags: true
+        emit_empty_slices: true
+        emit_interface: true
+  - engine: "postgresql"
+    queries: "server/database/postgres/queries"
+    schema: "server/database/migrations/postgres"
+    gen:
+      go:
+        package: "postgres"
+        out: "server/database/postgres"
+        sql_package: "pgx/v5"
         emit_json_tags: true
         emit_empty_slices: true
         emit_interface: true

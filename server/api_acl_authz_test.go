@@ -12,7 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/topi314/godrive/server/acl"
-	"github.com/topi314/godrive/server/database/dbq"
+	"github.com/topi314/godrive/server/database"
 )
 
 func withChiStar(r *http.Request, star string) *http.Request {
@@ -29,7 +29,7 @@ func TestPermissionsAPIAuthz(t *testing.T) {
 
 	now := time.Now().UTC()
 	for _, id := range []string{"reader", "editor", "stranger"} {
-		if _, err := e.s.store.Q.UpsertUser(e.ctx, dbq.UpsertUserParams{
+		if _, err := e.s.store.Q.UpsertUser(e.ctx, database.UpsertUserParams{
 			ID: id, Username: id, Email: id + "@example.com", Home: "/home/" + id,
 			Groups: "godrive", CreatedAt: now, UpdatedAt: now,
 		}); err != nil {

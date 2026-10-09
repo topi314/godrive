@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/topi314/godrive/server/database/dbq"
+	"github.com/topi314/godrive/server/database"
 )
 
 func (s *Server) ListTokensAPI(w http.ResponseWriter, r *http.Request) {
@@ -45,7 +45,7 @@ func (s *Server) CreateTokenAPI(w http.ResponseWriter, r *http.Request) {
 		prefix = prefix[:8]
 	}
 	now := time.Now().UTC()
-	row, err := s.store.Q.CreateAPIToken(r.Context(), dbq.CreateAPITokenParams{
+	row, err := s.store.Q.CreateAPIToken(r.Context(), database.CreateAPITokenParams{
 		TokenHash: hash, TokenPrefix: prefix, UserID: info.Subject,
 		Description: body.Description, CreatedAt: now,
 	})
@@ -65,7 +65,7 @@ func (s *Server) CreateTokenAPI(w http.ResponseWriter, r *http.Request) {
 func (s *Server) DeleteTokenAPI(w http.ResponseWriter, r *http.Request) {
 	info := GetUserInfo(r)
 	hash := chi.URLParam(r, "hash")
-	if err := s.store.Q.DeleteAPIToken(r.Context(), dbq.DeleteAPITokenParams{
+	if err := s.store.Q.DeleteAPIToken(r.Context(), database.DeleteAPITokenParams{
 		TokenHash: hash, UserID: info.Subject,
 	}); err != nil {
 		s.writeError(w, r, errors.New("not found"), http.StatusNotFound)

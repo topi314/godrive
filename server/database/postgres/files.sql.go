@@ -3,43 +3,36 @@
 //   sqlc v1.31.1
 // source: files.sql
 
-package dbq
+package postgres
 
 import (
 	"context"
-	"database/sql"
-	"time"
 )
 
 const deleteFile = `-- name: DeleteFile :exec
-DELETE FROM files WHERE path = ?1
+DELETE FROM files WHERE path = $1
 `
 
 func (q *Queries) DeleteFile(ctx context.Context, path string) error {
-	_, err := q.db.ExecContext(ctx, deleteFile, path)
+	_, err := q.db.Exec(ctx, deleteFile, path)
 	return err
 }
 
 const deleteFilesUnder = `-- name: DeleteFilesUnder :exec
-DELETE FROM files WHERE path = ?1 OR path LIKE ?2
+DELETE FROM files WHERE path = $1 OR path LIKE $2
 `
 
-type DeleteFilesUnderParams struct {
-	Path     string `json:"path"`
-	PathLike string `json:"path_like"`
-}
-
 func (q *Queries) DeleteFilesUnder(ctx context.Context, arg DeleteFilesUnderParams) error {
-	_, err := q.db.ExecContext(ctx, deleteFilesUnder, arg.Path, arg.PathLike)
+	_, err := q.db.Exec(ctx, deleteFilesUnder, arg.Path, arg.PathLike)
 	return err
 }
 
 const getFile = `-- name: GetFile :one
-SELECT path, size, content_type, description, user_id, created_at, updated_at FROM files WHERE path = ?1
+SELECT path, size, content_type, description, user_id, created_at, updated_at FROM files WHERE path = $1
 `
 
 func (q *Queries) GetFile(ctx context.Context, path string) (File, error) {
-	row := q.db.QueryRowContext(ctx, getFile, path)
+	row := q.db.QueryRow(ctx, getFile, path)
 	var i File
 	err := row.Scan(
 		&i.Path,
@@ -55,17 +48,12 @@ func (q *Queries) GetFile(ctx context.Context, path string) (File, error) {
 
 const listFilesUnder = `-- name: ListFilesUnder :many
 SELECT path, size, content_type, description, user_id, created_at, updated_at FROM files
-WHERE path = ?1 OR path LIKE ?2
+WHERE path = $1 OR path LIKE $2
 ORDER BY path
 `
 
-type ListFilesUnderParams struct {
-	Path     string `json:"path"`
-	PathLike string `json:"path_like"`
-}
-
 func (q *Queries) ListFilesUnder(ctx context.Context, arg ListFilesUnderParams) ([]File, error) {
-	rows, err := q.db.QueryContext(ctx, listFilesUnder, arg.Path, arg.PathLike)
+	rows, err := q.db.Query(ctx, listFilesUnder, arg.Path, arg.PathLike)
 	if err != nil {
 		return nil, err
 	}
@@ -86,9 +74,6 @@ func (q *Queries) ListFilesUnder(ctx context.Context, arg ListFilesUnderParams) 
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -97,26 +82,17 @@ func (q *Queries) ListFilesUnder(ctx context.Context, arg ListFilesUnderParams) 
 
 const updateFileMeta = `-- name: UpdateFileMeta :one
 UPDATE files
-SET path = ?1,
-    size = ?2,
-    content_type = ?3,
-    description = ?4,
-    updated_at = ?5
-WHERE path = ?6
+SET path = $1,
+    size = $2,
+    content_type = $3,
+    description = $4,
+    updated_at = $5
+WHERE path = $6
 RETURNING path, size, content_type, description, user_id, created_at, updated_at
 `
 
-type UpdateFileMetaParams struct {
-	NewPath     string    `json:"new_path"`
-	Size        int64     `json:"size"`
-	ContentType string    `json:"content_type"`
-	Description string    `json:"description"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	Path        string    `json:"path"`
-}
-
 func (q *Queries) UpdateFileMeta(ctx context.Context, arg UpdateFileMetaParams) (File, error) {
-	row := q.db.QueryRowContext(ctx, updateFileMeta,
+	row := q.db.QueryRow(ctx, updateFileMeta,
 		arg.NewPath,
 		arg.Size,
 		arg.ContentType,
@@ -139,7 +115,7 @@ func (q *Queries) UpdateFileMeta(ctx context.Context, arg UpdateFileMetaParams) 
 
 const upsertFile = `-- name: UpsertFile :one
 INSERT INTO files (path, size, content_type, description, user_id, created_at, updated_at)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (path) DO UPDATE SET
     size = excluded.size,
     content_type = excluded.content_type,
@@ -149,18 +125,8 @@ ON CONFLICT (path) DO UPDATE SET
 RETURNING path, size, content_type, description, user_id, created_at, updated_at
 `
 
-type UpsertFileParams struct {
-	Path        string         `json:"path"`
-	Size        int64          `json:"size"`
-	ContentType string         `json:"content_type"`
-	Description string         `json:"description"`
-	UserID      sql.NullString `json:"user_id"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-}
-
 func (q *Queries) UpsertFile(ctx context.Context, arg UpsertFileParams) (File, error) {
-	row := q.db.QueryRowContext(ctx, upsertFile,
+	row := q.db.QueryRow(ctx, upsertFile,
 		arg.Path,
 		arg.Size,
 		arg.ContentType,

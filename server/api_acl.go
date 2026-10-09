@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/topi314/godrive/server/acl"
-	"github.com/topi314/godrive/server/database/dbq"
+	"github.com/topi314/godrive/server/database"
 )
 
 type aclRuleBody struct {
@@ -23,7 +23,7 @@ type aclPrincipalBody struct {
 	PrincipalID   string `json:"principal_id"`
 }
 
-func aclJSON(row dbq.PathAcl) map[string]any {
+func aclJSON(row database.PathAcl) map[string]any {
 	return map[string]any{
 		"path":           row.Path,
 		"principal_type": row.PrincipalType,
@@ -80,26 +80,26 @@ func normalizeACLPrincipalID(principalType, principalID string) (string, string,
 	return principalType, pid, nil
 }
 
-func (s *Server) validateACLRule(ctx context.Context, row aclRuleBody) (dbq.UpsertACLParams, error) {
+func (s *Server) validateACLRule(ctx context.Context, row aclRuleBody) (database.UpsertACLParams, error) {
 	pt, pid, err := normalizeACLPrincipalID(row.PrincipalType, row.PrincipalID)
 	if err != nil {
-		return dbq.UpsertACLParams{}, err
+		return database.UpsertACLParams{}, err
 	}
 	switch pt {
 	case acl.PrincipalGroup:
 		if s.cfg.AuthEnabled() && !s.cfg.Auth.Groups.IsAvailableGroup(pid) {
-			return dbq.UpsertACLParams{}, errors.New("unknown group")
+			return database.UpsertACLParams{}, errors.New("unknown group")
 		}
 	case acl.PrincipalUser:
 		if _, err := s.store.Q.GetUser(ctx, pid); err != nil {
-			return dbq.UpsertACLParams{}, errors.New("unknown user")
+			return database.UpsertACLParams{}, errors.New("unknown user")
 		}
 	case acl.PrincipalShare:
 		if _, err := s.store.Q.GetShare(ctx, pid); err != nil {
-			return dbq.UpsertACLParams{}, errors.New("unknown share")
+			return database.UpsertACLParams{}, errors.New("unknown share")
 		}
 	}
-	return dbq.UpsertACLParams{
+	return database.UpsertACLParams{
 		PrincipalType: pt,
 		PrincipalID:   pid,
 		Allow:         row.Allow,
@@ -179,7 +179,7 @@ func (s *Server) PutPermissionsAPI(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, err, http.StatusBadRequest)
 		return
 	}
-	rules := make([]dbq.UpsertACLParams, 0, len(body.ACL))
+	rules := make([]database.UpsertACLParams, 0, len(body.ACL))
 	for _, row := range body.ACL {
 		rule, err := s.validateACLRule(r.Context(), row)
 		if err != nil {
@@ -190,24 +190,17 @@ func (s *Server) PutPermissionsAPI(w http.ResponseWriter, r *http.Request) {
 		rules = append(rules, rule)
 	}
 
-	tx, err := s.store.DB.BeginTx(r.Context(), nil)
-	if err != nil {
-		s.writeError(w, r, err, http.StatusInternalServerError)
-		return
-	}
-	defer tx.Rollback()
-	q := dbq.New(tx)
-	if err := q.DeleteACLForPath(r.Context(), p); err != nil {
-		s.writeError(w, r, err, http.StatusInternalServerError)
-		return
-	}
-	for _, rule := range rules {
-		if _, err := q.UpsertACL(r.Context(), rule); err != nil {
-			s.writeError(w, r, err, http.StatusInternalServerError)
-			return
+	if err := s.store.WithTx(r.Context(), func(q database.Querier) error {
+		if err := q.DeleteACLForPath(r.Context(), p); err != nil {
+			return err
 		}
-	}
-	if err := tx.Commit(); err != nil {
+		for _, rule := range rules {
+			if _, err := q.UpsertACL(r.Context(), rule); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
 		s.writeError(w, r, err, http.StatusInternalServerError)
 		return
 	}
@@ -238,18 +231,18 @@ func (s *Server) PatchPermissionsAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	removes := make([]dbq.DeleteACLParams, 0, len(body.Remove))
+	removes := make([]database.DeleteACLParams, 0, len(body.Remove))
 	for _, row := range body.Remove {
 		pt, pid, err := normalizeACLPrincipalID(row.PrincipalType, row.PrincipalID)
 		if err != nil {
 			s.writeError(w, r, err, http.StatusBadRequest)
 			return
 		}
-		removes = append(removes, dbq.DeleteACLParams{
+		removes = append(removes, database.DeleteACLParams{
 			Path: p, PrincipalType: pt, PrincipalID: pid,
 		})
 	}
-	upserts := make([]dbq.UpsertACLParams, 0, len(body.Upsert))
+	upserts := make([]database.UpsertACLParams, 0, len(body.Upsert))
 	for _, row := range body.Upsert {
 		rule, err := s.validateACLRule(r.Context(), row)
 		if err != nil {
@@ -260,26 +253,19 @@ func (s *Server) PatchPermissionsAPI(w http.ResponseWriter, r *http.Request) {
 		upserts = append(upserts, rule)
 	}
 
-	tx, err := s.store.DB.BeginTx(r.Context(), nil)
-	if err != nil {
-		s.writeError(w, r, err, http.StatusInternalServerError)
-		return
-	}
-	defer tx.Rollback()
-	q := dbq.New(tx)
-	for _, del := range removes {
-		if err := q.DeleteACL(r.Context(), del); err != nil {
-			s.writeError(w, r, err, http.StatusInternalServerError)
-			return
+	if err := s.store.WithTx(r.Context(), func(q database.Querier) error {
+		for _, del := range removes {
+			if err := q.DeleteACL(r.Context(), del); err != nil {
+				return err
+			}
 		}
-	}
-	for _, rule := range upserts {
-		if _, err := q.UpsertACL(r.Context(), rule); err != nil {
-			s.writeError(w, r, err, http.StatusInternalServerError)
-			return
+		for _, rule := range upserts {
+			if _, err := q.UpsertACL(r.Context(), rule); err != nil {
+				return err
+			}
 		}
-	}
-	if err := tx.Commit(); err != nil {
+		return nil
+	}); err != nil {
 		s.writeError(w, r, err, http.StatusInternalServerError)
 		return
 	}

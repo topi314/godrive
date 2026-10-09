@@ -90,7 +90,7 @@ type QueueItem = {
   progress: number
   error: string
   sessionId?: string
-  offset: number
+  uploadOffset: number
 }
 
 const open = defineModel<boolean>({ required: true })
@@ -145,7 +145,7 @@ function addFiles(files: File[]) {
       status: 'pending',
       progress: 0,
       error: '',
-      offset: 0,
+      uploadOffset: 0,
     }
     try {
       const sid = sessionStorage.getItem('godrive-upload:' + item.id)
@@ -211,7 +211,7 @@ async function recheck(item: QueueItem) {
 
 async function uploadOne(item: QueueItem) {
   item.error = ''
-  item.progress = Math.round((item.offset / (item.file.size || 1)) * 100)
+  item.progress = Math.round((item.uploadOffset / (item.file.size || 1)) * 100)
   try {
     // Already validated via preflight when queued; only recheck pending/failed.
     if (item.status !== 'queued') {
@@ -221,16 +221,16 @@ async function uploadOne(item: QueueItem) {
     item.status = 'uploading'
 
     let sessionId = item.sessionId
-    let offset = item.offset
+    let uploadOffset = item.uploadOffset
     if (sessionId) {
       try {
         const st = await api.getUploadSession(sessionId)
-        offset = st.offset
-        item.offset = offset
+        uploadOffset = st.upload_offset
+        item.uploadOffset = uploadOffset
       } catch {
         sessionId = undefined
-        offset = 0
-        item.offset = 0
+        uploadOffset = 0
+        item.uploadOffset = 0
       }
     }
     if (!sessionId) {
@@ -244,7 +244,7 @@ async function uploadOne(item: QueueItem) {
         share_id: props.shareId,
       })
       sessionId = sess.id
-      offset = sess.offset
+      uploadOffset = sess.upload_offset
       item.sessionId = sessionId
       try {
         sessionStorage.setItem('godrive-upload:' + item.id, sessionId)
@@ -252,12 +252,12 @@ async function uploadOne(item: QueueItem) {
     }
 
     const size = item.file.size
-    while (offset < size) {
-      const end = Math.min(offset + chunkSize.value, size)
-      const blob = item.file.slice(offset, end)
-      offset = await api.uploadChunk(sessionId, offset, blob)
-      item.offset = offset
-      item.progress = size ? Math.round((offset / size) * 100) : 100
+    while (uploadOffset < size) {
+      const end = Math.min(uploadOffset + chunkSize.value, size)
+      const blob = item.file.slice(uploadOffset, end)
+      uploadOffset = await api.uploadChunk(sessionId, uploadOffset, blob)
+      item.uploadOffset = uploadOffset
+      item.progress = size ? Math.round((uploadOffset / size) * 100) : 100
     }
 
     const acl: ACLEntry[] = []

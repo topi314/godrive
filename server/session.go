@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/topi314/godrive/server/config"
-	"github.com/topi314/godrive/server/database/dbq"
+	"github.com/topi314/godrive/server/database"
 	"golang.org/x/oauth2"
 )
 
@@ -22,7 +22,7 @@ func GetSessionExpiry(r *http.Request) time.Time {
 	return v
 }
 
-func (s *Server) refreshDeadline(sess dbq.Session) time.Time {
+func (s *Server) refreshDeadline(sess database.Session) time.Time {
 	d := config.DefaultRefreshTTL
 	if s.cfg.AuthEnabled() {
 		d = s.cfg.Auth.RefreshTokenLifespan.Duration
@@ -159,7 +159,7 @@ func (s *Server) rotateSession(ctx context.Context, w http.ResponseWriter, sessi
 	}
 	sessionExp := now.Add(sessionTTL)
 	refreshExp := s.refreshDeadline(sess)
-	_, err = s.store.Q.UpsertSession(ctx, dbq.UpsertSessionParams{
+	_, err = s.store.Q.UpsertSession(ctx, database.UpsertSessionParams{
 		ID:           newID,
 		UserID:       sess.UserID,
 		AccessToken:  access,
@@ -205,7 +205,7 @@ func (s *Server) syncUserFromOIDC(ctx context.Context, userID string, tok *oauth
 		username = userID
 	}
 	now := time.Now().UTC()
-	_, err := s.store.Q.UpsertUser(ctx, dbq.UpsertUserParams{
+	_, err := s.store.Q.UpsertUser(ctx, database.UpsertUserParams{
 		ID:        userID,
 		Username:  username,
 		Email:     claims.Email,

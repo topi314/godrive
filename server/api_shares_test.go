@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/topi314/godrive/server/acl"
-	"github.com/topi314/godrive/server/database/dbq"
+	"github.com/topi314/godrive/server/database"
 )
 
 func TestParseExpiresIn(t *testing.T) {
@@ -23,7 +23,7 @@ func TestParseExpiresIn(t *testing.T) {
 }
 
 func TestShareBrowsePath(t *testing.T) {
-	share := dbq.Share{ID: "xyz", Path: "/home/docs"}
+	share := database.Share{ID: "xyz", Path: "/home/docs"}
 	if got := shareBrowsePath(share, "/home/docs/lol2/a.pdf"); got != "/s/xyz/lol2/a.pdf" {
 		t.Fatalf("got %q", got)
 	}

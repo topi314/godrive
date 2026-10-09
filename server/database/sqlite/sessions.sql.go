@@ -3,11 +3,10 @@
 //   sqlc v1.31.1
 // source: sessions.sql
 
-package dbq
+package sqlite
 
 import (
 	"context"
-	"time"
 )
 
 const deleteSession = `-- name: DeleteSession :exec
@@ -60,17 +59,6 @@ ON CONFLICT (id) DO UPDATE SET
     updated_at = excluded.updated_at
 RETURNING id, user_id, access_token, expiry, refresh_token, id_token, created_at, updated_at
 `
-
-type UpsertSessionParams struct {
-	ID           string    `json:"id"`
-	UserID       string    `json:"user_id"`
-	AccessToken  string    `json:"access_token"`
-	Expiry       time.Time `json:"expiry"`
-	RefreshToken string    `json:"refresh_token"`
-	IDToken      string    `json:"id_token"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-}
 
 func (q *Queries) UpsertSession(ctx context.Context, arg UpsertSessionParams) (Session, error) {
 	row := q.db.QueryRowContext(ctx, upsertSession,

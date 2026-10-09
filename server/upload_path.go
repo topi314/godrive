@@ -6,12 +6,12 @@ import (
 	"strings"
 
 	"github.com/topi314/godrive/server/acl"
-	"github.com/topi314/godrive/server/database/dbq"
+	"github.com/topi314/godrive/server/database"
 )
 
 // resolveShareUploadDir maps a client dir (browse /s/{id}/…, empty, or storage path)
 // onto the share storage directory used as the relative-name base.
-func resolveShareUploadDir(share dbq.Share, dir string) string {
+func resolveShareUploadDir(share database.Share, dir string) string {
 	root := acl.NormalizePath(share.Path)
 	dir = strings.TrimSpace(dir)
 	if dir == "" || dir == "/" {

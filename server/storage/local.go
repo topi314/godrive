@@ -361,7 +361,7 @@ func (s *localStorage) CreateUpload(ctx context.Context, tempKey string, size in
 	return "", nil
 }
 
-func (s *localStorage) WriteUpload(ctx context.Context, tempKey string, offset int64, r io.Reader, n int64, uploadID string, partNumber int32) (string, error) {
+func (s *localStorage) WriteUpload(ctx context.Context, tempKey string, uploadOffset int64, r io.Reader, n int64, uploadID string, partNumber int32) (string, error) {
 	abs, err := s.uploadAbs(tempKey)
 	if err != nil {
 		return "", err
@@ -371,7 +371,7 @@ func (s *localStorage) WriteUpload(ctx context.Context, tempKey string, offset i
 		return "", err
 	}
 	defer f.Close()
-	if _, err := f.Seek(offset, io.SeekStart); err != nil {
+	if _, err := f.Seek(uploadOffset, io.SeekStart); err != nil {
 		return "", err
 	}
 	written, err := io.Copy(f, io.LimitReader(r, n))

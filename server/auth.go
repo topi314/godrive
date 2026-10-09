@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/topi314/godrive/server/config"
-	"github.com/topi314/godrive/server/database/dbq"
+	"github.com/topi314/godrive/server/database"
 	"github.com/topi314/godrive/server/oidc"
 	"golang.org/x/oauth2"
 )
@@ -195,7 +195,7 @@ func (s *Server) availableGroups() []string {
 	return s.cfg.Auth.Groups.AvailableGroups()
 }
 
-func (s *Server) userPublicJSON(ctx context.Context, u dbq.User) map[string]any {
+func (s *Server) userPublicJSON(ctx context.Context, u database.User) map[string]any {
 	_ = ctx
 	info := s.userToInfo(u)
 	return map[string]any{
@@ -272,7 +272,7 @@ func (s *Server) resolveUser(r *http.Request) (*UserInfo, time.Time) {
 	return s.userToInfo(user), sess.Expiry
 }
 
-func (s *Server) userToInfo(u dbq.User) *UserInfo {
+func (s *Server) userToInfo(u database.User) *UserInfo {
 	return &UserInfo{
 		Subject:  u.ID,
 		Email:    u.Email,
@@ -396,7 +396,7 @@ func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 	home := config.ExpandHome(s.cfg.Auth.DefaultHome, username, claims.Email, idToken.Subject)
 	now := time.Now().UTC()
-	user, err := s.store.Q.UpsertUser(r.Context(), dbq.UpsertUserParams{
+	user, err := s.store.Q.UpsertUser(r.Context(), database.UpsertUserParams{
 		ID:        idToken.Subject,
 		Username:  username,
 		Email:     claims.Email,
@@ -424,7 +424,7 @@ func (s *Server) Callback(w http.ResponseWriter, r *http.Request) {
 	sessionID := randomID(32)
 	sessionExp := now.Add(s.cfg.Auth.SessionLifespan.Duration)
 	refreshExp := now.Add(s.cfg.Auth.RefreshTokenLifespan.Duration)
-	_, err = s.store.Q.UpsertSession(r.Context(), dbq.UpsertSessionParams{
+	_, err = s.store.Q.UpsertSession(r.Context(), database.UpsertSessionParams{
 		ID:           sessionID,
 		UserID:       user.ID,
 		AccessToken:  oauth2Token.AccessToken,

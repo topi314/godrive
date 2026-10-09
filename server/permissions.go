@@ -10,7 +10,6 @@ import (
 
 	"github.com/topi314/godrive/server/acl"
 	"github.com/topi314/godrive/server/database"
-	"github.com/topi314/godrive/server/database/dbq"
 	"github.com/topi314/godrive/server/storage"
 )
 
@@ -77,13 +76,13 @@ func (s *Server) seedDefaultRootACL(ctx context.Context) error {
 	if len(rows) > 0 {
 		return nil
 	}
-	if _, err := s.store.Q.UpsertACL(ctx, dbq.UpsertACLParams{
+	if _, err := s.store.Q.UpsertACL(ctx, database.UpsertACLParams{
 		Path: "/", PrincipalType: acl.PrincipalEveryone, PrincipalID: acl.EveryoneID,
 		Allow: int64(acl.PermissionsAll), Deny: 0,
 	}); err != nil {
 		return err
 	}
-	if _, err := s.store.Q.UpsertACL(ctx, dbq.UpsertACLParams{
+	if _, err := s.store.Q.UpsertACL(ctx, database.UpsertACLParams{
 		Path: "/", PrincipalType: acl.PrincipalGuest, PrincipalID: acl.GuestID,
 		Allow: int64(acl.PermissionRead), Deny: 0,
 	}); err != nil {
@@ -180,7 +179,7 @@ func (s *Server) provisionUserHome(ctx context.Context, home string, info *UserI
 		return nil
 	}
 	if !file.UserID.Valid {
-		file, err = s.store.Q.UpsertFile(ctx, dbq.UpsertFileParams{
+		file, err = s.store.Q.UpsertFile(ctx, database.UpsertFileParams{
 			Path: file.Path, Size: file.Size, ContentType: file.ContentType,
 			Description: file.Description, UserID: database.NullString(&info.Subject),
 			CreatedAt: file.CreatedAt, UpdatedAt: now,
@@ -199,7 +198,7 @@ func (s *Server) provisionUserHome(ctx context.Context, home string, info *UserI
 			return nil
 		}
 	}
-	_, err = s.store.Q.UpsertACL(ctx, dbq.UpsertACLParams{
+	_, err = s.store.Q.UpsertACL(ctx, database.UpsertACLParams{
 		Path:          home,
 		PrincipalType: acl.PrincipalUser,
 		PrincipalID:   info.Subject,

@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/topi314/godrive/server/acl"
-	"github.com/topi314/godrive/server/database/dbq"
+	"github.com/topi314/godrive/server/database"
 )
 
 func TestAdminSudoMode(t *testing.T) {
@@ -23,7 +23,7 @@ func TestAdminSudoMode(t *testing.T) {
 	e.putACL(t, "/", acl.PrincipalUser, "admin", acl.PermissionRead, 0)
 
 	now := time.Now().UTC()
-	if _, err := e.s.store.Q.UpsertUser(e.ctx, dbq.UpsertUserParams{
+	if _, err := e.s.store.Q.UpsertUser(e.ctx, database.UpsertUserParams{
 		ID: "admin", Username: "admin", Email: "admin@example.com", Home: "/home/admin",
 		Groups: `["admin"]`, CreatedAt: now, UpdatedAt: now,
 	}); err != nil {

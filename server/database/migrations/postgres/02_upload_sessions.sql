@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS upload_sessions (
     size          BIGINT NOT NULL,
     content_type  TEXT NOT NULL DEFAULT '',
     description   TEXT NOT NULL DEFAULT '',
-    "offset"      BIGINT NOT NULL DEFAULT 0,
+    upload_offset BIGINT NOT NULL DEFAULT 0,
     replace_file  BOOLEAN NOT NULL DEFAULT FALSE,
     temp_key      TEXT NOT NULL,
     s3_upload_id  TEXT,

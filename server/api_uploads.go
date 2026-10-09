@@ -13,7 +13,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/topi314/godrive/server/acl"
 	"github.com/topi314/godrive/server/database"
-	"github.com/topi314/godrive/server/database/dbq"
 	"github.com/topi314/godrive/server/storage"
 )
 
@@ -113,12 +112,12 @@ func (s *Server) enforceUploadParallel(ctx context.Context, userID, shareID stri
 		err error
 	)
 	if shareID != "" {
-		n, err = s.store.Q.CountActiveUploadSessionsByShare(ctx, dbq.CountActiveUploadSessionsByShareParams{
+		n, err = s.store.Q.CountActiveUploadSessionsByShare(ctx, database.CountActiveUploadSessionsByShareParams{
 			ShareID: database.NullString(&shareID),
 			Now:     now,
 		})
 	} else if userID != "" {
-		n, err = s.store.Q.CountActiveUploadSessionsByUser(ctx, dbq.CountActiveUploadSessionsByUserParams{
+		n, err = s.store.Q.CountActiveUploadSessionsByUser(ctx, database.CountActiveUploadSessionsByUserParams{
 			UserID: userID,
 			Now:    now,
 		})
@@ -228,7 +227,7 @@ func (s *Server) CreateUploadSessionAPI(w http.ResponseWriter, r *http.Request) 
 	if ct == "" {
 		ct = sniffContentType(path.Base(target), "")
 	}
-	params := dbq.CreateUploadSessionParams{
+	params := database.CreateUploadSessionParams{
 		ID:          id,
 		UserID:      ownerSubject,
 		ShareID:     database.NullString(nullableStr(body.ShareID)),
@@ -236,7 +235,7 @@ func (s *Server) CreateUploadSessionAPI(w http.ResponseWriter, r *http.Request) 
 		Size:        body.Size,
 		ContentType: ct,
 		Description: body.Description,
-		Offset:      0,
+		UploadOffset: 0,
 		ReplaceFile: 0,
 		TempKey:     tempKey,
 		S3UploadID:  database.NullString(nullableStr(uploadID)),
@@ -258,8 +257,8 @@ func (s *Server) CreateUploadSessionAPI(w http.ResponseWriter, r *http.Request) 
 		"id":         sess.ID,
 		"path":       sess.Path,
 		"size":       sess.Size,
-		"offset":     sess.Offset,
-		"chunk_size": s.cfg.Upload.ChunkSize.Bytes,
+		"upload_offset": sess.UploadOffset,
+		"chunk_size":    s.cfg.Upload.ChunkSize.Bytes,
 		"expires_at": sess.ExpiresAt.UTC(),
 	}, http.StatusCreated)
 }
@@ -279,12 +278,12 @@ func (s *Server) GetUploadSessionAPI(w http.ResponseWriter, r *http.Request) {
 		"id":     sess.ID,
 		"path":   sess.Path,
 		"size":   sess.Size,
-		"offset": sess.Offset,
-		"expires_at": sess.ExpiresAt.UTC(),
+		"upload_offset": sess.UploadOffset,
+		"expires_at":    sess.ExpiresAt.UTC(),
 	}, http.StatusOK)
 }
 
-func (s *Server) canAccessUploadSession(r *http.Request, sess dbq.UploadSession) bool {
+func (s *Server) canAccessUploadSession(r *http.Request, sess database.UploadSession) bool {
 	if sess.ExpiresAt.Before(time.Now().UTC()) {
 		return false
 	}
@@ -313,8 +312,8 @@ func (s *Server) PatchUploadSessionAPI(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, errors.New("missing Upload-Offset"), http.StatusBadRequest)
 		return
 	}
-	if off != sess.Offset {
-		s.writeError(w, r, errors.New("offset mismatch"), http.StatusConflict)
+	if off != sess.UploadOffset {
+		s.writeError(w, r, errors.New("upload_offset mismatch"), http.StatusConflict)
 		return
 	}
 	n := r.ContentLength
@@ -326,7 +325,7 @@ func (s *Server) PatchUploadSessionAPI(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, errors.New("chunk too large"), http.StatusRequestEntityTooLarge)
 		return
 	}
-	if sess.Offset+n > sess.Size {
+	if sess.UploadOffset+n > sess.Size {
 		s.writeError(w, r, errors.New("chunk exceeds size"), http.StatusBadRequest)
 		return
 	}
@@ -338,7 +337,7 @@ func (s *Server) PatchUploadSessionAPI(w http.ResponseWriter, r *http.Request) {
 		uploadID = sess.S3UploadID.String
 		partNum = int32(len(parts) + 1)
 	}
-	etag, err := s.storage.WriteUpload(r.Context(), sess.TempKey, sess.Offset, r.Body, n, uploadID, partNum)
+	etag, err := s.storage.WriteUpload(r.Context(), sess.TempKey, sess.UploadOffset, r.Body, n, uploadID, partNum)
 	if err != nil {
 		s.writeError(w, r, err, http.StatusInternalServerError)
 		return
@@ -348,18 +347,18 @@ func (s *Server) PatchUploadSessionAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	partsJSON, _ := json.Marshal(parts)
 	now := time.Now().UTC()
-	updated, err := s.store.Q.UpdateUploadSessionOffset(r.Context(), dbq.UpdateUploadSessionOffsetParams{
-		ID:        sess.ID,
-		Offset:    sess.Offset + n,
-		S3Parts:   string(partsJSON),
-		UpdatedAt: now,
+	updated, err := s.store.Q.UpdateUploadSessionOffset(r.Context(), database.UpdateUploadSessionOffsetParams{
+		ID:           sess.ID,
+		UploadOffset: sess.UploadOffset + n,
+		S3Parts:      string(partsJSON),
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		s.writeError(w, r, err, http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Upload-Offset", strconv.FormatInt(updated.Offset, 10))
-	s.writeJSON(w, map[string]any{"offset": updated.Offset, "size": updated.Size}, http.StatusOK)
+	w.Header().Set("Upload-Offset", strconv.FormatInt(updated.UploadOffset, 10))
+	s.writeJSON(w, map[string]any{"upload_offset": updated.UploadOffset, "size": updated.Size}, http.StatusOK)
 }
 
 func (s *Server) CompleteUploadSessionAPI(w http.ResponseWriter, r *http.Request) {
@@ -373,7 +372,7 @@ func (s *Server) CompleteUploadSessionAPI(w http.ResponseWriter, r *http.Request
 		s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
 		return
 	}
-	if sess.Offset != sess.Size {
+	if sess.UploadOffset != sess.Size {
 		s.writeError(w, r, errors.New("incomplete upload"), http.StatusBadRequest)
 		return
 	}
@@ -421,7 +420,7 @@ func (s *Server) CompleteUploadSessionAPI(w http.ResponseWriter, r *http.Request
 		return
 	}
 	now := time.Now().UTC()
-	params := dbq.UpsertFileParams{
+	params := database.UpsertFileParams{
 		Path: sess.Path, Size: sess.Size, ContentType: sess.ContentType, Description: desc,
 		CreatedAt: now, UpdatedAt: now,
 	}
@@ -438,7 +437,7 @@ func (s *Server) CompleteUploadSessionAPI(w http.ResponseWriter, r *http.Request
 		if perms.Has(acl.PermissionUpdatePermissions) || s.adminSudo(info) || info.Subject == sess.UserID {
 			_ = s.store.Q.DeleteACLForPath(r.Context(), sess.Path)
 			for _, row := range body.ACL {
-				_, _ = s.store.Q.UpsertACL(r.Context(), dbq.UpsertACLParams{
+				_, _ = s.store.Q.UpsertACL(r.Context(), database.UpsertACLParams{
 					Path: sess.Path, PrincipalType: row.PrincipalType, PrincipalID: row.PrincipalID,
 					Allow: row.Allow, Deny: row.Deny,
 				})

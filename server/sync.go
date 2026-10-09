@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/topi314/godrive/server/acl"
-	"github.com/topi314/godrive/server/database/dbq"
+	"github.com/topi314/godrive/server/database"
 	"github.com/topi314/godrive/server/storage"
 )
 
@@ -78,7 +78,7 @@ func (s *Server) syncPrefix(ctx context.Context, prefix string) {
 		seen[obj.Path] = struct{}{}
 		s.upsertIndexedFile(ctx, obj)
 	}
-	rows, err := s.store.Q.ListFilesUnder(ctx, dbq.ListFilesUnderParams{
+	rows, err := s.store.Q.ListFilesUnder(ctx, database.ListFilesUnderParams{
 		Path: acl.NormalizePath(prefix), PathLike: acl.LikeUnder(prefix),
 	})
 	if err != nil {
@@ -116,14 +116,14 @@ func (s *Server) upsertIndexedFile(ctx context.Context, info storage.ObjectInfo)
 		if existing.ContentType != "" {
 			ct = existing.ContentType
 		}
-		_, _ = s.store.Q.UpsertFile(ctx, dbq.UpsertFileParams{
+		_, _ = s.store.Q.UpsertFile(ctx, database.UpsertFileParams{
 			Path: path, Size: info.Size, ContentType: ct,
 			Description: existing.Description, UserID: existing.UserID,
 			CreatedAt: existing.CreatedAt, UpdatedAt: stamp,
 		})
 		return
 	}
-	_, _ = s.store.Q.UpsertFile(ctx, dbq.UpsertFileParams{
+	_, _ = s.store.Q.UpsertFile(ctx, database.UpsertFileParams{
 		Path: path, Size: info.Size, ContentType: ct,
 		CreatedAt: stamp, UpdatedAt: stamp,
 	})

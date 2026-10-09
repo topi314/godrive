@@ -13,7 +13,6 @@ import (
 	"github.com/topi314/godrive/server/acl"
 	"github.com/topi314/godrive/server/config"
 	"github.com/topi314/godrive/server/database"
-	"github.com/topi314/godrive/server/database/dbq"
 	"github.com/topi314/godrive/server/storage"
 )
 
@@ -101,7 +100,7 @@ func (e *testEnv) ensureFile(t *testing.T, p, owner string, body []byte) {
 	if err := e.s.storage.PutObject(e.ctx, p, int64(len(body)), bytes.NewReader(body), "text/plain"); err != nil {
 		t.Fatal(err)
 	}
-	params := dbq.UpsertFileParams{
+	params := database.UpsertFileParams{
 		Path: p, Size: int64(len(body)), ContentType: "text/plain",
 		CreatedAt: now, UpdatedAt: now,
 	}
@@ -115,7 +114,7 @@ func (e *testEnv) ensureFile(t *testing.T, p, owner string, body []byte) {
 
 func (e *testEnv) putACL(t *testing.T, p, principalType, principalID string, allow, deny acl.Permissions) {
 	t.Helper()
-	if _, err := e.s.store.Q.UpsertACL(e.ctx, dbq.UpsertACLParams{
+	if _, err := e.s.store.Q.UpsertACL(e.ctx, database.UpsertACLParams{
 		Path: p, PrincipalType: principalType, PrincipalID: principalID,
 		Allow: int64(allow), Deny: int64(deny),
 	}); err != nil {

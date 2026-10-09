@@ -3,12 +3,10 @@
 //   sqlc v1.31.1
 // source: uploads.sql
 
-package dbq
+package sqlite
 
 import (
 	"context"
-	"database/sql"
-	"time"
 )
 
 const countActiveUploadSessionsByShare = `-- name: CountActiveUploadSessionsByShare :one
@@ -16,11 +14,6 @@ SELECT COUNT(*) FROM upload_sessions
 WHERE share_id = ?1
   AND expires_at > ?2
 `
-
-type CountActiveUploadSessionsByShareParams struct {
-	ShareID sql.NullString `json:"share_id"`
-	Now     time.Time      `json:"now"`
-}
 
 func (q *Queries) CountActiveUploadSessionsByShare(ctx context.Context, arg CountActiveUploadSessionsByShareParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countActiveUploadSessionsByShare, arg.ShareID, arg.Now)
@@ -36,11 +29,6 @@ WHERE user_id = ?1
   AND (share_id IS NULL OR share_id = '')
 `
 
-type CountActiveUploadSessionsByUserParams struct {
-	UserID string    `json:"user_id"`
-	Now    time.Time `json:"now"`
-}
-
 func (q *Queries) CountActiveUploadSessionsByUser(ctx context.Context, arg CountActiveUploadSessionsByUserParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countActiveUploadSessionsByUser, arg.UserID, arg.Now)
 	var count int64
@@ -50,32 +38,14 @@ func (q *Queries) CountActiveUploadSessionsByUser(ctx context.Context, arg Count
 
 const createUploadSession = `-- name: CreateUploadSession :one
 INSERT INTO upload_sessions (
-    id, user_id, share_id, path, size, content_type, description, "offset", replace_file,
+    id, user_id, share_id, path, size, content_type, description, upload_offset, replace_file,
     temp_key, s3_upload_id, s3_parts, expires_at, created_at, updated_at
 ) VALUES (
     ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9,
     ?10, ?11, ?12, ?13, ?14, ?15
 )
-RETURNING id, user_id, share_id, path, size, content_type, description, "offset", replace_file, temp_key, s3_upload_id, s3_parts, expires_at, created_at, updated_at
+RETURNING id, user_id, share_id, path, size, content_type, description, upload_offset, replace_file, temp_key, s3_upload_id, s3_parts, expires_at, created_at, updated_at
 `
-
-type CreateUploadSessionParams struct {
-	ID          string         `json:"id"`
-	UserID      string         `json:"user_id"`
-	ShareID     sql.NullString `json:"share_id"`
-	Path        string         `json:"path"`
-	Size        int64          `json:"size"`
-	ContentType string         `json:"content_type"`
-	Description string         `json:"description"`
-	Offset      int64          `json:"offset"`
-	ReplaceFile int64          `json:"replace_file"`
-	TempKey     string         `json:"temp_key"`
-	S3UploadID  sql.NullString `json:"s3_upload_id"`
-	S3Parts     string         `json:"s3_parts"`
-	ExpiresAt   time.Time      `json:"expires_at"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-}
 
 func (q *Queries) CreateUploadSession(ctx context.Context, arg CreateUploadSessionParams) (UploadSession, error) {
 	row := q.db.QueryRowContext(ctx, createUploadSession,
@@ -86,7 +56,7 @@ func (q *Queries) CreateUploadSession(ctx context.Context, arg CreateUploadSessi
 		arg.Size,
 		arg.ContentType,
 		arg.Description,
-		arg.Offset,
+		arg.UploadOffset,
 		arg.ReplaceFile,
 		arg.TempKey,
 		arg.S3UploadID,
@@ -104,7 +74,7 @@ func (q *Queries) CreateUploadSession(ctx context.Context, arg CreateUploadSessi
 		&i.Size,
 		&i.ContentType,
 		&i.Description,
-		&i.Offset,
+		&i.UploadOffset,
 		&i.ReplaceFile,
 		&i.TempKey,
 		&i.S3UploadID,
@@ -118,12 +88,12 @@ func (q *Queries) CreateUploadSession(ctx context.Context, arg CreateUploadSessi
 
 const deleteExpiredUploadSessions = `-- name: DeleteExpiredUploadSessions :many
 DELETE FROM upload_sessions
-WHERE expires_at < ?1
-RETURNING id, user_id, share_id, path, size, content_type, description, "offset", replace_file, temp_key, s3_upload_id, s3_parts, expires_at, created_at, updated_at
+WHERE expires_at < datetime('now')
+RETURNING id, user_id, share_id, path, size, content_type, description, upload_offset, replace_file, temp_key, s3_upload_id, s3_parts, expires_at, created_at, updated_at
 `
 
-func (q *Queries) DeleteExpiredUploadSessions(ctx context.Context, now time.Time) ([]UploadSession, error) {
-	rows, err := q.db.QueryContext(ctx, deleteExpiredUploadSessions, now)
+func (q *Queries) DeleteExpiredUploadSessions(ctx context.Context) ([]UploadSession, error) {
+	rows, err := q.db.QueryContext(ctx, deleteExpiredUploadSessions)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +109,7 @@ func (q *Queries) DeleteExpiredUploadSessions(ctx context.Context, now time.Time
 			&i.Size,
 			&i.ContentType,
 			&i.Description,
-			&i.Offset,
+			&i.UploadOffset,
 			&i.ReplaceFile,
 			&i.TempKey,
 			&i.S3UploadID,
@@ -171,7 +141,7 @@ func (q *Queries) DeleteUploadSession(ctx context.Context, id string) error {
 }
 
 const getUploadSession = `-- name: GetUploadSession :one
-SELECT id, user_id, share_id, path, size, content_type, description, "offset", replace_file, temp_key, s3_upload_id, s3_parts, expires_at, created_at, updated_at FROM upload_sessions WHERE id = ?1
+SELECT id, user_id, share_id, path, size, content_type, description, upload_offset, replace_file, temp_key, s3_upload_id, s3_parts, expires_at, created_at, updated_at FROM upload_sessions WHERE id = ?1
 `
 
 func (q *Queries) GetUploadSession(ctx context.Context, id string) (UploadSession, error) {
@@ -185,7 +155,7 @@ func (q *Queries) GetUploadSession(ctx context.Context, id string) (UploadSessio
 		&i.Size,
 		&i.ContentType,
 		&i.Description,
-		&i.Offset,
+		&i.UploadOffset,
 		&i.ReplaceFile,
 		&i.TempKey,
 		&i.S3UploadID,
@@ -199,23 +169,16 @@ func (q *Queries) GetUploadSession(ctx context.Context, id string) (UploadSessio
 
 const updateUploadSessionOffset = `-- name: UpdateUploadSessionOffset :one
 UPDATE upload_sessions
-SET "offset" = ?1,
+SET upload_offset = ?1,
     s3_parts = ?2,
     updated_at = ?3
 WHERE id = ?4
-RETURNING id, user_id, share_id, path, size, content_type, description, "offset", replace_file, temp_key, s3_upload_id, s3_parts, expires_at, created_at, updated_at
+RETURNING id, user_id, share_id, path, size, content_type, description, upload_offset, replace_file, temp_key, s3_upload_id, s3_parts, expires_at, created_at, updated_at
 `
-
-type UpdateUploadSessionOffsetParams struct {
-	Offset    int64     `json:"offset"`
-	S3Parts   string    `json:"s3_parts"`
-	UpdatedAt time.Time `json:"updated_at"`
-	ID        string    `json:"id"`
-}
 
 func (q *Queries) UpdateUploadSessionOffset(ctx context.Context, arg UpdateUploadSessionOffsetParams) (UploadSession, error) {
 	row := q.db.QueryRowContext(ctx, updateUploadSessionOffset,
-		arg.Offset,
+		arg.UploadOffset,
 		arg.S3Parts,
 		arg.UpdatedAt,
 		arg.ID,
@@ -229,7 +192,7 @@ func (q *Queries) UpdateUploadSessionOffset(ctx context.Context, arg UpdateUploa
 		&i.Size,
 		&i.ContentType,
 		&i.Description,
-		&i.Offset,
+		&i.UploadOffset,
 		&i.ReplaceFile,
 		&i.TempKey,
 		&i.S3UploadID,

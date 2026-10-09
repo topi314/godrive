@@ -10,7 +10,6 @@ import (
 	"github.com/topi314/godrive/server/acl"
 	"github.com/topi314/godrive/server/config"
 	"github.com/topi314/godrive/server/database"
-	"github.com/topi314/godrive/server/database/dbq"
 	"github.com/topi314/godrive/server/storage"
 )
 
@@ -37,7 +36,7 @@ func TestRenamePathCarriesACL(t *testing.T) {
 	if err := st.Mkdir(ctx, "/docs"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Q.UpsertFile(ctx, dbq.UpsertFileParams{
+	if _, err := store.Q.UpsertFile(ctx, database.UpsertFileParams{
 		Path: "/docs", Size: 0, ContentType: storage.ContentTypeDirectory, CreatedAt: now, UpdatedAt: now,
 	}); err != nil {
 		t.Fatal(err)
@@ -45,17 +44,17 @@ func TestRenamePathCarriesACL(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "docs", "a.txt"), []byte("hi"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Q.UpsertFile(ctx, dbq.UpsertFileParams{
+	if _, err := store.Q.UpsertFile(ctx, database.UpsertFileParams{
 		Path: "/docs/a.txt", Size: 2, ContentType: "text/plain", CreatedAt: now, UpdatedAt: now,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Q.UpsertACL(ctx, dbq.UpsertACLParams{
+	if _, err := store.Q.UpsertACL(ctx, database.UpsertACLParams{
 		Path: "/docs", PrincipalType: acl.PrincipalEveryone, PrincipalID: acl.EveryoneID, Allow: int64(acl.PermissionsAll),
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Q.UpsertACL(ctx, dbq.UpsertACLParams{
+	if _, err := store.Q.UpsertACL(ctx, database.UpsertACLParams{
 		Path: "/docs/a.txt", PrincipalType: acl.PrincipalUser, PrincipalID: "u1", Allow: int64(acl.PermissionRead),
 	}); err != nil {
 		t.Fatal(err)
@@ -112,7 +111,7 @@ func TestRenamePathMovesDeeperAndUp(t *testing.T) {
 	if err := st.Mkdir(ctx, "/docs"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Q.UpsertFile(ctx, dbq.UpsertFileParams{
+	if _, err := store.Q.UpsertFile(ctx, database.UpsertFileParams{
 		Path: "/docs", Size: 0, ContentType: storage.ContentTypeDirectory, CreatedAt: now, UpdatedAt: now,
 	}); err != nil {
 		t.Fatal(err)
@@ -120,7 +119,7 @@ func TestRenamePathMovesDeeperAndUp(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "docs", "a.txt"), []byte("hi"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Q.UpsertFile(ctx, dbq.UpsertFileParams{
+	if _, err := store.Q.UpsertFile(ctx, database.UpsertFileParams{
 		Path: "/docs/a.txt", Size: 2, ContentType: "text/plain", CreatedAt: now, UpdatedAt: now,
 	}); err != nil {
 		t.Fatal(err)

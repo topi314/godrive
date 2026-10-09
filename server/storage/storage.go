@@ -30,7 +30,7 @@ type Storage interface {
 
 	// Resumable upload staging (temp keys are opaque session ids, not user paths).
 	CreateUpload(ctx context.Context, tempKey string, size int64) (uploadID string, err error)
-	WriteUpload(ctx context.Context, tempKey string, offset int64, r io.Reader, n int64, uploadID string, partNumber int32) (etag string, err error)
+	WriteUpload(ctx context.Context, tempKey string, uploadOffset int64, r io.Reader, n int64, uploadID string, partNumber int32) (etag string, err error)
 	CommitUpload(ctx context.Context, tempKey, destPath, contentType, uploadID string, parts []CompletedPart) error
 	AbortUpload(ctx context.Context, tempKey, uploadID string) error
 }

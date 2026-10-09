@@ -3,28 +3,27 @@
 //   sqlc v1.31.1
 // source: users.sql
 
-package dbq
+package postgres
 
 import (
 	"context"
-	"time"
 )
 
 const deleteUser = `-- name: DeleteUser :exec
-DELETE FROM users WHERE id = ?1
+DELETE FROM users WHERE id = $1
 `
 
 func (q *Queries) DeleteUser(ctx context.Context, id string) error {
-	_, err := q.db.ExecContext(ctx, deleteUser, id)
+	_, err := q.db.Exec(ctx, deleteUser, id)
 	return err
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, username, email, home, "groups", created_at, updated_at FROM users WHERE id = ?1
+SELECT id, username, email, home, groups, created_at, updated_at FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUser, id)
+	row := q.db.QueryRow(ctx, getUser, id)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -39,11 +38,11 @@ func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, email, home, "groups", created_at, updated_at FROM users ORDER BY username
+SELECT id, username, email, home, groups, created_at, updated_at FROM users ORDER BY username
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
-	rows, err := q.db.QueryContext(ctx, listUsers)
+	rows, err := q.db.Query(ctx, listUsers)
 	if err != nil {
 		return nil, err
 	}
@@ -64,9 +63,6 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -75,20 +71,14 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 
 const updateUserHome = `-- name: UpdateUserHome :one
 UPDATE users
-SET home = ?1,
-    updated_at = ?2
-WHERE id = ?3
-RETURNING id, username, email, home, "groups", created_at, updated_at
+SET home = $1,
+    updated_at = $2
+WHERE id = $3
+RETURNING id, username, email, home, groups, created_at, updated_at
 `
 
-type UpdateUserHomeParams struct {
-	Home      string    `json:"home"`
-	UpdatedAt time.Time `json:"updated_at"`
-	ID        string    `json:"id"`
-}
-
 func (q *Queries) UpdateUserHome(ctx context.Context, arg UpdateUserHomeParams) (User, error) {
-	row := q.db.QueryRowContext(ctx, updateUserHome, arg.Home, arg.UpdatedAt, arg.ID)
+	row := q.db.QueryRow(ctx, updateUserHome, arg.Home, arg.UpdatedAt, arg.ID)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -104,28 +94,18 @@ func (q *Queries) UpdateUserHome(ctx context.Context, arg UpdateUserHomeParams) 
 
 const upsertUser = `-- name: UpsertUser :one
 INSERT INTO users (id, username, email, home, groups, created_at, updated_at)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (id) DO UPDATE SET
     username = excluded.username,
     email = excluded.email,
     home = users.home,
     groups = excluded.groups,
     updated_at = excluded.updated_at
-RETURNING id, username, email, home, "groups", created_at, updated_at
+RETURNING id, username, email, home, groups, created_at, updated_at
 `
 
-type UpsertUserParams struct {
-	ID        string    `json:"id"`
-	Username  string    `json:"username"`
-	Email     string    `json:"email"`
-	Home      string    `json:"home"`
-	Groups    string    `json:"groups"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
 func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, error) {
-	row := q.db.QueryRowContext(ctx, upsertUser,
+	row := q.db.QueryRow(ctx, upsertUser,
 		arg.ID,
 		arg.Username,
 		arg.Email,

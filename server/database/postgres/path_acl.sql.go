@@ -3,59 +3,47 @@
 //   sqlc v1.31.1
 // source: path_acl.sql
 
-package dbq
+package postgres
 
 import (
 	"context"
-	"strings"
 )
 
 const deleteACL = `-- name: DeleteACL :exec
 DELETE FROM path_acl
-WHERE path = ?1 AND principal_type = ?2 AND principal_id = ?3
+WHERE path = $1 AND principal_type = $2 AND principal_id = $3
 `
 
-type DeleteACLParams struct {
-	Path          string `json:"path"`
-	PrincipalType string `json:"principal_type"`
-	PrincipalID   string `json:"principal_id"`
-}
-
 func (q *Queries) DeleteACL(ctx context.Context, arg DeleteACLParams) error {
-	_, err := q.db.ExecContext(ctx, deleteACL, arg.Path, arg.PrincipalType, arg.PrincipalID)
+	_, err := q.db.Exec(ctx, deleteACL, arg.Path, arg.PrincipalType, arg.PrincipalID)
 	return err
 }
 
 const deleteACLForPath = `-- name: DeleteACLForPath :exec
-DELETE FROM path_acl WHERE path = ?1
+DELETE FROM path_acl WHERE path = $1
 `
 
 func (q *Queries) DeleteACLForPath(ctx context.Context, path string) error {
-	_, err := q.db.ExecContext(ctx, deleteACLForPath, path)
+	_, err := q.db.Exec(ctx, deleteACLForPath, path)
 	return err
 }
 
 const deleteACLForPrincipal = `-- name: DeleteACLForPrincipal :exec
 DELETE FROM path_acl
-WHERE principal_type = ?1 AND principal_id = ?2
+WHERE principal_type = $1 AND principal_id = $2
 `
 
-type DeleteACLForPrincipalParams struct {
-	PrincipalType string `json:"principal_type"`
-	PrincipalID   string `json:"principal_id"`
-}
-
 func (q *Queries) DeleteACLForPrincipal(ctx context.Context, arg DeleteACLForPrincipalParams) error {
-	_, err := q.db.ExecContext(ctx, deleteACLForPrincipal, arg.PrincipalType, arg.PrincipalID)
+	_, err := q.db.Exec(ctx, deleteACLForPrincipal, arg.PrincipalType, arg.PrincipalID)
 	return err
 }
 
 const listACLByPath = `-- name: ListACLByPath :many
-SELECT path, principal_type, principal_id, allow, deny FROM path_acl WHERE path = ?1 ORDER BY principal_type, principal_id
+SELECT path, principal_type, principal_id, allow, deny FROM path_acl WHERE path = $1 ORDER BY principal_type, principal_id
 `
 
 func (q *Queries) ListACLByPath(ctx context.Context, path string) ([]PathAcl, error) {
-	rows, err := q.db.QueryContext(ctx, listACLByPath, path)
+	rows, err := q.db.Query(ctx, listACLByPath, path)
 	if err != nil {
 		return nil, err
 	}
@@ -73,9 +61,6 @@ func (q *Queries) ListACLByPath(ctx context.Context, path string) ([]PathAcl, er
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -85,22 +70,12 @@ func (q *Queries) ListACLByPath(ctx context.Context, path string) ([]PathAcl, er
 
 const listACLByPaths = `-- name: ListACLByPaths :many
 SELECT path, principal_type, principal_id, allow, deny FROM path_acl
-WHERE path IN (/*SLICE:paths*/?)
+WHERE path = ANY($1::text[])
 ORDER BY path, principal_type, principal_id
 `
 
 func (q *Queries) ListACLByPaths(ctx context.Context, paths []string) ([]PathAcl, error) {
-	query := listACLByPaths
-	var queryParams []interface{}
-	if len(paths) > 0 {
-		for _, v := range paths {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:paths*/?", strings.Repeat(",?", len(paths))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:paths*/?", "NULL", 1)
-	}
-	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	rows, err := q.db.Query(ctx, listACLByPaths, paths)
 	if err != nil {
 		return nil, err
 	}
@@ -118,9 +93,6 @@ func (q *Queries) ListACLByPaths(ctx context.Context, paths []string) ([]PathAcl
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -130,17 +102,12 @@ func (q *Queries) ListACLByPaths(ctx context.Context, paths []string) ([]PathAcl
 
 const listACLUnder = `-- name: ListACLUnder :many
 SELECT path, principal_type, principal_id, allow, deny FROM path_acl
-WHERE path = ?1 OR path LIKE ?2
+WHERE path = $1 OR path LIKE $2
 ORDER BY path, principal_type, principal_id
 `
 
-type ListACLUnderParams struct {
-	Path     string `json:"path"`
-	PathLike string `json:"path_like"`
-}
-
 func (q *Queries) ListACLUnder(ctx context.Context, arg ListACLUnderParams) ([]PathAcl, error) {
-	rows, err := q.db.QueryContext(ctx, listACLUnder, arg.Path, arg.PathLike)
+	rows, err := q.db.Query(ctx, listACLUnder, arg.Path, arg.PathLike)
 	if err != nil {
 		return nil, err
 	}
@@ -158,9 +125,6 @@ func (q *Queries) ListACLUnder(ctx context.Context, arg ListACLUnderParams) ([]P
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -173,7 +137,7 @@ SELECT path, principal_type, principal_id, allow, deny FROM path_acl ORDER BY pa
 `
 
 func (q *Queries) ListAllACL(ctx context.Context) ([]PathAcl, error) {
-	rows, err := q.db.QueryContext(ctx, listAllACL)
+	rows, err := q.db.Query(ctx, listAllACL)
 	if err != nil {
 		return nil, err
 	}
@@ -192,9 +156,6 @@ func (q *Queries) ListAllACL(ctx context.Context) ([]PathAcl, error) {
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -203,23 +164,15 @@ func (q *Queries) ListAllACL(ctx context.Context) ([]PathAcl, error) {
 
 const upsertACL = `-- name: UpsertACL :one
 INSERT INTO path_acl (path, principal_type, principal_id, allow, deny)
-VALUES (?1, ?2, ?3, ?4, ?5)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (path, principal_type, principal_id) DO UPDATE SET
     allow = excluded.allow,
     deny = excluded.deny
 RETURNING path, principal_type, principal_id, allow, deny
 `
 
-type UpsertACLParams struct {
-	Path          string `json:"path"`
-	PrincipalType string `json:"principal_type"`
-	PrincipalID   string `json:"principal_id"`
-	Allow         int64  `json:"allow"`
-	Deny          int64  `json:"deny"`
-}
-
 func (q *Queries) UpsertACL(ctx context.Context, arg UpsertACLParams) (PathAcl, error) {
-	row := q.db.QueryRowContext(ctx, upsertACL,
+	row := q.db.QueryRow(ctx, upsertACL,
 		arg.Path,
 		arg.PrincipalType,
 		arg.PrincipalID,

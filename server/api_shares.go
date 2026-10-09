@@ -15,11 +15,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/topi314/godrive/server/acl"
 	"github.com/topi314/godrive/server/database"
-	"github.com/topi314/godrive/server/database/dbq"
 	"github.com/topi314/godrive/server/storage"
 )
 
-func shareToJSON(share dbq.Share) map[string]any {
+func shareToJSON(share database.Share) map[string]any {
 	out := map[string]any{
 		"id":         share.ID,
 		"path":       share.Path,
@@ -105,14 +104,14 @@ func (s *Server) CreateShareAPI(w http.ResponseWriter, r *http.Request) {
 		expiresAt = &t
 	}
 	id := s.newShareID()
-	share, err := s.store.Q.CreateShare(r.Context(), dbq.CreateShareParams{
+	share, err := s.store.Q.CreateShare(r.Context(), database.CreateShareParams{
 		ID: id, Path: p, UserID: info.Subject, CreatedAt: now, ExpiresAt: database.NullTime(expiresAt),
 	})
 	if err != nil {
 		s.writeError(w, r, err, http.StatusInternalServerError)
 		return
 	}
-	if _, err := s.store.Q.UpsertACL(r.Context(), dbq.UpsertACLParams{
+	if _, err := s.store.Q.UpsertACL(r.Context(), database.UpsertACLParams{
 		Path: p, PrincipalType: acl.PrincipalShare, PrincipalID: id,
 		Allow: allow, Deny: body.Deny,
 	}); err != nil {
@@ -152,7 +151,7 @@ func (s *Server) DeleteShareAPI(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
 		return
 	}
-	_ = s.store.Q.DeleteACLForPrincipal(r.Context(), dbq.DeleteACLForPrincipalParams{
+	_ = s.store.Q.DeleteACLForPrincipal(r.Context(), database.DeleteACLForPrincipalParams{
 		PrincipalType: acl.PrincipalShare, PrincipalID: id,
 	})
 	_ = s.store.Q.DeleteShare(r.Context(), id)
@@ -215,10 +214,10 @@ func joinShareTarget(shareRoot, rest string) (string, error) {
 
 var errShareExpired = errors.New("expired")
 
-func (s *Server) resolveShare(r *http.Request) (dbq.Share, string, error) {
+func (s *Server) resolveShare(r *http.Request) (database.Share, string, error) {
 	id := chi.URLParam(r, "id")
 	if id == "" || strings.Contains(id, "/") || strings.Contains(id, "..") {
-		return dbq.Share{}, "", errors.New("not found")
+		return database.Share{}, "", errors.New("not found")
 	}
 	share, err := s.store.Q.GetShare(r.Context(), id)
 	if err != nil {
@@ -246,7 +245,7 @@ func (s *Server) resolveShare(r *http.Request) (dbq.Share, string, error) {
 }
 
 // shareBrowsePath maps a storage path to the public /s/{id}/… browse URL.
-func shareBrowsePath(share dbq.Share, storagePath string) string {
+func shareBrowsePath(share database.Share, storagePath string) string {
 	root := acl.NormalizePath(share.Path)
 	storagePath = acl.NormalizePath(storagePath)
 	base := "/s/" + share.ID
@@ -269,7 +268,7 @@ func (s *Server) shareEffectivePerms(ctx context.Context, shareID, filePath stri
 }
 
 // listShareDir lists immediate children under target for a share capability URL.
-func (s *Server) listShareDir(ctx context.Context, share dbq.Share, target string, sharePerms acl.Permissions) ([]FileEntry, error) {
+func (s *Server) listShareDir(ctx context.Context, share database.Share, target string, sharePerms acl.Permissions) ([]FileEntry, error) {
 	target = acl.NormalizePath(target)
 	if !acl.IsSelfOrUnder(target, share.Path) {
 		return nil, errors.New("forbidden")
@@ -279,7 +278,7 @@ func (s *Server) listShareDir(ctx context.Context, share dbq.Share, target strin
 	}
 	s.syncPrefix(ctx, target)
 
-	rows, err := s.store.Q.ListFilesUnder(ctx, dbq.ListFilesUnderParams{
+	rows, err := s.store.Q.ListFilesUnder(ctx, database.ListFilesUnderParams{
 		Path:     target,
 		PathLike: acl.LikeUnder(target),
 	})
@@ -541,7 +540,7 @@ func (s *Server) ShareUploadFileAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := time.Now().UTC()
-	params := dbq.UpsertFileParams{
+	params := database.UpsertFileParams{
 		Path: target, Size: meta.Size, ContentType: ct, Description: meta.Description,
 		UserID: database.NullString(&share.UserID), CreatedAt: now, UpdatedAt: now,
 	}

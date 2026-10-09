@@ -3,7 +3,7 @@ package server
 import (
 	"testing"
 
-	"github.com/topi314/godrive/server/database/dbq"
+	"github.com/topi314/godrive/server/database"
 )
 
 func TestResolveUploadTarget(t *testing.T) {
@@ -28,7 +28,7 @@ func TestResolveUploadTarget(t *testing.T) {
 }
 
 func TestResolveShareUploadDir(t *testing.T) {
-	share := dbq.Share{ID: "abc", Path: "/photos"}
+	share := database.Share{ID: "abc", Path: "/photos"}
 	if got := resolveShareUploadDir(share, ""); got != "/photos" {
 		t.Fatalf("empty: %q", got)
 	}

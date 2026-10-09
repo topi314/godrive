@@ -256,31 +256,31 @@ export function useApi() {
     replace?: boolean
     share_id?: string
   }) {
-    return await apiFetch<{ id: string; path: string; size: number; offset: number; chunk_size: number }>('/api/uploads', {
+    return await apiFetch<{ id: string; path: string; size: number; upload_offset: number; chunk_size: number }>('/api/uploads', {
       method: 'POST',
       body,
     })
   }
 
   async function getUploadSession(id: string) {
-    return await apiFetch<{ id: string; path: string; size: number; offset: number }>('/api/uploads/' + encodeURIComponent(id))
+    return await apiFetch<{ id: string; path: string; size: number; upload_offset: number }>('/api/uploads/' + encodeURIComponent(id))
   }
 
-  async function uploadChunk(id: string, offset: number, blob: Blob) {
+  async function uploadChunk(id: string, uploadOffset: number, blob: Blob) {
     const url = (useRuntimeConfig().public.apiBase || '') + '/api/uploads/' + encodeURIComponent(id)
     const send = () => new Promise<number>((resolve, reject) => {
       const xhr = new XMLHttpRequest()
       xhr.open('PATCH', url)
       xhr.withCredentials = true
-      xhr.setRequestHeader('Upload-Offset', String(offset))
+      xhr.setRequestHeader('Upload-Offset', String(uploadOffset))
       xhr.setRequestHeader('Content-Type', 'application/octet-stream')
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
             const j = JSON.parse(xhr.responseText || '{}')
-            resolve(Number(j.offset) || offset + blob.size)
+            resolve(Number(j.upload_offset) || uploadOffset + blob.size)
           } catch {
-            resolve(offset + blob.size)
+            resolve(uploadOffset + blob.size)
           }
         } else {
           reject(Object.assign(new Error(xhr.responseText || 'chunk failed'), { status: xhr.status }))
