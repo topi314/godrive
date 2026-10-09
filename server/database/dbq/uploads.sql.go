@@ -50,7 +50,7 @@ func (q *Queries) CountActiveUploadSessionsByUser(ctx context.Context, arg Count
 
 const createUploadSession = `-- name: CreateUploadSession :one
 INSERT INTO upload_sessions (
-    id, user_id, share_id, path, size, content_type, description, offset, replace_file,
+    id, user_id, share_id, path, size, content_type, description, "offset", replace_file,
     temp_key, s3_upload_id, s3_parts, expires_at, created_at, updated_at
 ) VALUES (
     ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9,
@@ -199,7 +199,7 @@ func (q *Queries) GetUploadSession(ctx context.Context, id string) (UploadSessio
 
 const updateUploadSessionOffset = `-- name: UpdateUploadSessionOffset :one
 UPDATE upload_sessions
-SET offset = ?1,
+SET "offset" = ?1,
     s3_parts = ?2,
     updated_at = ?3
 WHERE id = ?4
