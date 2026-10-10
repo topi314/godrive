@@ -34,6 +34,25 @@
           </span>
         </p>
 
+        <div v-if="canChangeOwner" class="owner-field">
+          <label class="acl-path-field">
+            Owner
+            <select v-model="ownerDraft">
+              <option v-if="!ownerDraft" value="" disabled>Select owner</option>
+              <option v-for="u in userOptions(ownerDraft)" :key="u.id" :value="u.id">
+                {{ userLabel(u) }}
+              </option>
+            </select>
+          </label>
+          <label v-if="isDir" class="owner-recursive">
+            <input v-model="ownerRecursive" type="checkbox">
+            Also apply to all contents
+          </label>
+        </div>
+        <p v-else-if="ownerLabel" class="muted owner-line">
+          Owner: <strong>{{ ownerLabel }}</strong>
+        </p>
+
         <div class="acl-table-wrap">
           <table class="file-table acl-table">
             <thead>
@@ -168,8 +187,20 @@ const rows = ref<ACLRow[]>([])
 const inherited = ref<ACLRow[]>([])
 const availableGroups = ref<string[]>([])
 const availableUsers = ref<{ id: string; username: string; email?: string }[]>([])
+const ownerID = ref('')
+const ownerName = ref('')
+const ownerDraft = ref('')
+const ownerRecursive = ref(false)
+const isDir = ref(false)
 
 const permFlags = PERM_FLAGS
+
+const canChangeOwner = computed(() => hasPerm(effective.value, Perm.UpdatePermissions))
+const ownerLabel = computed(() => {
+  if (ownerName.value) return ownerName.value
+  if (ownerID.value) return ownerID.value
+  return ''
+})
 
 const guestPublished = computed(() => {
   const local = rows.value.find(r => r.principal_type === 'guest')
@@ -321,6 +352,11 @@ async function refresh() {
     }))
     availableGroups.value = res.available_groups || []
     availableUsers.value = res.available_users || []
+    ownerID.value = res.owner_id || ''
+    ownerName.value = res.owner || ''
+    ownerDraft.value = res.owner_id || ''
+    ownerRecursive.value = false
+    isDir.value = !!res.is_dir
     seedDefaultRow()
   } catch (e: any) {
     error.value = e?.data?.message || e.message || 'Failed to load permissions'
@@ -348,6 +384,12 @@ async function save() {
       }
     }
     await api.putPermissions(path.value, acl)
+    if (canChangeOwner.value && ownerDraft.value) {
+      const recursive = isDir.value && ownerRecursive.value
+      if (ownerDraft.value !== ownerID.value || recursive) {
+        await api.setOwner(path.value, ownerDraft.value, { recursive })
+      }
+    }
     open.value = false
     emit('saved')
   } catch (e: any) {

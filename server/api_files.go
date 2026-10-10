@@ -123,22 +123,44 @@ func (s *Server) listDir(ctx context.Context, dir string, info *UserInfo) ([]Fil
 			name := parts[0]
 			updated := row.UpdatedAt.UTC().Format(time.RFC3339)
 			size := row.Size
+			dirRow := len(parts) == 1 && storage.IsDirectory(row.ContentType)
 			if storage.IsDirectory(row.ContentType) {
 				size = 0
 			}
 			if existing, ok := dirs[name]; ok {
-				existing.entry.Size += size
+				if !dirRow {
+					existing.entry.Size += size
+				}
 				if updated > existing.entry.Date {
 					existing.entry.Date = updated
+				}
+				if dirRow && owner != "" && existing.entry.OwnerID == "" {
+					existing.entry.OwnerID = owner
+					if user, err := s.store.Q.GetUser(ctx, owner); err == nil {
+						existing.entry.Owner = user.Username
+					}
+					dPerms, _ := s.EffectivePermissions(ctx, existing.entry.Path, info, nullableStr(owner))
+					existing.entry.Permissions = uint64(dPerms)
 				}
 				continue
 			}
 			dpath := acl.NormalizePath(path.Join(dir, name))
-			dPerms, _ := s.EffectivePermissions(ctx, dpath, info, nil)
-			dirs[name] = &agg{entry: FileEntry{
+			ownerPtr := (*string)(nil)
+			if dirRow {
+				ownerPtr = nullableStr(owner)
+			}
+			dPerms, _ := s.EffectivePermissions(ctx, dpath, info, ownerPtr)
+			entry := FileEntry{
 				Path: dpath, Name: name, IsDir: true, Size: size,
 				Date: updated, Permissions: uint64(dPerms),
-			}}
+			}
+			if dirRow && owner != "" {
+				entry.OwnerID = owner
+				if user, err := s.store.Q.GetUser(ctx, owner); err == nil {
+					entry.Owner = user.Username
+				}
+			}
+			dirs[name] = &agg{entry: entry}
 			continue
 		}
 		files = append(files, s.fileEntryFromRow(ctx, row, owner, eff))
@@ -938,10 +960,12 @@ func (s *Server) PatchFileAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var meta struct {
-		Name        string `json:"name"`
-		Dir         string `json:"dir"`
-		Description string `json:"description"`
-		Size        int64  `json:"size"`
+		Name           string  `json:"name"`
+		Dir            string  `json:"dir"`
+		Description    string  `json:"description"`
+		Size           int64   `json:"size"`
+		OwnerID        *string `json:"owner_id"`
+		OwnerRecursive bool    `json:"owner_recursive"`
 	}
 	var replace io.ReadCloser
 	ctHeader := r.Header.Get("Content-Type")
@@ -999,16 +1023,36 @@ func (s *Server) PatchFileAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	descChanged := meta.Description != "" || r.FormValue("description") != ""
-	if replace != nil || descChanged || newPath == p {
+	ownerChanging := meta.OwnerID != nil
+	renaming := newPath != p
+	contentChanging := replace != nil || descChanged
+	if !contentChanging && !renaming && !ownerChanging {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if contentChanging {
 		perms, err := s.EffectivePermissions(r.Context(), p, info, nullableStr(owner))
 		if err != nil || (s.cfg.AuthEnabled() && !perms.Has(acl.PermissionUpdate)) {
 			s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
 			return
 		}
 	}
-	if newPath != p {
+	if renaming {
 		if err := s.authorizeRename(r.Context(), p, newPath, info, nullableStr(owner)); err != nil {
 			s.writeError(w, r, err, renameHTTPStatus(err))
+			return
+		}
+	}
+	if ownerChanging {
+		if err := s.setFileOwner(r.Context(), p, info, owner, strings.TrimSpace(*meta.OwnerID), meta.OwnerRecursive); err != nil {
+			status := http.StatusInternalServerError
+			switch {
+			case errors.Is(err, errForbidden):
+				status = http.StatusForbidden
+			case errors.Is(err, errBadOwner):
+				status = http.StatusBadRequest
+			}
+			s.writeError(w, r, err, status)
 			return
 		}
 	}
@@ -1023,7 +1067,7 @@ func (s *Server) PatchFileAPI(w http.ResponseWriter, r *http.Request) {
 		if meta.Size > 0 {
 			size = meta.Size
 		}
-		if newPath != p {
+		if renaming {
 			if err := s.renamePath(r.Context(), p, newPath, info); err != nil {
 				s.writeError(w, r, err, renameHTTPStatus(err))
 				return
@@ -1045,7 +1089,7 @@ func (s *Server) PatchFileAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if newPath != p {
+	if renaming {
 		if err := s.renamePath(r.Context(), p, newPath, info); err != nil {
 			s.writeError(w, r, err, renameHTTPStatus(err))
 			return
@@ -1062,6 +1106,38 @@ func (s *Server) PatchFileAPI(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+var errBadOwner = errors.New("invalid owner")
+
+func (s *Server) setFileOwner(ctx context.Context, p string, info *UserInfo, currentOwner, newOwner string, recursive bool) error {
+	if newOwner == "" || newOwner == "guest" {
+		return errBadOwner
+	}
+	perms, err := s.EffectivePermissions(ctx, p, info, nullableStr(currentOwner))
+	if err != nil {
+		return err
+	}
+	if s.cfg.AuthEnabled() && !perms.Has(acl.PermissionUpdatePermissions) && !s.adminSudo(info) {
+		return errForbidden
+	}
+	if _, err := s.store.Q.GetUser(ctx, newOwner); err != nil {
+		return errBadOwner
+	}
+	now := time.Now().UTC()
+	uid := database.NullString(&newOwner)
+	if recursive {
+		return s.store.Q.UpdateFilesOwnerUnder(ctx, database.UpdateFilesOwnerUnderParams{
+			Path: p, PathLike: acl.LikeUnder(p), UserID: uid, UpdatedAt: now,
+		})
+	}
+	if newOwner == currentOwner {
+		return nil
+	}
+	_, err = s.store.Q.UpdateFileOwner(ctx, database.UpdateFileOwnerParams{
+		Path: p, UserID: uid, UpdatedAt: now,
+	})
+	return err
 }
 
 func (s *Server) MoveFilesAPI(w http.ResponseWriter, r *http.Request) {

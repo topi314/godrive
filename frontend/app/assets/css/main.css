@@ -74,6 +74,21 @@ textarea {
   font: inherit;
 }
 
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 2.1rem;
+  background-color: var(--input-bg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23828997' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.6rem center;
+  background-size: 1rem;
+}
+
+.light select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%235a616c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
 button {
   cursor: pointer;
   border: 1px solid var(--line);
@@ -1031,6 +1046,28 @@ a.icon-btn:hover,
   cursor: pointer;
 }
 
+.owner-field {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.owner-field .acl-path-field {
+  margin-bottom: 0;
+}
+
+.owner-recursive {
+  display: inline-flex !important;
+  flex-direction: row-reverse !important;
+  justify-content: flex-end !important;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 !important;
+  color: var(--muted) !important;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
 .settings-section {
   margin-bottom: 1.5rem;
 }
@@ -1084,8 +1121,37 @@ a.icon-btn:hover,
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 0.5rem 0.65rem;
-  background: var(--input-bg);
+  background-color: var(--input-bg);
   color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dialog select {
+  padding-right: 2.1rem;
+}
+
+.dialog input:focus,
+.dialog input:focus-visible,
+.dialog textarea:focus,
+.dialog textarea:focus-visible,
+.dialog select:focus,
+.dialog select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.dialog select:has(option[value=""]:checked) {
+  color: var(--muted);
+}
+
+.dialog select option {
+  color: var(--ink);
+}
+
+.dialog select option:disabled {
+  color: var(--muted);
 }
 
 .dialog input[type="checkbox"] {

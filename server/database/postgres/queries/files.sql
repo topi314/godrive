@@ -27,6 +27,19 @@ SET path = @new_path,
 WHERE path = @path
 RETURNING *;
 
+-- name: UpdateFileOwner :one
+UPDATE files
+SET user_id = @user_id,
+    updated_at = @updated_at
+WHERE path = @path
+RETURNING *;
+
+-- name: UpdateFilesOwnerUnder :exec
+UPDATE files
+SET user_id = @user_id,
+    updated_at = @updated_at
+WHERE path = @path OR path LIKE @path_like;
+
 -- name: DeleteFile :exec
 DELETE FROM files WHERE path = @path;
 

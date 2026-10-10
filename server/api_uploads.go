@@ -424,7 +424,13 @@ func (s *Server) CompleteUploadSessionAPI(w http.ResponseWriter, r *http.Request
 		Path: sess.Path, Size: sess.Size, ContentType: sess.ContentType, Description: desc,
 		CreatedAt: now, UpdatedAt: now,
 	}
-	if sess.UserID != "" && sess.UserID != "guest" {
+	if existing, err := s.store.Q.GetFile(r.Context(), sess.Path); err == nil {
+		params.CreatedAt = existing.CreatedAt
+		params.UserID = existing.UserID
+		if desc == "" {
+			params.Description = existing.Description
+		}
+	} else if sess.UserID != "" && sess.UserID != "guest" {
 		params.UserID = database.NullString(&sess.UserID)
 	}
 	if _, err := s.store.Q.UpsertFile(r.Context(), params); err != nil {

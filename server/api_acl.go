@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/topi314/godrive/server/acl"
 	"github.com/topi314/godrive/server/database"
+	"github.com/topi314/godrive/server/storage"
 )
 
 type aclRuleBody struct {
@@ -151,8 +152,35 @@ func (s *Server) GetPermissionsAPI(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}
+	ownerID := ""
+	ownerName := ""
+	isDir := p == "/"
+	if file, err := s.store.Q.GetFile(r.Context(), p); err == nil {
+		if file.UserID.Valid {
+			ownerID = file.UserID.String
+			if user, err := s.store.Q.GetUser(r.Context(), ownerID); err == nil {
+				ownerName = user.Username
+			}
+		}
+		isDir = storage.IsDirectory(file.ContentType)
+	} else if p != "/" {
+		under, err := s.store.Q.ListFilesUnder(r.Context(), database.ListFilesUnderParams{
+			Path: p, PathLike: acl.LikeUnder(p),
+		})
+		if err == nil {
+			for _, row := range under {
+				if row.Path != p {
+					isDir = true
+					break
+				}
+			}
+		}
+	}
 	s.writeJSON(w, map[string]any{
 		"path":             p,
+		"owner_id":         ownerID,
+		"owner":            ownerName,
+		"is_dir":           isDir,
 		"effective":        uint64(perms),
 		"acl":              local,
 		"inherited":        inherited,

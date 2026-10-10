@@ -43,6 +43,8 @@ type Querier interface {
 	ListSharesByUser(ctx context.Context, userID string) ([]Share, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	UpdateFileMeta(ctx context.Context, arg UpdateFileMetaParams) (File, error)
+	UpdateFileOwner(ctx context.Context, arg UpdateFileOwnerParams) (File, error)
+	UpdateFilesOwnerUnder(ctx context.Context, arg UpdateFilesOwnerUnderParams) error
 	UpdateSharePath(ctx context.Context, arg UpdateSharePathParams) error
 	UpdateUploadSessionOffset(ctx context.Context, arg UpdateUploadSessionOffsetParams) (UploadSession, error)
 	UpdateUserHome(ctx context.Context, arg UpdateUserHomeParams) (User, error)

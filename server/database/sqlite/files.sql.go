@@ -116,6 +116,46 @@ func (q *Queries) UpdateFileMeta(ctx context.Context, arg UpdateFileMetaParams) 
 	return i, err
 }
 
+const updateFileOwner = `-- name: UpdateFileOwner :one
+UPDATE files
+SET user_id = ?1,
+    updated_at = ?2
+WHERE path = ?3
+RETURNING path, size, content_type, description, user_id, created_at, updated_at
+`
+
+func (q *Queries) UpdateFileOwner(ctx context.Context, arg UpdateFileOwnerParams) (File, error) {
+	row := q.db.QueryRowContext(ctx, updateFileOwner, arg.UserID, arg.UpdatedAt, arg.Path)
+	var i File
+	err := row.Scan(
+		&i.Path,
+		&i.Size,
+		&i.ContentType,
+		&i.Description,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateFilesOwnerUnder = `-- name: UpdateFilesOwnerUnder :exec
+UPDATE files
+SET user_id = ?1,
+    updated_at = ?2
+WHERE path = ?3 OR path LIKE ?4
+`
+
+func (q *Queries) UpdateFilesOwnerUnder(ctx context.Context, arg UpdateFilesOwnerUnderParams) error {
+	_, err := q.db.ExecContext(ctx, updateFilesOwnerUnder,
+		arg.UserID,
+		arg.UpdatedAt,
+		arg.Path,
+		arg.PathLike,
+	)
+	return err
+}
+
 const upsertFile = `-- name: UpsertFile :one
 INSERT INTO files (path, size, content_type, description, user_id, created_at, updated_at)
 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)

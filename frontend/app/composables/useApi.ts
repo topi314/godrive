@@ -143,6 +143,16 @@ export function useApi() {
     })
   }
 
+  async function setOwner(path: string, ownerId: string, opts?: { recursive?: boolean }) {
+    await apiFetch(publicFilePath(path), {
+      method: 'PATCH',
+      body: {
+        owner_id: ownerId,
+        ...(opts?.recursive ? { owner_recursive: true } : {}),
+      },
+    })
+  }
+
   async function remove(paths: string[]) {
     const unique = [...new Set(paths.map(publicFilePath).filter(p => p && p !== '/'))]
     if (!unique.length) return
@@ -177,6 +187,9 @@ export function useApi() {
   async function getPermissions(path: string) {
     return await apiFetch<{
       path: string
+      owner_id?: string
+      owner?: string
+      is_dir?: boolean
       effective: number
       acl: ACLEntry[]
       inherited?: ACLEntry[]
@@ -355,6 +368,7 @@ export function useApi() {
     listPath,
     mkdir,
     rename,
+    setOwner,
     remove,
     getPermissions,
     putPermissions,
