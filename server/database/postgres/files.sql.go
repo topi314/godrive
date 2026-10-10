@@ -80,6 +80,45 @@ func (q *Queries) ListFilesUnder(ctx context.Context, arg ListFilesUnderParams) 
 	return items, nil
 }
 
+const searchFilesUnder = `-- name: SearchFilesUnder :many
+SELECT path, size, content_type, description, user_id, created_at, updated_at FROM files
+WHERE (path = $1 OR path LIKE $2)
+  AND (
+    path ILIKE $3
+    OR COALESCE(description, '') ILIKE $3
+  )
+ORDER BY path
+LIMIT 200
+`
+
+func (q *Queries) SearchFilesUnder(ctx context.Context, arg SearchFilesUnderParams) ([]File, error) {
+	rows, err := q.db.Query(ctx, searchFilesUnder, arg.Path, arg.PathLike, arg.TermLike)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []File{}
+	for rows.Next() {
+		var i File
+		if err := rows.Scan(
+			&i.Path,
+			&i.Size,
+			&i.ContentType,
+			&i.Description,
+			&i.UserID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateFileMeta = `-- name: UpdateFileMeta :one
 UPDATE files
 SET path = $1,

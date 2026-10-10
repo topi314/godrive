@@ -42,6 +42,7 @@ type Querier interface {
 	ListSharesByPath(ctx context.Context, arg ListSharesByPathParams) ([]Share, error)
 	ListSharesByUser(ctx context.Context, userID string) ([]Share, error)
 	ListUsers(ctx context.Context) ([]User, error)
+	SearchFilesUnder(ctx context.Context, arg SearchFilesUnderParams) ([]File, error)
 	UpdateFileMeta(ctx context.Context, arg UpdateFileMetaParams) (File, error)
 	UpdateFileOwner(ctx context.Context, arg UpdateFileOwnerParams) (File, error)
 	UpdateFilesOwnerUnder(ctx context.Context, arg UpdateFilesOwnerUnderParams) error

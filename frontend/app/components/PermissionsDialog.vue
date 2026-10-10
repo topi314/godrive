@@ -6,7 +6,7 @@
         <IconBtn name="x" label="Close" variant="ghost" @click="close" />
       </div>
 
-      <label class="acl-path-field">
+      <label v-if="selectPath" class="acl-path-field">
         Path
         <input
           ref="pathInput"
@@ -17,23 +17,15 @@
           @blur="commitPath"
         >
       </label>
+      <p v-else class="acl-path-field acl-path-readonly">
+        <span class="muted">Path</span>
+        <code>{{ pathDraft }}</code>
+      </p>
 
       <p v-if="error" class="error">{{ error }}</p>
       <p v-else-if="loading" class="muted">Loading…</p>
 
       <template v-else>
-        <p class="muted effective-line">
-          Your effective access:
-          <span
-            v-for="p in permFlags"
-            :key="p.bit"
-            class="perm-chip"
-            :class="[{ on: hasPerm(effective, p.bit) }, 'perm-' + p.short.toLowerCase()]"
-          >
-            {{ p.label }}
-          </span>
-        </p>
-
         <div v-if="canChangeOwner" class="owner-field">
           <label class="acl-path-field">
             Owner
@@ -45,49 +37,192 @@
             </select>
           </label>
           <label v-if="isDir" class="owner-recursive">
-            <input v-model="ownerRecursive" type="checkbox">
-            Also apply to all contents
+            <span class="check-slot">
+              <input v-model="ownerRecursive" type="checkbox">
+            </span>
+            Include contents
           </label>
         </div>
         <p v-else-if="ownerLabel" class="muted owner-line">
           Owner: <strong>{{ ownerLabel }}</strong>
         </p>
 
-        <div class="acl-table-wrap">
-          <table class="file-table acl-table">
-            <thead>
-              <tr>
-                <th>Source</th>
-                <th>Type</th>
-                <th>Principal</th>
-                <th
-                  v-for="p in permFlags"
-                  :key="'h-' + p.bit"
-                  class="perm-col"
-                  :class="'perm-' + p.short.toLowerCase()"
-                >{{ p.short }}</th>
-                <th class="acl-actions">
-                  <IconBtn name="plus" label="Add rule" variant="primary" @click="addRow" />
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(row, idx) in inherited" :key="'i-' + idx" class="inherited">
-                <td class="muted"><code>{{ row.path }}</code></td>
-                <td class="muted">{{ row.principal_type }}</td>
-                <td class="muted">{{ row.principal_id }}</td>
-                <td v-for="p in permFlags" :key="'ic-' + p.bit" class="perm-cell">
-                  <span
-                    class="perm-mark"
-                    :class="markClass(row, p.bit)"
+        <div class="effective-line">
+          <span class="effective-line-label muted">Access</span>
+          <span
+            v-for="p in permFlags"
+            :key="p.bit"
+            class="perm-chip"
+            :class="[{ on: hasPerm(effective, p.bit) }, 'perm-' + p.short.toLowerCase()]"
+            :title="p.label"
+          >
+            <span class="perm-chip-full">{{ p.label }}</span>
+            <span class="perm-chip-short">{{ p.short }}</span>
+          </span>
+          <IconBtn class="acl-add-mobile" name="plus" label="Add rule" variant="primary" @click="addRow" />
+        </div>
+
+        <div class="acl-scroll">
+          <div class="acl-table-wrap acl-desktop">
+            <table class="file-table acl-table">
+              <thead>
+                <tr>
+                  <th>Source</th>
+                  <th>Type</th>
+                  <th>Principal</th>
+                  <th
+                    v-for="p in permFlags"
+                    :key="'h-' + p.bit"
+                    class="perm-col"
+                    :class="'perm-' + p.short.toLowerCase()"
+                  >{{ p.short }}</th>
+                  <th class="acl-actions">
+                    <IconBtn name="plus" label="Add rule" variant="primary" @click="addRow" />
+                  </th>
+                </tr>
+              </thead>
+              <tbody v-if="inherited.length">
+                <tr class="acl-inherited-toggle-row">
+                  <td colspan="10">
+                    <button
+                      type="button"
+                      class="acl-inherited-toggle"
+                      :aria-expanded="inheritedOpen"
+                      @click="inheritedOpen = !inheritedOpen"
+                    >
+                      <span class="acl-inherited-chevron" aria-hidden="true">{{ inheritedOpen ? '▾' : '▸' }}</span>
+                      Inherited
+                      <span class="muted">({{ inherited.length }})</span>
+                    </button>
+                  </td>
+                </tr>
+                <template v-if="inheritedOpen">
+                  <tr v-for="(row, idx) in inherited" :key="'i-' + idx" class="inherited">
+                    <td class="muted"><code>{{ row.path }}</code></td>
+                    <td class="muted">{{ row.principal_type }}</td>
+                    <td class="muted">{{ principalLabel(row.principal_type, row.principal_id) }}</td>
+                    <td v-for="p in permFlags" :key="'ic-' + p.bit" class="perm-cell">
+                      <span
+                        class="perm-mark"
+                        :class="markClass(row, p.bit)"
+                        :title="p.label"
+                      >{{ markLabel(row, p.bit) }}</span>
+                    </td>
+                    <td class="muted inherit-tag">inherited</td>
+                  </tr>
+                </template>
+              </tbody>
+              <tbody>
+                <tr v-for="(row, idx) in rows" :key="'l-' + idx">
+                  <td class="muted">local</td>
+                  <td>
+                    <select v-model="row.principal_type" @change="onTypeChange(row)">
+                      <option value="everyone">everyone</option>
+                      <option value="guest">guest</option>
+                      <option value="group">group</option>
+                      <option value="user">user</option>
+                      <option value="share">share</option>
+                    </select>
+                  </td>
+                  <td>
+                    <select
+                      v-if="row.principal_type === 'group'"
+                      v-model="row.principal_id"
+                    >
+                      <option value="" disabled>Select group</option>
+                      <option v-for="g in groupOptions(row.principal_id)" :key="g" :value="g">{{ g }}</option>
+                    </select>
+                    <select
+                      v-else-if="row.principal_type === 'user'"
+                      v-model="row.principal_id"
+                    >
+                      <option value="" disabled>Select user</option>
+                      <option v-for="u in userOptions(row.principal_id)" :key="u.id" :value="u.id">
+                        {{ userLabel(u) }}
+                      </option>
+                    </select>
+                    <input
+                      v-else-if="row.principal_type === 'share'"
+                      v-model="row.principal_id"
+                      placeholder="share id"
+                      spellcheck="false"
+                    >
+                    <input
+                      v-else
+                      v-model="row.principal_id"
+                      disabled
+                      placeholder="*"
+                    >
+                  </td>
+                  <td v-for="p in permFlags" :key="'c-' + p.bit" class="perm-cell">
+                    <button
+                      type="button"
+                      class="perm-mark"
+                      :class="markClass(row, p.bit)"
+                      :title="p.label + ' (click to cycle allow / deny / none)'"
+                      @click="cyclePerm(row, p.bit)"
+                    >{{ markLabel(row, p.bit) }}</button>
+                  </td>
+                  <td class="acl-actions">
+                    <IconBtn name="trash" label="Remove rule" variant="danger" @click="rows.splice(idx, 1)" />
+                  </td>
+                </tr>
+                <tr v-if="!rows.length && !inherited.length">
+                  <td colspan="10" class="muted">No ACL rules on this path or its parents.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="acl-cards acl-mobile">
+            <button
+              v-if="inherited.length"
+              type="button"
+              class="acl-inherited-toggle acl-section-label"
+              :aria-expanded="inheritedOpen"
+              @click="inheritedOpen = !inheritedOpen"
+            >
+              <span class="acl-inherited-chevron" aria-hidden="true">{{ inheritedOpen ? '▾' : '▸' }}</span>
+              Inherited
+              <span class="muted">({{ inherited.length }})</span>
+            </button>
+            <template v-if="inheritedOpen">
+              <article
+                v-for="(row, idx) in inherited"
+                :key="'mi-' + idx"
+                class="acl-card inherited"
+              >
+                <header class="acl-card-head">
+                  <div class="acl-card-title">
+                    <strong>{{ row.principal_type }}</strong>
+                    <span class="muted">{{ principalLabel(row.principal_type, row.principal_id) }}</span>
+                  </div>
+                  <span class="inherit-tag">from <code>{{ row.path }}</code></span>
+                </header>
+                <div class="acl-card-perms" aria-label="Inherited permissions">
+                  <div
+                    v-for="p in permFlags"
+                    :key="'mip-' + idx + '-' + p.bit"
+                    class="acl-card-perm"
+                    :class="'perm-' + p.short.toLowerCase()"
                     :title="p.label"
-                  >{{ markLabel(row, p.bit) }}</span>
-                </td>
-                <td class="muted inherit-tag">inherited</td>
-              </tr>
-              <tr v-for="(row, idx) in rows" :key="'l-' + idx">
-                <td class="muted">this path</td>
-                <td>
+                  >
+                    <span class="acl-card-perm-label">{{ p.short }}</span>
+                    <span class="perm-mark" :class="markClass(row, p.bit)">{{ markLabel(row, p.bit) }}</span>
+                  </div>
+                </div>
+              </article>
+            </template>
+
+            <p v-if="rows.length" class="acl-section-label">Local</p>
+            <article
+              v-for="(row, idx) in rows"
+              :key="'ml-' + idx"
+              class="acl-card"
+            >
+              <div class="acl-card-fields">
+                <label>
+                  Type
                   <select v-model="row.principal_type" @change="onTypeChange(row)">
                     <option value="everyone">everyone</option>
                     <option value="guest">guest</option>
@@ -95,8 +230,12 @@
                     <option value="user">user</option>
                     <option value="share">share</option>
                   </select>
-                </td>
-                <td>
+                </label>
+                <label class="acl-card-principal">
+                  <span class="acl-card-principal-label">
+                    Principal
+                    <IconBtn name="trash" label="Remove rule" variant="danger" @click="rows.splice(idx, 1)" />
+                  </span>
                   <select
                     v-if="row.principal_type === 'group'"
                     v-model="row.principal_id"
@@ -125,31 +264,37 @@
                     disabled
                     placeholder="*"
                   >
-                </td>
-                <td v-for="p in permFlags" :key="'c-' + p.bit" class="perm-cell">
-                  <button
-                    type="button"
-                    class="perm-mark"
-                    :class="markClass(row, p.bit)"
-                    :title="p.label + ' (click to cycle allow / deny / none)'"
-                    @click="cyclePerm(row, p.bit)"
-                  >{{ markLabel(row, p.bit) }}</button>
-                </td>
-                <td class="acl-actions">
-                  <IconBtn name="trash" label="Remove rule" variant="danger" @click="rows.splice(idx, 1)" />
-                </td>
-              </tr>
-              <tr v-if="!rows.length && !inherited.length">
-                <td colspan="10" class="muted">No ACL rules on this path or its parents.</td>
-              </tr>
-            </tbody>
-          </table>
+                </label>
+              </div>
+              <div class="acl-card-perms" aria-label="Rule permissions">
+                <button
+                  v-for="p in permFlags"
+                  :key="'mp-' + idx + '-' + p.bit"
+                  type="button"
+                  class="acl-card-perm"
+                  :class="['perm-' + p.short.toLowerCase(), markClass(row, p.bit)]"
+                  :aria-label="p.label"
+                  :title="p.label + ' (click to cycle allow / deny / none)'"
+                  @click="cyclePerm(row, p.bit)"
+                >
+                  <span class="acl-card-perm-label">{{ p.short }}</span>
+                  <span class="perm-mark" :class="markClass(row, p.bit)">{{ markLabel(row, p.bit) }}</span>
+                </button>
+              </div>
+            </article>
+
+            <p v-if="!rows.length && !inherited.length" class="muted">No ACL rules on this path or its parents.</p>
+          </div>
+
+          <PermLegend class="perm-legend-footer" marks />
         </div>
 
-        <div class="toolbar acl-toolbar">
+        <div class="acl-toolbar">
           <label class="quick-publish">
-            <input type="checkbox" :checked="guestPublished" @change="toggleGuestPublish(($event.target as HTMLInputElement).checked)">
-            Guests can read
+            <span class="check-slot">
+              <input type="checkbox" :checked="guestPublished" @change="toggleGuestPublish(($event.target as HTMLInputElement).checked)">
+            </span>
+            Guest read
           </label>
           <IconBtn name="check" label="Save" variant="primary" :disabled="saving" @click="save" />
         </div>
@@ -192,6 +337,7 @@ const ownerName = ref('')
 const ownerDraft = ref('')
 const ownerRecursive = ref(false)
 const isDir = ref(false)
+const inheritedOpen = ref(false)
 
 const permFlags = PERM_FLAGS
 
@@ -221,6 +367,15 @@ function userLabel(u: { id: string; username: string; email?: string }) {
   if (u.username) return u.username
   if (u.email) return u.email
   return u.id
+}
+
+function principalLabel(type: string, id: string) {
+  if (!id || id === '*') return id || '*'
+  if (type === 'user') {
+    const u = availableUsers.value.find(x => x.id === id)
+    if (u) return userLabel(u)
+  }
+  return id
 }
 
 function groupOptions(current: string) {
@@ -334,6 +489,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 async function refresh() {
   loading.value = true
   error.value = ''
+  inheritedOpen.value = false
   try {
     const res = await api.getPermissions(path.value)
     effective.value = res.effective || 0

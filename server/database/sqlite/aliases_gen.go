@@ -6,6 +6,7 @@ import "github.com/topi314/godrive/server/database/dbtypes"
 
 type DeleteFilesUnderParams = dbtypes.DeleteFilesUnderParams
 type ListFilesUnderParams = dbtypes.ListFilesUnderParams
+type SearchFilesUnderParams = dbtypes.SearchFilesUnderParams
 type UpdateFileMetaParams = dbtypes.UpdateFileMetaParams
 type UpdateFileOwnerParams = dbtypes.UpdateFileOwnerParams
 type UpdateFilesOwnerUnderParams = dbtypes.UpdateFilesOwnerUnderParams

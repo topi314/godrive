@@ -4,7 +4,7 @@
       <div class="topbar-brand">
         <NuxtLink to="/" class="brand">go<span>drive</span></NuxtLink>
         <a
-          class="icon-btn"
+          class="icon-btn topbar-github"
           href="https://github.com/topi314/godrive"
           target="_blank"
           rel="noopener noreferrer"

@@ -33,7 +33,9 @@
           </div>
         </div>
         <label v-if="me?.auth_enabled && me?.is_admin" class="quick-publish">
-          <input type="checkbox" :checked="!!me?.sudo" @change="toggleSudo">
+          <span class="check-slot">
+            <input type="checkbox" :checked="!!me?.sudo" @change="toggleSudo">
+          </span>
           Sudo mode — browse all paths (bypass ACLs)
         </label>
         <p v-if="me?.auth_enabled && me?.is_admin" class="muted tip">

@@ -117,6 +117,8 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/*", s.GetPath)
 		r.Head("/", s.GetPath)
 		r.Head("/*", s.GetPath)
+		r.MethodFunc("QUERY", "/", s.QueryFilesAPI)
+		r.MethodFunc("QUERY", "/*", s.QueryFilesAPI)
 		r.With(s.RequireAccess).Post("/", s.UploadFileAPI)
 		r.With(s.RequireAccess).Post("/*", s.UploadFileAPI)
 		r.With(s.RequireAccess).Patch("/", s.PatchFileAPI)

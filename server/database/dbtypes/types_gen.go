@@ -17,6 +17,12 @@ type ListFilesUnderParams struct {
 	PathLike string `json:"path_like"`
 }
 
+type SearchFilesUnderParams struct {
+	Path     string `json:"path"`
+	PathLike string `json:"path_like"`
+	TermLike string `json:"term_like"`
+}
+
 type UpdateFileMetaParams struct {
 	NewPath     string    `json:"new_path"`
 	Size        int64     `json:"size"`

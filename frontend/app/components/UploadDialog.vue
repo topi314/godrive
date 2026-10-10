@@ -12,12 +12,16 @@
 
       <div class="upload-options">
         <label class="quick-publish">
-          <input v-model="replace" type="checkbox">
+          <span class="check-slot">
+            <input v-model="replace" type="checkbox">
+          </span>
           Replace existing
         </label>
         <label v-if="!shareId" class="quick-publish">
-          <input v-model="guestRead" type="checkbox">
-          Guests can read
+          <span class="check-slot">
+            <input v-model="guestRead" type="checkbox">
+          </span>
+          Guest read
         </label>
       </div>
 

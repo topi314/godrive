@@ -15,6 +15,17 @@
     </nav>
 
     <div class="toolbar">
+      <label class="toolbar-select-all" title="Select all">
+        <span class="check-slot">
+          <input
+            type="checkbox"
+            :checked="allSelected"
+            :disabled="!files.length"
+            aria-label="Select all"
+            @change="toggleAll"
+          />
+        </span>
+      </label>
       <NuxtLink
         v-if="canGoHome"
         :to="homePath"
@@ -25,10 +36,36 @@
       >
         <AppIcon name="home" />
       </NuxtLink>
-      <IconBtn name="download" label="Download" :disabled="!selected.length" @click="downloadSelected" />
-      <IconBtn name="upload" label="Upload" :disabled="!canCreate" @click="openUpload()" />
-      <IconBtn name="folder" label="New folder" :disabled="!canCreate || !!shareId" @click="openNewFolder" />
-      <IconBtn name="move" label="Move" :disabled="!selected.length || !canMove || !!shareId" @click="openMove" />
+      <label v-if="!shareId" class="toolbar-search">
+        <AppIcon name="search" class="toolbar-search-icon" />
+        <input
+          v-model="searchQ"
+          type="search"
+          placeholder="Search this folder and subfolders…"
+          autocomplete="off"
+          spellcheck="false"
+          @keydown.escape.prevent="clearSearch"
+        >
+        <button
+          v-if="searchQ"
+          type="button"
+          class="toolbar-search-clear"
+          title="Clear search"
+          aria-label="Clear search"
+          @click="clearSearch"
+        >
+          <AppIcon name="x" />
+        </button>
+      </label>
+      <IconBtn class="toolbar-sort-btn" name="sort" label="Sort" @click="sortOpen = true" />
+      <template v-if="selected.length">
+        <IconBtn name="download" label="Download" @click="downloadSelected" />
+        <IconBtn name="move" label="Move" :disabled="!canMove || !!shareId" @click="openMove" />
+      </template>
+      <template v-else>
+        <IconBtn name="upload" label="Upload" :disabled="!canCreate" @click="openUpload()" />
+        <IconBtn name="folder-plus" label="New folder" :disabled="!canCreate || !!shareId || searching" @click="openNewFolder" />
+      </template>
       <IconBtn name="trash" label="Delete" variant="danger" :disabled="!selected.length || !canDelete || !!shareId" @click="deleteSelected" />
       <input ref="fileInput" type="file" multiple hidden @change="onPick" />
     </div>
@@ -45,32 +82,39 @@
     </div>
 
     <template v-else>
+    <div class="file-table-wrap">
     <table class="file-table browser-files">
       <thead>
         <tr>
-          <th><input type="checkbox" :checked="allSelected" @change="toggleAll" aria-label="Select all" /></th>
+          <th class="col-check">
+            <label class="row-select">
+              <span class="check-slot">
+                <input type="checkbox" :checked="allSelected" @change="toggleAll" aria-label="Select all" />
+              </span>
+            </label>
+          </th>
           <th class="col-type" aria-label="Type"></th>
-          <th>
+          <th class="col-name">
             <button type="button" class="th-sort" @click="sortBy('name')">
               Name <span class="sort-ind">{{ sortIndicator('name') }}</span>
             </button>
           </th>
-          <th>
+          <th class="col-size">
             <button type="button" class="th-sort" @click="sortBy('size')">
               Size <span class="sort-ind">{{ sortIndicator('size') }}</span>
             </button>
           </th>
-          <th>
+          <th class="col-date">
             <button type="button" class="th-sort" @click="sortBy('date')">
               Modified <span class="sort-ind">{{ sortIndicator('date') }}</span>
             </button>
           </th>
-          <th>
+          <th class="col-desc">
             <button type="button" class="th-sort" @click="sortBy('description')">
               Description <span class="sort-ind">{{ sortIndicator('description') }}</span>
             </button>
           </th>
-          <th>
+          <th class="col-owner">
             <button type="button" class="th-sort" @click="sortBy('owner')">
               Owner <span class="sort-ind">{{ sortIndicator('owner') }}</span>
             </button>
@@ -79,52 +123,108 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-if="parentPath != null" class="parent-row">
-          <td></td>
+        <tr
+          v-if="parentPath != null && !searching"
+          class="parent-row"
+          role="link"
+          tabindex="0"
+          aria-label="Go to parent folder"
+          @click="goTo(parentPath)"
+          @keydown.enter.prevent="goTo(parentPath)"
+          @keydown.space.prevent="goTo(parentPath)"
+        >
+          <td class="col-check">
+            <span class="row-select row-select-static">
+              <AppIcon name="folder" class="type-icon row-select-icon" />
+            </span>
+          </td>
           <td class="col-type">
             <AppIcon name="folder" class="type-icon" />
           </td>
-          <td>
-            <NuxtLink class="name" :to="parentPath" @click.prevent="goTo(parentPath)">..</NuxtLink>
+          <td class="col-name">
+            <NuxtLink class="name" :to="parentPath" @click.stop.prevent="goTo(parentPath)">..</NuxtLink>
           </td>
-          <td class="muted">—</td>
-          <td class="muted">—</td>
-          <td class="muted desc">—</td>
-          <td class="muted">—</td>
+          <td class="muted col-size">—</td>
+          <td class="muted col-date">—</td>
+          <td class="muted desc col-desc">—</td>
+          <td class="muted col-owner">—</td>
           <td class="col-actions"></td>
         </tr>
         <tr
           v-for="f in sortedFiles"
           :key="f.path"
+          class="file-row"
           :class="{ selected: selected.includes(f.path) }"
+          @click="onFileRowClick($event, f)"
         >
-          <td><input type="checkbox" :checked="selected.includes(f.path)" @change="toggle(f.path)" :aria-label="'Select ' + f.name" /></td>
+          <td class="col-check">
+            <label class="row-select">
+              <span class="check-slot">
+                <input
+                  type="checkbox"
+                  :checked="selected.includes(f.path)"
+                  @change="toggle(f.path)"
+                  :aria-label="'Select ' + displayName(f)"
+                />
+              </span>
+              <AppIcon :name="f.is_dir ? 'folder' : 'file'" class="type-icon row-select-icon" />
+            </label>
+          </td>
           <td class="col-type">
             <AppIcon :name="f.is_dir ? 'folder' : 'file'" class="type-icon" />
           </td>
-          <td>
-            <NuxtLink v-if="f.is_dir" class="name" :to="linkFor(f)" @click.prevent="goTo(linkFor(f))">{{ f.name }}</NuxtLink>
-            <a
-              v-else-if="mediaKind(f.name, f.content_type)"
-              class="name"
-              :href="streamUrl(f)"
-              target="_blank"
-              rel="noopener"
-            >{{ f.name }}</a>
-            <a v-else class="name" :href="downloadUrl(f)" target="_blank" rel="noopener">{{ f.name }}</a>
+          <td class="col-name">
+            <span class="name-cell">
+              <button
+                v-if="searching && resultParentRel(f)"
+                type="button"
+                class="result-dir"
+                :title="'Open ' + containingFolder(f)"
+                @click="openContainingFolder(f)"
+              >{{ resultParentRel(f) }}/</button>
+              <NuxtLink v-if="f.is_dir" class="name" :to="linkFor(f)" @click.prevent="goTo(linkFor(f))">{{ displayName(f) }}</NuxtLink>
+              <a
+                v-else-if="mediaKind(displayName(f), f.content_type)"
+                class="name"
+                :href="streamUrl(f)"
+                target="_blank"
+                rel="noopener"
+              >{{ displayName(f) }}</a>
+              <a v-else class="name" :href="streamUrl(f)" target="_blank" rel="noopener">{{ displayName(f) }}</a>
+              <span class="mobile-meta muted">
+                <template v-if="!f.is_dir">{{ formatSize(f.size) }} · </template>{{ formatDate(f.date) }}<template v-if="f.owner"> · {{ f.owner }}</template>
+              </span>
+              <span v-if="f.description" class="mobile-meta mobile-desc muted">{{ f.description }}</span>
+            </span>
           </td>
-          <td class="muted">{{ formatSize(f.size) }}</td>
-          <td class="muted">{{ formatDate(f.date) }}</td>
-          <td class="muted desc">{{ f.description || '—' }}</td>
-          <td class="muted">{{ f.owner || '—' }}</td>
+          <td class="muted col-size">{{ formatSize(f.size) }}</td>
+          <td class="muted col-date">{{ formatDate(f.date) }}</td>
+          <td class="muted desc col-desc">{{ f.description || '—' }}</td>
+          <td class="muted col-owner">{{ f.owner || '—' }}</td>
           <td class="col-actions">
+            <div class="row-actions">
+              <IconBtn
+                v-if="searching && containingFolder(f)"
+                class="search-open-folder"
+                name="folder-open"
+                label="Open containing folder"
+                @click="openContainingFolder(f)"
+              />
             <div v-if="hasRowMenu(f)" class="row-menu" :class="{ open: menuPath === f.path }">
               <IconBtn
                 name="more"
-                :label="'Actions for ' + f.name"
+                :label="'Actions for ' + displayName(f)"
                 @click.stop="toggleMenu(f.path)"
               />
               <div v-if="menuPath === f.path" class="row-menu-panel" role="menu" @click.stop>
+                <button
+                  v-if="searching && containingFolder(f)"
+                  type="button"
+                  role="menuitem"
+                  @click="runMenu(() => openContainingFolder(f))"
+                >
+                  <AppIcon name="folder-open" /> Open folder
+                </button>
                 <button
                   v-if="rowMenu(f).download"
                   type="button"
@@ -168,10 +268,12 @@
                 </button>
               </div>
             </div>
+            </div>
           </td>
         </tr>
       </tbody>
     </table>
+    </div>
 
     <div
       class="dropzone"
@@ -239,6 +341,50 @@
         <p v-if="renameError" class="error">{{ renameError }}</p>
         <div class="dialog-actions">
           <IconBtn name="check" label="Rename" variant="primary" :disabled="!renameName.trim()" @click="submitRename" />
+        </div>
+      </div>
+    </div>
+
+    <div v-if="sortOpen" class="dialog-backdrop" @click.self="sortOpen = false" @keydown.escape.prevent="sortOpen = false">
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="sort-title">
+        <div class="dialog-head">
+          <h2 id="sort-title">Sort</h2>
+          <IconBtn name="x" label="Close" variant="ghost" @click="sortOpen = false" />
+        </div>
+        <p class="sort-section-label">Sort by</p>
+        <div class="sort-options" role="listbox" aria-label="Sort field">
+          <button
+            v-for="opt in sortFieldOptions"
+            :key="opt.key"
+            type="button"
+            class="sort-option"
+            :class="{ active: sortKey === opt.key }"
+            role="option"
+            :aria-selected="sortKey === opt.key"
+            @click="setSortKey(opt.key)"
+          >{{ opt.label }}</button>
+        </div>
+        <p class="sort-section-label">Order</p>
+        <div class="sort-options" role="listbox" aria-label="Sort order">
+          <button
+            type="button"
+            class="sort-option"
+            :class="{ active: sortDir === 'asc' }"
+            role="option"
+            :aria-selected="sortDir === 'asc'"
+            @click="sortDir = 'asc'"
+          >Ascending</button>
+          <button
+            type="button"
+            class="sort-option"
+            :class="{ active: sortDir === 'desc' }"
+            role="option"
+            :aria-selected="sortDir === 'desc'"
+            @click="sortDir = 'desc'"
+          >Descending</button>
+        </div>
+        <div class="dialog-actions">
+          <IconBtn name="check" label="Done" variant="primary" @click="sortOpen = false" />
         </div>
       </div>
     </div>
@@ -340,6 +486,7 @@
           <div class="dialog-actions">
             <IconBtn name="check" label="Create link" variant="primary" @click="createShareLink" />
           </div>
+          <PermLegend class="perm-legend-footer" marks />
         </template>
         <template v-else>
           <label>
@@ -373,6 +520,7 @@ import {
 
 
 const props = defineProps<{ basePath: string; shareId?: string }>()
+const route = useRoute()
 const api = useApi()
 const { toast } = useToast()
 const { confirm } = useConfirm()
@@ -385,7 +533,29 @@ const errorStatus = ref(0)
 const loading = ref(false)
 /** Path currently shown in crumbs + list (updated together when a listing arrives). */
 const listedPath = ref(props.basePath || '/')
+const searchQ = ref('')
+const searching = computed(() => !props.shareId && searchQ.value.trim().length > 0)
 let loadSeq = 0
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+let searchSeq = 0
+let suppressSearchWatch = false
+
+function routeSearchQ() {
+  if (props.shareId) return ''
+  const q = route.query.q
+  if (Array.isArray(q)) return String(q[0] || '').trim()
+  return typeof q === 'string' ? q.trim() : ''
+}
+
+async function syncSearchToRoute(q: string) {
+  if (props.shareId) return
+  const term = q.trim()
+  if (term === routeSearchQ()) return
+  const query = { ...route.query } as Record<string, string | string[] | undefined>
+  if (term) query.q = term
+  else delete query.q
+  await navigateTo({ path: route.path, query }, { replace: true })
+}
 
 const errorTitle = computed(() => {
   const s = errorStatus.value
@@ -475,10 +645,18 @@ const moveOpen = ref(false)
 const moveDest = ref('')
 const moveError = ref('')
 const moveInput = ref<HTMLInputElement | null>(null)
+const sortOpen = ref(false)
 const menuPath = ref('')
 type SortKey = 'type' | 'name' | 'description' | 'owner' | 'size' | 'date'
 const sortKey = ref<SortKey>('name')
 const sortDir = ref<'asc' | 'desc'>('asc')
+const sortFieldOptions: { key: SortKey; label: string }[] = [
+  { key: 'name', label: 'Name' },
+  { key: 'size', label: 'Size' },
+  { key: 'date', label: 'Modified' },
+  { key: 'description', label: 'Description' },
+  { key: 'owner', label: 'Owner' },
+]
 
 const rootLink = computed(() => (props.shareId ? `/s/${props.shareId}` : '/'))
 const rootLabel = '/'
@@ -538,6 +716,10 @@ function sortBy(key: SortKey) {
     sortKey.value = key
     sortDir.value = key === 'date' || key === 'size' ? 'desc' : 'asc'
   }
+}
+
+function setSortKey(key: SortKey) {
+  sortKey.value = key
 }
 
 function sortIndicator(key: SortKey) {
@@ -633,6 +815,19 @@ async function load() {
   loading.value = true
   selected.value = []
   menuPath.value = ''
+  const q = routeSearchQ()
+  suppressSearchWatch = true
+  searchQ.value = q
+  suppressSearchWatch = false
+  if (q) {
+    await runSearch(q)
+    if (seq === loadSeq) {
+      // Keep crumbs on the search root together with the result list.
+      listedPath.value = path
+      loading.value = false
+    }
+    return
+  }
   try {
     const res = await fetchListing(path)
     if (seq !== loadSeq) return
@@ -658,12 +853,76 @@ async function load() {
   }
 }
 
+async function runSearch(q: string) {
+  const term = q.trim()
+  // Always scope to the folder currently being browsed (and its descendants).
+  const path = props.basePath || '/'
+  const seq = ++searchSeq
+  if (!term) {
+    const res = await fetchListing(path)
+    if (seq !== searchSeq) return
+    files.value = res.files
+    dirPerms.value = res.permissions
+    selected.value = []
+    return
+  }
+  loading.value = true
+  error.value = ''
+  errorStatus.value = 0
+  try {
+    const res = await api.queryPath(path, term)
+    if (seq !== searchSeq) return
+    files.value = res.files || []
+    dirPerms.value = res.permissions ?? dirPerms.value
+    selected.value = []
+  } catch (e: any) {
+    if (seq !== searchSeq) return
+    const status = Number(e?.statusCode || e?.status || e?.response?.status || 0)
+    if (status !== 401) {
+      errorStatus.value = status
+      error.value = e?.data?.message || e.message || 'Search failed'
+    }
+    files.value = []
+  } finally {
+    if (seq === searchSeq) loading.value = false
+  }
+}
+
+function clearSearch() {
+  searchQ.value = ''
+}
+
+watch(searchQ, (q) => {
+  if (props.shareId || suppressSearchWatch) return
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    void syncSearchToRoute(q)
+    void runSearch(q)
+  }, 250)
+})
+
+watch(() => route.query.q, () => {
+  if (props.shareId || suppressSearchWatch) return
+  const term = routeSearchQ()
+  if (term === searchQ.value.trim()) return
+  suppressSearchWatch = true
+  searchQ.value = term
+  suppressSearchWatch = false
+  void runSearch(term)
+})
+
 async function goTo(path: string | null | undefined) {
   if (!path) return
   const cur = props.basePath || '/'
-  if (path === cur) return
-  void fetchListing(path)
-  await navigateTo(path)
+  const next = normalizePath(path)
+  if (next === normalizePath(cur) && !routeSearchQ()) return
+  suppressSearchWatch = true
+  searchQ.value = ''
+  suppressSearchWatch = false
+  // Prefetch; load() applies files + crumbs together when the route updates.
+  void fetchListing(next)
+  // Drop ?q when leaving search / changing folders.
+  await navigateTo({ path: next, query: {} })
 }
 
 function linkFor(f: FileEntry) {
@@ -674,6 +933,46 @@ function linkFor(f: FileEntry) {
     return `${base}/${f.name}`
   }
   return f.path
+}
+
+function containingFolder(f: FileEntry) {
+  const p = normalizePath(f.path)
+  if (p === '/') return ''
+  const idx = p.lastIndexOf('/')
+  return idx <= 0 ? '/' : p.slice(0, idx)
+}
+
+/** Parent path relative to the search root (empty if the hit is directly in that folder). */
+function resultParentRel(f: FileEntry) {
+  const parent = containingFolder(f)
+  if (!parent) return ''
+  const root = normalizePath(props.basePath || '/')
+  if (parent === root) return ''
+  if (root === '/') return parent.replace(/^\//, '')
+  if (parent.startsWith(root + '/')) return parent.slice(root.length + 1)
+  return parent.replace(/^\//, '')
+}
+
+function displayName(f: FileEntry) {
+  if (!searching.value) return f.name
+  return f.path.split('/').filter(Boolean).at(-1) || f.name
+}
+
+function openContainingFolder(f: FileEntry) {
+  const dir = containingFolder(f)
+  if (!dir) return
+  void goTo(dir)
+}
+
+function openEntry(f: FileEntry) {
+  if (f.is_dir) void goTo(linkFor(f))
+  else window.open(streamUrl(f), '_blank', 'noopener')
+}
+
+function onFileRowClick(e: MouseEvent, f: FileEntry) {
+  const t = e.target as HTMLElement | null
+  if (t?.closest('a, button, input, label, .row-actions, .row-menu')) return
+  openEntry(f)
 }
 
 function toggle(path: string) {
@@ -733,6 +1032,11 @@ function onKeydown(e: KeyboardEvent) {
   // Nested dialogs (upload/permissions/settings/admin) handle Escape themselves.
   if (shareOpen.value) {
     closeShare()
+    e.preventDefault()
+    return
+  }
+  if (sortOpen.value) {
+    sortOpen.value = false
     e.preventDefault()
     return
   }
@@ -867,6 +1171,7 @@ async function copyShare() {
 }
 
 async function openACL(path: string) {
+  menuPath.value = ''
   aclPath.value = path
   aclOpen.value = true
 }

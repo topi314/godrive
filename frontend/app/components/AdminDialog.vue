@@ -115,6 +115,7 @@
               </tr>
             </tbody>
           </table>
+          <PermLegend class="perm-legend-footer" marks />
           </template>
         </section>
     </div>

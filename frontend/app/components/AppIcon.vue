@@ -97,6 +97,15 @@
     <template v-else-if="name === 'folder'">
       <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
     </template>
+    <template v-else-if="name === 'folder-plus'">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+      <line x1="12" y1="11" x2="12" y2="17" />
+      <line x1="9" y1="14" x2="15" y2="14" />
+    </template>
+    <template v-else-if="name === 'folder-open'">
+      <path d="M5 19a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4l2 3h9a2 2 0 0 1 2 2v1" />
+      <path d="M3 17h16l2 4H5a2 2 0 0 1-2-2z" />
+    </template>
     <template v-else-if="name === 'move'">
       <polyline points="5 9 2 12 5 15" />
       <polyline points="9 5 12 2 15 5" />
@@ -104,6 +113,14 @@
       <polyline points="19 9 22 12 19 15" />
       <line x1="2" y1="12" x2="22" y2="12" />
       <line x1="12" y1="2" x2="12" y2="22" />
+    </template>
+    <template v-else-if="name === 'search'">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </template>
+    <template v-else-if="name === 'sort'">
+      <path d="M11 5h10M11 12h7M11 19h4" />
+      <path d="M3 8l3-3 3 3M6 5v14" />
     </template>
     <template v-else-if="name === 'home'">
       <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />

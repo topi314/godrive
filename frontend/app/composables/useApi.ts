@@ -141,6 +141,39 @@ export function useApi() {
     })
   }
 
+  /** Search under path via HTTP QUERY (RFC 10008). */
+  async function queryPath(path: string, q: string) {
+    // ofetch only serializes bodies for POST/PUT/PATCH/DELETE, so QUERY must use fetch.
+    const url = publicFilePath(path)
+    const doFetch = () => fetch(url, {
+      method: 'QUERY',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ q }),
+      credentials: 'same-origin',
+    })
+    let res = await doFetch()
+    if (res.status === 401) {
+      try {
+        await refreshSession()
+        res = await doFetch()
+      } catch {
+        /* keep 401 */
+      }
+    }
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      const err: any = new Error(data?.message || res.statusText || 'Search failed')
+      err.statusCode = res.status
+      err.status = res.status
+      err.data = data
+      throw err
+    }
+    return data as { path: string; q: string; files: FileEntry[]; permissions?: number }
+  }
+
   async function mkdir(dir: string, name: string) {
     const base = publicFilePath(dir)
     const target = base === '/' ? `/${name}` : `${base}/${name}`
@@ -409,6 +442,7 @@ export function useApi() {
     me,
     updateMe,
     listPath,
+    queryPath,
     mkdir,
     rename,
     move,

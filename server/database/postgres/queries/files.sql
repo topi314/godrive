@@ -6,6 +6,16 @@ SELECT * FROM files
 WHERE path = @path OR path LIKE @path_like
 ORDER BY path;
 
+-- name: SearchFilesUnder :many
+SELECT * FROM files
+WHERE (path = @path OR path LIKE @path_like)
+  AND (
+    path ILIKE @term_like
+    OR COALESCE(description, '') ILIKE @term_like
+  )
+ORDER BY path
+LIMIT 200;
+
 -- name: UpsertFile :one
 INSERT INTO files (path, size, content_type, description, user_id, created_at, updated_at)
 VALUES (@path, @size, @content_type, @description, @user_id, @created_at, @updated_at)

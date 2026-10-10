@@ -313,6 +313,99 @@ func wantsJSON(r *http.Request) bool {
 	return strings.Contains(r.Header.Get("Accept"), "application/json")
 }
 
+type queryFilesBody struct {
+	Q string `json:"q"`
+}
+
+// QueryFilesAPI handles QUERY /{path} (RFC 10008): search under the target folder.
+// Body: {"q":"term"} with Content-Type application/json.
+func (s *Server) QueryFilesAPI(w http.ResponseWriter, r *http.Request) {
+	ct := r.Header.Get("Content-Type")
+	if ct == "" || !strings.HasPrefix(strings.ToLower(ct), "application/json") {
+		s.writeError(w, r, errors.New("Content-Type must be application/json"), http.StatusUnsupportedMediaType)
+		return
+	}
+	var body queryFilesBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		s.writeError(w, r, errors.New("invalid json"), http.StatusBadRequest)
+		return
+	}
+	q := strings.TrimSpace(body.Q)
+	if q == "" {
+		s.writeError(w, r, errors.New("q required"), http.StatusBadRequest)
+		return
+	}
+	if len([]rune(q)) > 200 {
+		s.writeError(w, r, errors.New("q too long"), http.StatusBadRequest)
+		return
+	}
+
+	dir := s.filePathFromRequest(r)
+	info := GetUserInfo(r)
+	if s.cfg.AuthEnabled() {
+		perms, err := s.EffectivePermissions(r.Context(), dir, info, nil)
+		if err != nil {
+			s.writeError(w, r, err, http.StatusInternalServerError)
+			return
+		}
+		if !perms.Has(acl.PermissionRead) {
+			anon, _ := s.CanAnonymousRead(r.Context(), dir)
+			if !anon && !s.isGuest(info) {
+				s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
+				return
+			}
+		}
+	}
+
+	// Index this folder and all descendants before searching so nested files are visible.
+	s.syncPrefix(r.Context(), dir)
+
+	rows, err := s.store.Q.SearchFilesUnder(r.Context(), database.SearchFilesUnderParams{
+		Path:     dir,
+		PathLike: acl.LikeUnder(dir),
+		TermLike: acl.LikeContains(q),
+	})
+	if err != nil {
+		s.writeError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+
+	out := make([]FileEntry, 0, len(rows))
+	for _, row := range rows {
+		if acl.IsReservedPath(row.Path) || row.Path == dir {
+			continue
+		}
+		owner := ""
+		if row.UserID.Valid {
+			owner = row.UserID.String
+		}
+		eff, err := s.EffectivePermissions(r.Context(), row.Path, info, nullableStr(owner))
+		if err != nil {
+			continue
+		}
+		if s.cfg.AuthEnabled() && !eff.Has(acl.PermissionRead) {
+			continue
+		}
+		entry := s.fileEntryFromRow(r.Context(), row, owner, eff)
+		// Prefer path relative to the search root so deep hits stay distinguishable.
+		rel := strings.TrimPrefix(row.Path, dir)
+		rel = strings.TrimPrefix(rel, "/")
+		if rel != "" {
+			entry.Name = rel
+		}
+		out = append(out, entry)
+	}
+
+	dirPerms, _ := s.EffectivePermissions(r.Context(), dir, info, nil)
+	w.Header().Set("Accept-Query", "application/json")
+	s.writeJSON(w, map[string]any{
+		"path":        dir,
+		"q":           q,
+		"files":       out,
+		"permissions": uint64(dirPerms),
+	}, http.StatusOK)
+}
+
 var contentTypeByExt = map[string]string{
 	".mp3":  "audio/mpeg",
 	".m4a":  "audio/mp4",

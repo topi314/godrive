@@ -52,6 +52,40 @@ func LikeUnder(prefix string) string {
 	return prefix + "/%"
 }
 
+// LikeContains builds a LIKE/ILIKE pattern from a user search term.
+// Always matches as a substring of path/description. Wildcards:
+//   * — any sequence (SQL %)
+//   ? — single character (SQL _)
+// Literal SQL metacharacters (%, _, \) in the input are ignored.
+func LikeContains(term string) string {
+	var b strings.Builder
+	for _, r := range term {
+		switch r {
+		case '*':
+			b.WriteByte('%')
+		case '?':
+			b.WriteByte('_')
+		case '%', '_', '\\':
+			continue
+		default:
+			b.WriteRune(r)
+		}
+	}
+	pat := b.String()
+	if pat == "" {
+		return "%"
+	}
+	// Wrap so patterns like test(*).mp3 match /home/…/test(1).mp3, not only
+	// paths that begin with "test(".
+	if !strings.HasPrefix(pat, "%") {
+		pat = "%" + pat
+	}
+	if !strings.HasSuffix(pat, "%") {
+		pat = pat + "%"
+	}
+	return pat
+}
+
 func IsSelfOrUnder(p, root string) bool {
 	p, root = NormalizePath(p), NormalizePath(root)
 	if p == root {
