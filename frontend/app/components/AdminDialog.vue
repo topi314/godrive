@@ -137,6 +137,7 @@ const props = defineProps<{ me: Me | null }>()
 
 const api = useApi()
 const { toast } = useToast()
+const { confirm } = useConfirm()
 const tab = ref<'users' | 'access'>('users')
 const users = ref<any[]>([])
 const allACL = ref<any[]>([])
@@ -263,7 +264,13 @@ async function saveUserHome(id: string) {
 }
 
 async function delUser(id: string) {
-  if (!confirm('Delete this user and their sessions/tokens?')) return
+  const ok = await confirm({
+    title: 'Delete user',
+    message: 'Delete this user and their sessions/tokens?',
+    confirmLabel: 'Delete',
+    danger: true,
+  })
+  if (!ok) return
   error.value = ''
   try {
     await api.deleteUser(id)

@@ -95,6 +95,9 @@ func (s *Server) listDir(ctx context.Context, dir string, info *UserInfo) ([]Fil
 	var files []FileEntry
 
 	for _, row := range rows {
+		if acl.IsReservedPath(row.Path) {
+			continue
+		}
 		owner := ""
 		if row.UserID.Valid {
 			owner = row.UserID.String
@@ -121,6 +124,10 @@ func (s *Server) listDir(ctx context.Context, dir string, info *UserInfo) ([]Fil
 		}
 		if len(parts) > 1 || storage.IsDirectory(row.ContentType) {
 			name := parts[0]
+			dpath := acl.NormalizePath(path.Join(dir, name))
+			if acl.IsReservedPath(dpath) {
+				continue
+			}
 			updated := row.UpdatedAt.UTC().Format(time.RFC3339)
 			size := row.Size
 			dirRow := len(parts) == 1 && storage.IsDirectory(row.ContentType)
@@ -144,7 +151,6 @@ func (s *Server) listDir(ctx context.Context, dir string, info *UserInfo) ([]Fil
 				}
 				continue
 			}
-			dpath := acl.NormalizePath(path.Join(dir, name))
 			ownerPtr := (*string)(nil)
 			if dirRow {
 				ownerPtr = nullableStr(owner)
@@ -366,8 +372,73 @@ func zipEntryName(root, filePath string, isDir bool) string {
 	return name
 }
 
+// zipSelectionPaths returns absolute paths for optional ?name= child filters.
+// Names must be single path segments under root. Empty means zip the whole folder.
+func zipSelectionPaths(root string, names []string) []string {
+	if len(names) == 0 {
+		return nil
+	}
+	root = acl.NormalizePath(root)
+	var out []string
+	seen := map[string]struct{}{}
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" || name == "." || name == ".." || strings.ContainsAny(name, "/\\") {
+			continue
+		}
+		p := acl.NormalizePath(path.Join(root, name))
+		if _, ok := seen[p]; ok {
+			continue
+		}
+		seen[p] = struct{}{}
+		out = append(out, p)
+	}
+	return out
+}
+
+func zipPathSelected(filePath string, selection []string) bool {
+	if len(selection) == 0 {
+		return true
+	}
+	filePath = acl.NormalizePath(filePath)
+	for _, sel := range selection {
+		if filePath == sel || strings.HasPrefix(filePath, sel+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// zipEntryNameSelected places each selected item at the zip root (file name or folder tree).
+func zipEntryNameSelected(selection []string, filePath string, isDir bool) (string, bool) {
+	filePath = acl.NormalizePath(filePath)
+	for _, sel := range selection {
+		sel = acl.NormalizePath(sel)
+		if filePath != sel && !strings.HasPrefix(filePath, sel+"/") {
+			continue
+		}
+		base := path.Base(sel)
+		rel := strings.TrimPrefix(filePath, sel)
+		rel = strings.TrimPrefix(rel, "/")
+		name := base
+		if rel != "" {
+			name = base + "/" + rel
+		}
+		if isDir && !strings.HasSuffix(name, "/") {
+			name += "/"
+		}
+		return name, true
+	}
+	return "", false
+}
+
 func (s *Server) streamZip(w http.ResponseWriter, r *http.Request, root string, info *UserInfo, skipACL bool) {
 	root = acl.NormalizePath(root)
+	selection := zipSelectionPaths(root, r.URL.Query()["name"])
+	if len(r.URL.Query()["name"]) > 0 && len(selection) == 0 {
+		s.writeError(w, r, errors.New("invalid name"), http.StatusBadRequest)
+		return
+	}
 	rows, err := s.store.Q.ListFilesUnder(r.Context(), database.ListFilesUnderParams{
 		Path:     root,
 		PathLike: acl.LikeUnder(root),
@@ -378,7 +449,7 @@ func (s *Server) streamZip(w http.ResponseWriter, r *http.Request, root string, 
 	}
 
 	filename := path.Base(root) + ".zip"
-	if root == "/" {
+	if root == "/" || len(selection) > 0 {
 		filename = "files.zip"
 	}
 	w.Header().Set("Content-Type", "application/zip")
@@ -390,6 +461,12 @@ func (s *Server) streamZip(w http.ResponseWriter, r *http.Request, root string, 
 
 	added := map[string]struct{}{}
 	for _, row := range rows {
+		if acl.IsReservedPath(row.Path) {
+			continue
+		}
+		if !zipPathSelected(row.Path, selection) {
+			continue
+		}
 		owner := ""
 		if row.UserID.Valid {
 			owner = row.UserID.String
@@ -404,7 +481,16 @@ func (s *Server) streamZip(w http.ResponseWriter, r *http.Request, root string, 
 		if row.Path == root && isDir {
 			continue
 		}
-		name := zipEntryName(root, row.Path, isDir)
+		var name string
+		if len(selection) > 0 {
+			var ok bool
+			name, ok = zipEntryNameSelected(selection, row.Path, isDir)
+			if !ok {
+				continue
+			}
+		} else {
+			name = zipEntryName(root, row.Path, isDir)
+		}
 		if _, ok := added[name]; ok {
 			continue
 		}

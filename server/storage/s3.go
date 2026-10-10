@@ -228,6 +228,9 @@ func (s *s3Storage) List(ctx context.Context, prefix string) ([]ObjectInfo, erro
 			}
 			key := *obj.Key
 			logical := acl.NormalizePath("/" + strings.TrimSuffix(key, "/"))
+			if acl.IsReservedPath(logical) {
+				continue
+			}
 			info := ObjectInfo{Path: logical}
 			if strings.HasSuffix(key, "/") {
 				info.ContentType = ContentTypeDirectory

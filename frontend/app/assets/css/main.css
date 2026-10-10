@@ -1225,6 +1225,30 @@ input[type="checkbox"]:checked:hover {
   margin-top: 1rem;
 }
 
+.move-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
+}
+
+.move-pick {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 0.3rem 0.65rem;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.move-pick:hover {
+  border-color: var(--accent, var(--line));
+  background: var(--input-bg, var(--bg));
+}
+
 .btn-primary {
   display: inline-flex;
   align-items: center;
@@ -1259,6 +1283,47 @@ input[type="checkbox"]:checked:hover {
   opacity: 0.55;
   cursor: wait;
   filter: none;
+}
+
+.btn-primary.danger {
+  border-color: color-mix(in srgb, var(--text-error) 55%, transparent);
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--text-error) 92%, #fff),
+    var(--text-error)
+  );
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--text-error) 28%, transparent);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-width: 7rem;
+  padding: 0.65rem 1.1rem;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  background: var(--input-bg, var(--bg-elev));
+}
+
+.btn-secondary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.confirm-dialog p {
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.45;
 }
 
 .load-error {

@@ -112,6 +112,7 @@
       :me="user"
     />
     <LoginRequiredDialog v-if="needsLogin" :href="loginHref" />
+    <ConfirmDialog />
     <ToastHost />
   </div>
 </template>

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -231,6 +232,9 @@ func (s *localStorage) List(ctx context.Context, prefix string) ([]ObjectInfo, e
 				return nil
 			}
 			logical := s.toLogical(path)
+			if acl.IsReservedPath(logical) {
+				return filepath.SkipDir
+			}
 			if prefix != "/" && logical != prefix && !strings.HasPrefix(logical, prefix+"/") {
 				return nil
 			}
@@ -242,6 +246,9 @@ func (s *localStorage) List(ctx context.Context, prefix string) ([]ObjectInfo, e
 			return nil
 		}
 		logical := s.toLogical(path)
+		if acl.IsReservedPath(logical) {
+			return nil
+		}
 		if prefix != "/" && logical != prefix && !strings.HasPrefix(logical, prefix+"/") {
 			return nil
 		}
@@ -263,6 +270,9 @@ func (s *localStorage) Watch(ctx context.Context, onChange func(Event)) error {
 
 	var addDir func(string)
 	addDir = func(dir string) {
+		if dir != s.root && acl.IsReservedPath(s.toLogical(dir)) {
+			return
+		}
 		_ = watcher.Add(dir)
 		entries, err := os.ReadDir(dir)
 		if err != nil {
@@ -277,6 +287,7 @@ func (s *localStorage) Watch(ctx context.Context, onChange func(Event)) error {
 	addDir(s.root)
 
 	debounce := map[string]*time.Timer{}
+	var debounceMu sync.Mutex
 	go func() {
 		defer watcher.Close()
 		for {
@@ -294,8 +305,11 @@ func (s *localStorage) Watch(ctx context.Context, onChange func(Event)) error {
 				}
 				if ev.Has(fsnotify.Create) {
 					if st, err := os.Stat(ev.Name); err == nil && st.IsDir() {
-						addDir(ev.Name)
 						logical := s.toLogical(ev.Name)
+						if acl.IsReservedPath(logical) {
+							continue
+						}
+						addDir(ev.Name)
 						info, err := s.Stat(ctx, logical)
 						if err == nil {
 							onChange(Event{Type: EventUpsert, Path: logical, Info: info})
@@ -304,16 +318,20 @@ func (s *localStorage) Watch(ctx context.Context, onChange func(Event)) error {
 					}
 				}
 				logical := s.toLogical(ev.Name)
-				if strings.HasSuffix(logical, ".tmp") {
+				if acl.IsReservedPath(logical) || strings.HasSuffix(logical, ".tmp") {
 					continue
 				}
-				if t, ok := debounce[logical]; ok {
+				path := logical
+				remove := ev.Has(fsnotify.Remove) || ev.Has(fsnotify.Rename)
+				debounceMu.Lock()
+				if t, ok := debounce[path]; ok {
 					t.Stop()
 				}
-				path := logical
 				debounce[path] = time.AfterFunc(200*time.Millisecond, func() {
+					debounceMu.Lock()
 					delete(debounce, path)
-					if ev.Has(fsnotify.Remove) || ev.Has(fsnotify.Rename) {
+					debounceMu.Unlock()
+					if remove {
 						onChange(Event{Type: EventDelete, Path: path})
 						return
 					}
@@ -323,6 +341,7 @@ func (s *localStorage) Watch(ctx context.Context, onChange func(Event)) error {
 					}
 					onChange(Event{Type: EventUpsert, Path: path, Info: info})
 				})
+				debounceMu.Unlock()
 			}
 		}
 	}()

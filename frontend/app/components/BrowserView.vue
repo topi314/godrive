@@ -28,6 +28,7 @@
       <IconBtn name="download" label="Download" :disabled="!selected.length" @click="downloadSelected" />
       <IconBtn name="upload" label="Upload" :disabled="!canCreate" @click="openUpload()" />
       <IconBtn name="folder" label="New folder" :disabled="!canCreate || !!shareId" @click="openNewFolder" />
+      <IconBtn name="move" label="Move" :disabled="!selected.length || !canMove || !!shareId" @click="openMove" />
       <IconBtn name="trash" label="Delete" variant="danger" :disabled="!selected.length || !canDelete || !!shareId" @click="deleteSelected" />
       <input ref="fileInput" type="file" multiple hidden @change="onPick" />
     </div>
@@ -242,6 +243,39 @@
       </div>
     </div>
 
+    <div v-if="moveOpen" class="dialog-backdrop" @click.self="moveOpen = false" @keydown.escape.prevent="moveOpen = false">
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="move-title">
+        <div class="dialog-head">
+          <h2 id="move-title">Move {{ selected.length }} item{{ selected.length === 1 ? '' : 's' }}</h2>
+          <IconBtn name="x" label="Close" variant="ghost" @click="moveOpen = false" />
+        </div>
+        <label>
+          Destination folder
+          <input
+            ref="moveInput"
+            v-model="moveDest"
+            placeholder="/path/to/folder or ../folder"
+            @keydown.enter.prevent="submitMove"
+            @keydown.escape.prevent="moveOpen = false"
+          >
+        </label>
+        <div v-if="moveFolderPicks.length" class="move-picks">
+          <button
+            v-for="f in moveFolderPicks"
+            :key="f.path"
+            type="button"
+            class="move-pick"
+            @click="moveDest = f.path"
+          >{{ f.name }}</button>
+        </div>
+        <p class="muted">Absolute path, or relative to the current folder. Nested folders are created if needed.</p>
+        <p v-if="moveError" class="error">{{ moveError }}</p>
+        <div class="dialog-actions">
+          <IconBtn name="check" label="Move" variant="primary" :disabled="!moveDest.trim()" @click="submitMove" />
+        </div>
+      </div>
+    </div>
+
     <div v-if="shareOpen" class="dialog-backdrop" @click.self="closeShare" @keydown.escape.prevent="closeShare">
       <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="share-title">
         <div class="dialog-head">
@@ -329,6 +363,7 @@ import { PERM_FLAGS, cycleAllowDeny, markClass, markLabel } from '~/composables/
 import {
   fileDownloadUrl,
   fileStreamUrl,
+  fileZipDownloadUrl,
   hasPerm,
   mediaKind,
   Perm,
@@ -340,6 +375,7 @@ import {
 const props = defineProps<{ basePath: string; shareId?: string }>()
 const api = useApi()
 const { toast } = useToast()
+const { confirm } = useConfirm()
 const user = useState<Me | null>('me')
 const files = ref<FileEntry[]>([])
 const dirPerms = ref(0)
@@ -435,6 +471,10 @@ const renameName = ref('')
 const renameError = ref('')
 const renamePath = ref('')
 const renameInput = ref<HTMLInputElement | null>(null)
+const moveOpen = ref(false)
+const moveDest = ref('')
+const moveError = ref('')
+const moveInput = ref<HTMLInputElement | null>(null)
 const menuPath = ref('')
 type SortKey = 'type' | 'name' | 'description' | 'owner' | 'size' | 'date'
 const sortKey = ref<SortKey>('name')
@@ -536,6 +576,12 @@ const homePath = computed(() => {
 const canDelete = computed(() =>
   selectedEntries.value.length > 0 && selectedEntries.value.every(f => rowCan(f, Perm.Delete)),
 )
+/** Move needs Delete on each source (Create on dest is checked by the API). */
+const canMove = computed(() => canDelete.value)
+const moveFolderPicks = computed(() => {
+  const selectedSet = new Set(selected.value)
+  return files.value.filter(f => f.is_dir && !selectedSet.has(f.path))
+})
 const allSelected = computed(() => files.value.length > 0 && selected.value.length === files.value.length)
 const absoluteShare = computed(() => (typeof window !== 'undefined' ? window.location.origin : '') + shareUrl.value)
 const shareExpiresLabel = computed(() => {
@@ -690,6 +736,11 @@ function onKeydown(e: KeyboardEvent) {
     e.preventDefault()
     return
   }
+  if (moveOpen.value) {
+    moveOpen.value = false
+    e.preventDefault()
+    return
+  }
   if (renameOpen.value) {
     renameOpen.value = false
     e.preventDefault()
@@ -711,22 +762,48 @@ function dropPaths(paths: string[]) {
 }
 
 async function deleteSelected() {
-  if (!confirm('Delete selected?')) return
+  const n = selected.value.length
+  const ok = await confirm({
+    title: 'Delete',
+    message: n === 1 ? 'Delete this item?' : `Delete ${n} selected items?`,
+    confirmLabel: 'Delete',
+    danger: true,
+  })
+  if (!ok) return
   const paths = [...selected.value]
   await api.remove(paths)
   dropPaths(paths)
 }
 
 async function deleteOne(f: FileEntry) {
-  if (!confirm(`Delete ${f.name}?`)) return
+  const ok = await confirm({
+    title: 'Delete',
+    message: `Delete ${f.name}?`,
+    confirmLabel: 'Delete',
+    danger: true,
+  })
+  if (!ok) return
   await api.remove([f.path])
   dropPaths([f.path])
 }
 
 function downloadSelected() {
-  for (const f of selectedEntries.value) {
-    window.open(downloadUrl(f), '_blank')
+  const entries = selectedEntries.value
+  if (!entries.length) return
+  if (entries.length === 1) {
+    window.open(downloadUrl(entries[0]), '_blank')
+    return
   }
+  const names = entries.map(f => f.name)
+  if (props.shareId) {
+    const base = (listedPath.value || props.basePath || `/s/${props.shareId}`).replace(/\/$/, '') || `/s/${props.shareId}`
+    const params = new URLSearchParams()
+    params.set('dl', '1')
+    for (const name of names) params.append('name', name)
+    window.open(`${base}?${params.toString()}`, '_blank')
+    return
+  }
+  window.open(fileZipDownloadUrl(listedPath.value || '/', names), '_blank')
 }
 
 function downloadOne(f: FileEntry) {
@@ -847,6 +924,68 @@ async function openRename(f: FileEntry) {
   await nextTick()
   renameInput.value?.focus()
   renameInput.value?.select()
+}
+
+function resolveMoveDest(spec: string, cwd: string) {
+  const raw = spec.replaceAll('\\', '/').trim()
+  if (!raw) return ''
+  const joined = raw.startsWith('/')
+    ? raw
+    : (cwd === '/' ? '' : cwd) + '/' + raw
+  const parts: string[] = []
+  for (const part of joined.split('/')) {
+    if (!part || part === '.') continue
+    if (part === '..') {
+      parts.pop()
+      continue
+    }
+    parts.push(part)
+  }
+  return parts.length ? '/' + parts.join('/') : '/'
+}
+
+function invalidMoveDest(dest: string, sources: string[]) {
+  if (!dest) return 'Destination required'
+  for (const src of sources) {
+    if (dest === src || dest.startsWith(src + '/')) {
+      return 'Cannot move into a selected folder'
+    }
+  }
+  return ''
+}
+
+async function openMove() {
+  if (!canMove.value || props.shareId) return
+  moveDest.value = ''
+  moveError.value = ''
+  moveOpen.value = true
+  await nextTick()
+  moveInput.value?.focus()
+}
+
+async function submitMove() {
+  const paths = [...selected.value]
+  if (!paths.length) return
+  const dest = resolveMoveDest(moveDest.value, listedPath.value || '/')
+  const bad = invalidMoveDest(dest, paths)
+  if (bad) {
+    moveError.value = bad
+    return
+  }
+  const parent = listedPath.value || '/'
+  if (dest === parent) {
+    moveError.value = 'Already in this folder'
+    return
+  }
+  moveError.value = ''
+  try {
+    await api.move(paths, dest)
+    moveOpen.value = false
+    toast(paths.length === 1 ? 'Moved' : `Moved ${paths.length} items`)
+    dropPaths(paths)
+  } catch (e: any) {
+    moveError.value = e?.data?.message || e.message || 'Failed to move'
+  }
 }
 
 async function submitRename() {

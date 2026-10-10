@@ -62,6 +62,17 @@ export function fileDownloadUrl(path: string) {
   return base + (base.includes('?') ? '&' : '?') + 'dl=1'
 }
 
+/** Zip download for selected children of a directory (`?dl=1&name=…`). */
+export function fileZipDownloadUrl(dir: string, names: string[]) {
+  const base = publicFilePath(dir)
+  const params = new URLSearchParams()
+  params.set('dl', '1')
+  for (const name of names) {
+    if (name) params.append('name', name)
+  }
+  return base + '?' + params.toString()
+}
+
 /** Inline stream URL — public path, raw bytes for the browser. */
 export function fileStreamUrl(path: string) {
   return publicFilePath(path)
@@ -141,6 +152,38 @@ export function useApi() {
       method: 'PATCH',
       body: { name },
     })
+  }
+
+  /** Move one or more paths into dest (directory). Uses PUT + Destination. */
+  async function move(paths: string[], dest: string) {
+    const unique = [...new Set(paths.map(publicFilePath).filter(p => p && p !== '/'))]
+    const destination = publicFilePath(dest)
+    if (!unique.length || !destination) return
+
+    const byParent = new Map<string, string[]>()
+    for (const full of unique) {
+      const parts = full.split('/').filter(Boolean)
+      const name = parts.at(-1)!
+      const parent = parts.length <= 1 ? '/' : '/' + parts.slice(0, -1).join('/')
+      const list = byParent.get(parent) || []
+      list.push(name)
+      byParent.set(parent, list)
+    }
+
+    await Promise.all([...byParent.entries()].map(([parent, names]) => {
+      if (names.length === 1) {
+        const target = parent === '/' ? `/${names[0]}` : `${parent}/${names[0]}`
+        return apiFetch(target, {
+          method: 'PUT',
+          headers: { Destination: destination },
+        })
+      }
+      return apiFetch(parent === '/' ? '/' : parent, {
+        method: 'PUT',
+        headers: { Destination: destination },
+        body: names,
+      })
+    }))
   }
 
   async function setOwner(path: string, ownerId: string, opts?: { recursive?: boolean }) {
@@ -368,6 +411,7 @@ export function useApi() {
     listPath,
     mkdir,
     rename,
+    move,
     setOwner,
     remove,
     getPermissions,

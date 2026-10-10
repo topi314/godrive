@@ -15,9 +15,11 @@ var reservedPrefixes = []string{
 	"/api",
 	"/s",
 	"/_nuxt",
+	"/.uploads", // resumable-upload staging (local + S3); not a user folder
 }
 
-// IsReservedPath reports whether p conflicts with app routes or embedded static assets.
+// IsReservedPath reports whether p conflicts with app routes, embedded static
+// assets, or internal storage staging paths.
 func IsReservedPath(p string) bool {
 	p = NormalizePath(p)
 	for _, prefix := range reservedPrefixes {
