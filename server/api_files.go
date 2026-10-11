@@ -204,6 +204,8 @@ func nullableStr(s string) *string {
 func (s *Server) GetPath(w http.ResponseWriter, r *http.Request) {
 	p := acl.NormalizePath(r.URL.Path)
 	info := GetUserInfo(r)
+	// Path GETs negotiate HTML vs JSON; always vary so caches don't mix them.
+	varyAccept(w)
 
 	// Pick up files that exist on disk but aren't indexed yet before deciding SPA vs stream.
 	s.syncPrefix(r.Context(), p)
@@ -298,7 +300,7 @@ func (s *Server) GetPath(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		dirPerms, _ := s.EffectivePermissions(r.Context(), p, info, nil)
-		s.writeJSON(w, map[string]any{
+		s.writeNegotiatedJSON(w, map[string]any{
 			"path":        p,
 			"files":       entries,
 			"permissions": uint64(dirPerms),

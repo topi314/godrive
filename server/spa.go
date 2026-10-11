@@ -17,6 +17,7 @@ func (s *Server) serveSPA(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "frontend not built", http.StatusServiceUnavailable)
 		return
 	}
+	varyAccept(w)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	_, _ = w.Write(data)

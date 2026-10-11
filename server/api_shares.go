@@ -368,6 +368,7 @@ func (s *Server) listShareDir(ctx context.Context, share database.Share, target 
 }
 
 func (s *Server) GetSharePage(w http.ResponseWriter, r *http.Request) {
+	varyAccept(w)
 	share, target, err := s.resolveShare(r)
 	if err != nil {
 		if isBot(r) {
@@ -427,7 +428,7 @@ func (s *Server) GetSharePage(w http.ResponseWriter, r *http.Request) {
 
 	if wantsJSON(r) {
 		if !sharePerms.Has(acl.PermissionRead) {
-			s.writeJSON(w, map[string]any{
+			s.writeNegotiatedJSON(w, map[string]any{
 				"path":        shareBrowsePath(share, target),
 				"share_id":    share.ID,
 				"files":       []FileEntry{},
@@ -444,7 +445,7 @@ func (s *Server) GetSharePage(w http.ResponseWriter, r *http.Request) {
 			s.writeError(w, r, err, status)
 			return
 		}
-		s.writeJSON(w, map[string]any{
+		s.writeNegotiatedJSON(w, map[string]any{
 			"path":        shareBrowsePath(share, target),
 			"share_id":    share.ID,
 			"files":       entries,
