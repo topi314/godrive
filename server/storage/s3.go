@@ -1,12 +1,14 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -43,9 +45,19 @@ func newS3Storage(ctx context.Context, cfg config.StorageConfig) (*s3Storage, er
 		}
 		o.EndpointOptions.DisableHTTPS = !s3cfg.Secure
 		o.UsePathStyle = s3cfg.ForcePathStyle || s3cfg.Endpoint != ""
+		// Default "when_supported" tries trailing checksums; those need TLS + a seekable
+		// body. MinIO over HTTP breaks UploadPart/PutObject with unseekable streams.
+		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
+		o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
 	})
 
 	return &s3Storage{client: client, bucket: s3cfg.Bucket}, nil
+}
+
+// unsignedPayloadOpts avoids SigV4 payload hashing when the body is not seekable
+// (HTTP endpoints cannot use trailing-checksum streaming either).
+func unsignedPayloadOpts() func(*s3.Options) {
+	return s3.WithAPIOptions(v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware)
 }
 
 // s3Endpoint normalizes a custom endpoint to http(s) based on [storage.s3].secure.
@@ -109,7 +121,7 @@ func (s *s3Storage) PutObject(ctx context.Context, path string, size int64, r io
 		Body:          r,
 		ContentLength: aws.Int64(size),
 		ContentType:   aws.String(contentType),
-	})
+	}, unsignedPayloadOpts())
 	return err
 }
 
@@ -275,14 +287,20 @@ func (s *s3Storage) CreateUpload(ctx context.Context, tempKey string, size int64
 }
 
 func (s *s3Storage) WriteUpload(ctx context.Context, tempKey string, uploadOffset int64, r io.Reader, n int64, uploadID string, partNumber int32) (string, error) {
+	// Buffer the part: http.Request.Body / LimitReader are not seekable, and over
+	// plain HTTP the SDK cannot fall back to trailing checksums.
+	buf := make([]byte, n)
+	if _, err := io.ReadFull(r, buf); err != nil {
+		return "", err
+	}
 	out, err := s.client.UploadPart(ctx, &s3.UploadPartInput{
 		Bucket:        aws.String(s.bucket),
 		Key:           aws.String(s.uploadKey(tempKey)),
 		UploadId:      aws.String(uploadID),
 		PartNumber:    aws.Int32(partNumber),
-		Body:          io.LimitReader(r, n),
+		Body:          bytes.NewReader(buf),
 		ContentLength: aws.Int64(n),
-	})
+	}, unsignedPayloadOpts())
 	if err != nil {
 		return "", err
 	}

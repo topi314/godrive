@@ -184,13 +184,12 @@
               >{{ resultParentRel(f) }}/</button>
               <NuxtLink v-if="f.is_dir" class="name" :to="linkFor(f)" @click.prevent="goTo(linkFor(f))">{{ displayName(f) }}</NuxtLink>
               <a
-                v-else-if="mediaKind(displayName(f), f.content_type)"
+                v-else
                 class="name"
                 :href="streamUrl(f)"
                 target="_blank"
                 rel="noopener"
               >{{ displayName(f) }}</a>
-              <a v-else class="name" :href="streamUrl(f)" target="_blank" rel="noopener">{{ displayName(f) }}</a>
               <span class="mobile-meta muted">
                 <template v-if="!f.is_dir">{{ formatSize(f.size) }} · </template>{{ formatDate(f.date) }}<template v-if="f.owner"> · {{ f.owner }}</template>
               </span>
@@ -512,7 +511,6 @@ import {
   fileStreamUrl,
   fileZipDownloadUrl,
   hasPerm,
-  mediaKind,
   Perm,
   type FileEntry,
   type Me,
@@ -965,8 +963,17 @@ function openContainingFolder(f: FileEntry) {
 }
 
 function openEntry(f: FileEntry) {
-  if (f.is_dir) void goTo(linkFor(f))
-  else window.open(streamUrl(f), '_blank', 'noopener')
+  if (f.is_dir) {
+    void goTo(linkFor(f))
+    return
+  }
+  // Prefer a real <a> navigation over window.open(..., 'noopener'), which can
+  // leave a blank tab in Firefox when the third-arg features string is set.
+  const a = document.createElement('a')
+  a.href = streamUrl(f)
+  a.target = '_blank'
+  a.rel = 'noopener'
+  a.click()
 }
 
 function onFileRowClick(e: MouseEvent, f: FileEntry) {
@@ -987,8 +994,13 @@ function toggleAll(e: Event) {
 
 function openUpload(files?: File[]) {
   if (!canCreate.value) return
-  uploadInitialFiles.value = files?.length ? [...files] : []
-  uploadOpen.value = true
+  if (files?.length) {
+    uploadInitialFiles.value = [...files]
+    uploadOpen.value = true
+    return
+  }
+  // Open the OS picker first; the dialog opens once files are chosen.
+  fileInput.value?.click()
 }
 
 function onPick(e: Event) {

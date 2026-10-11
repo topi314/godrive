@@ -66,6 +66,17 @@ func (s *Server) applyStorageEvent(ctx context.Context, ev storage.Event) {
 }
 
 func (s *Server) syncPrefix(ctx context.Context, prefix string) {
+	prefix = acl.NormalizePath(prefix)
+	// GetPath syncs the requested path before streaming. S3 List uses prefix+"/",
+	// which misses a file object itself — the reconcile pass would then delete it
+	// from the index and the new-tab open would fall through to the SPA/redirect.
+	if prefix != "/" {
+		if info, err := s.storage.Stat(ctx, prefix); err == nil && !storage.IsDirectory(info.ContentType) {
+			s.upsertIndexedFile(ctx, info)
+			return
+		}
+	}
+
 	objs, err := s.storage.List(ctx, prefix)
 	if err != nil {
 		return
@@ -79,7 +90,7 @@ func (s *Server) syncPrefix(ctx context.Context, prefix string) {
 		s.upsertIndexedFile(ctx, obj)
 	}
 	rows, err := s.store.Q.ListFilesUnder(ctx, database.ListFilesUnderParams{
-		Path: acl.NormalizePath(prefix), PathLike: acl.LikeUnder(prefix),
+		Path: prefix, PathLike: acl.LikeUnder(prefix),
 	})
 	if err != nil {
 		return

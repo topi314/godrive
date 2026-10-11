@@ -1,12 +1,12 @@
 <template>
   <div v-if="open" class="dialog-backdrop" @click.self="close">
-    <div class="dialog dialog-wide" role="dialog" aria-modal="true" aria-labelledby="upload-title">
+    <div class="dialog dialog-wide upload-dialog" role="dialog" aria-modal="true" aria-labelledby="upload-title">
       <div class="dialog-head">
         <h2 id="upload-title">Upload</h2>
         <IconBtn name="x" label="Close" variant="ghost" :disabled="busy" @click="close" />
       </div>
 
-      <p class="muted">
+      <p class="muted upload-hint">
         Paths are relative to <code>{{ baseDir }}</code>, or absolute (start with <code>/</code>).
       </p>
 
@@ -25,49 +25,52 @@
         </label>
       </div>
 
-      <label>
-        Description
-        <input v-model="description" placeholder="optional">
-      </label>
-
-      <div class="upload-queue">
-        <div v-for="item in items" :key="item.id" class="upload-row">
-          <label class="upload-name">
-            Path
-            <input
-              v-model="item.name"
-              :disabled="item.status === 'uploading' || item.status === 'done'"
-              @change="recheck(item)"
-            >
-          </label>
-          <p class="muted upload-resolved">→ {{ resolvePreview(item.name) }}</p>
-          <div class="progress"><i :style="{ width: item.progress + '%' }" /></div>
-          <div class="upload-row-meta">
-            <span class="muted">{{ statusLabel(item) }}</span>
-            <span v-if="item.error" class="error">{{ item.error }}</span>
-            <div class="upload-row-actions">
-              <IconBtn
-                v-if="item.status === 'failed' || item.status === 'declined'"
-                name="check"
-                label="Retry"
-                variant="primary"
-                @click="retryItem(item)"
-              />
-              <IconBtn
-                v-if="item.status !== 'uploading' && item.status !== 'done'"
-                name="trash"
-                label="Remove"
-                variant="danger"
-                @click="removeItem(item.id)"
-              />
+      <div class="upload-scroll">
+        <div class="upload-queue">
+          <div v-for="item in items" :key="item.id" class="upload-row">
+            <label class="upload-name">
+              Name
+              <input
+                v-model="item.name"
+                :disabled="item.status === 'uploading' || item.status === 'done'"
+                @change="recheck(item)"
+              >
+            </label>
+            <label class="upload-desc">
+              Description
+              <input
+                v-model="item.description"
+                placeholder="optional"
+                :disabled="item.status === 'uploading' || item.status === 'done'"
+              >
+            </label>
+            <p class="muted upload-resolved">→ {{ resolvePreview(item.name) }}</p>
+            <div class="progress"><i :style="{ width: item.progress + '%' }" /></div>
+            <div class="upload-row-meta">
+              <span class="muted">{{ statusLabel(item) }}</span>
+              <span v-if="item.error" class="error">{{ item.error }}</span>
+              <div class="upload-row-actions">
+                <IconBtn
+                  v-if="item.status === 'failed' || item.status === 'declined'"
+                  name="check"
+                  label="Retry"
+                  variant="primary"
+                  @click="retryItem(item)"
+                />
+                <IconBtn
+                  v-if="item.status !== 'uploading' && item.status !== 'done'"
+                  name="trash"
+                  label="Remove"
+                  variant="danger"
+                  @click="removeItem(item.id)"
+                />
+              </div>
             </div>
           </div>
         </div>
-        <p v-if="!items.length" class="muted">No files yet — add files to upload.</p>
       </div>
 
-      <div class="dialog-actions">
-        <IconBtn name="upload" label="Add files" :disabled="busy" @click="picker?.click()" />
+      <div class="dialog-actions upload-actions">
         <IconBtn
           name="check"
           label="Start upload"
@@ -76,7 +79,6 @@
           @click="startAll"
         />
       </div>
-      <input ref="picker" type="file" multiple hidden @change="onPick">
     </div>
   </div>
 </template>
@@ -90,6 +92,7 @@ type QueueItem = {
   id: string
   file: File
   name: string
+  description: string
   status: ItemStatus
   progress: number
   error: string
@@ -109,9 +112,7 @@ const api = useApi()
 const items = ref<QueueItem[]>([])
 const replace = ref(false)
 const guestRead = ref(false)
-const description = ref('')
 const busy = ref(false)
-const picker = ref<HTMLInputElement | null>(null)
 const chunkSize = ref(16_000_000)
 const maxParallel = ref(6)
 const maxSize = ref(50_000_000_000)
@@ -146,6 +147,7 @@ function addFiles(files: File[]) {
       id: uid(),
       file,
       name: file.name,
+      description: '',
       status: 'pending',
       progress: 0,
       error: '',
@@ -161,17 +163,7 @@ function addFiles(files: File[]) {
 
 function removeItem(id: string) {
   items.value = items.value.filter(i => i.id !== id)
-}
-
-function onPick(e: Event) {
-  const input = e.target as HTMLInputElement
-  if (input.files?.length) {
-    addFiles([...input.files])
-    for (const item of items.value) {
-      if (item.status === 'pending') void recheck(item)
-    }
-  }
-  input.value = ''
+  if (!items.value.length && !busy.value) close()
 }
 
 async function loadConfig() {
@@ -243,7 +235,7 @@ async function uploadOne(item: QueueItem) {
         name: item.name,
         size: item.file.size,
         content_type: item.file.type,
-        description: description.value,
+        description: item.description,
         replace: replace.value,
         share_id: props.shareId,
       })
@@ -269,7 +261,7 @@ async function uploadOne(item: QueueItem) {
       acl.push({ principal_type: 'guest', principal_id: '*', allow: Perm.Read, deny: 0 })
     }
     await api.completeUpload(sessionId, {
-      description: description.value,
+      description: item.description,
       acl: acl.length ? acl : undefined,
     })
     item.progress = 100
@@ -324,13 +316,16 @@ watch(open, async (v) => {
       items.value = []
       replace.value = false
       guestRead.value = false
-      description.value = ''
     }
+    return
+  }
+  if (!props.initialFiles?.length) {
+    open.value = false
     return
   }
   await loadConfig()
   items.value = []
-  if (props.initialFiles?.length) addFiles(props.initialFiles)
+  addFiles(props.initialFiles)
   for (const item of items.value) {
     if (item.status === 'pending') await recheck(item)
   }
