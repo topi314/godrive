@@ -8,6 +8,8 @@ export type FileEntry = {
   owner_id?: string
   owner?: string
   date: string
+  /** ISO created time when known; shown via tooltip, not a column. */
+  created?: string
   permissions: number
 }
 
@@ -229,6 +231,13 @@ export function useApi() {
     })
   }
 
+  async function setDescription(path: string, description: string) {
+    await apiFetch(publicFilePath(path), {
+      method: 'PATCH',
+      body: { description },
+    })
+  }
+
   async function remove(paths: string[]) {
     const unique = [...new Set(paths.map(publicFilePath).filter(p => p && p !== '/'))]
     if (!unique.length) return
@@ -447,6 +456,7 @@ export function useApi() {
     rename,
     move,
     setOwner,
+    setDescription,
     remove,
     getPermissions,
     putPermissions,

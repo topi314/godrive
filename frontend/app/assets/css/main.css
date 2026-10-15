@@ -74,6 +74,10 @@ textarea {
   font: inherit;
 }
 
+textarea {
+  resize: vertical;
+}
+
 select {
   appearance: none;
   -webkit-appearance: none;
@@ -565,11 +569,40 @@ a.icon-btn:hover,
   font-size: 0.85em;
 }
 
+.file-table .col-check,
+.file-table .col-type,
+.file-table .col-size,
+.file-table .col-date,
+.file-table .col-owner,
+.file-table .col-actions {
+  /* Shrink-wrap to content; name/desc absorb leftover width. */
+  width: 1%;
+  white-space: nowrap;
+}
+
+.file-table .col-name {
+  width: auto;
+  min-width: 8rem;
+}
+
+.file-table .col-desc {
+  width: 1%;
+  max-width: 18rem;
+}
+
 .file-table td.desc {
-  max-width: 14rem;
+  max-width: 18rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.file-table td.desc.desc-editable {
+  cursor: pointer;
+}
+
+.file-table td.desc.desc-editable:hover {
+  color: var(--ink);
 }
 
 .file-table td {
@@ -639,7 +672,7 @@ a.icon-btn:hover,
 }
 
 .file-table .col-actions {
-  width: auto;
+  width: 1%;
   text-align: right;
   padding-top: 0.25rem;
   padding-bottom: 0.25rem;
@@ -657,6 +690,25 @@ a.icon-btn:hover,
 
 .mobile-meta {
   display: none;
+}
+
+button.mobile-meta {
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+}
+
+button.mobile-meta.desc-editable:not(:disabled) {
+  cursor: pointer;
+}
+
+button.mobile-meta.desc-editable:not(:disabled):hover {
+  color: var(--ink);
 }
 
 .file-table .result-dir {
@@ -1468,6 +1520,9 @@ a.icon-btn:hover,
 .dialog input:not([type="checkbox"]),
 .dialog textarea,
 .dialog select {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 0.5rem 0.65rem;
@@ -1752,7 +1807,7 @@ button.btn-primary.danger:hover:not(:disabled),
   transition: width 180ms ease;
 }
 
-.dialog.dialog-wide:has(.upload-scroll) {
+.dialog.dialog-wide.upload-dialog {
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1762,7 +1817,36 @@ button.btn-primary.danger:hover:not(:disabled),
 .dialog.dialog-wide:has(.upload-scroll) .dialog-head,
 .dialog.dialog-wide:has(.upload-scroll) .upload-hint,
 .dialog.dialog-wide:has(.upload-scroll) .upload-options,
-.dialog.dialog-wide:has(.upload-scroll) .upload-actions {
+.dialog.dialog-wide:has(.upload-scroll) .upload-actions,
+.dialog.dialog-wide:has(.upload-preparing) .dialog-head,
+.dialog.dialog-wide:has(.upload-preparing) .upload-hint,
+.dialog.dialog-wide:has(.upload-preparing) .upload-options,
+.dialog.dialog-wide:has(.upload-preparing) .upload-actions {
+  flex-shrink: 0;
+}
+
+.upload-preparing {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  min-height: 10rem;
+  margin: 0.5rem 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.upload-preparing .loading-kitty {
+  width: 3rem;
+  height: 3rem;
+  image-rendering: pixelated;
+}
+
+.loading-kitty-sm {
+  width: 1rem;
+  height: 1rem;
   flex-shrink: 0;
 }
 
@@ -1787,6 +1871,12 @@ button.btn-primary.danger:hover:not(:disabled),
   display: grid;
   gap: 0.25rem;
   margin: 0.45rem 0 0;
+}
+
+.upload-row .upload-desc textarea {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .dialog.dialog-wide .upload-scroll {
@@ -1836,6 +1926,18 @@ button.btn-primary.danger:hover:not(:disabled),
   gap: 0.35rem 0.65rem;
   margin-top: 0.4rem;
   min-height: 1.75rem;
+}
+
+.upload-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.upload-status .loading-kitty,
+.icon-btn.is-busy .loading-kitty {
+  width: 14px;
+  height: 14px;
 }
 
 .upload-row-actions {
@@ -1981,6 +2083,10 @@ button.btn-primary.danger:hover:not(:disabled),
 @keyframes rise {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 @keyframes drop-in {

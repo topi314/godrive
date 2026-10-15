@@ -33,6 +33,7 @@ type FileEntry struct {
 	OwnerID     string `json:"owner_id,omitempty"`
 	Owner       string `json:"owner,omitempty"`
 	Date        string `json:"date"`
+	Created     string `json:"created,omitempty"`
 	Permissions uint64 `json:"permissions"`
 }
 
@@ -129,6 +130,7 @@ func (s *Server) listDir(ctx context.Context, dir string, info *UserInfo) ([]Fil
 				continue
 			}
 			updated := row.UpdatedAt.UTC().Format(time.RFC3339)
+			created := row.CreatedAt.UTC().Format(time.RFC3339)
 			size := row.Size
 			dirRow := len(parts) == 1 && storage.IsDirectory(row.ContentType)
 			if storage.IsDirectory(row.ContentType) {
@@ -141,8 +143,12 @@ func (s *Server) listDir(ctx context.Context, dir string, info *UserInfo) ([]Fil
 				if updated > existing.entry.Date {
 					existing.entry.Date = updated
 				}
+				if dirRow || existing.entry.Created == "" || created < existing.entry.Created {
+					existing.entry.Created = created
+				}
 				// Directory index row is authoritative; otherwise keep a unanimous child owner.
 				if dirRow {
+					existing.entry.Description = row.Description
 					s.applyDirOwner(ctx, &existing.entry, info, owner, true)
 				} else {
 					s.applyDirOwner(ctx, &existing.entry, info, owner, false)
@@ -156,9 +162,10 @@ func (s *Server) listDir(ctx context.Context, dir string, info *UserInfo) ([]Fil
 			dPerms, _ := s.EffectivePermissions(ctx, dpath, info, ownerPtr)
 			entry := FileEntry{
 				Path: dpath, Name: name, IsDir: true, Size: size,
-				Date: updated, Permissions: uint64(dPerms),
+				Date: updated, Created: created, Permissions: uint64(dPerms),
 			}
 			if dirRow {
+				entry.Description = row.Description
 				s.applyDirOwner(ctx, &entry, info, owner, true)
 			} else {
 				s.applyDirOwner(ctx, &entry, info, owner, false)
@@ -213,7 +220,10 @@ func (s *Server) fileEntryFromRow(ctx context.Context, row database.File, owner 
 	entry := FileEntry{
 		Path: row.Path, Name: path.Base(row.Path), IsDir: storage.IsDirectory(row.ContentType),
 		Size: row.Size, ContentType: row.ContentType, Description: row.Description,
-		OwnerID: owner, Date: row.UpdatedAt.UTC().Format(time.RFC3339), Permissions: uint64(eff),
+		OwnerID: owner,
+		Date:    row.UpdatedAt.UTC().Format(time.RFC3339),
+		Created: row.CreatedAt.UTC().Format(time.RFC3339),
+		Permissions: uint64(eff),
 	}
 	if owner != "" {
 		if user, err := s.store.Q.GetUser(ctx, owner); err == nil {
@@ -1172,7 +1182,7 @@ func (s *Server) PatchFileAPI(w http.ResponseWriter, r *http.Request) {
 	var meta struct {
 		Name           string  `json:"name"`
 		Dir            string  `json:"dir"`
-		Description    string  `json:"description"`
+		Description    *string `json:"description"`
 		Size           int64   `json:"size"`
 		OwnerID        *string `json:"owner_id"`
 		OwnerRecursive bool    `json:"owner_recursive"`
@@ -1232,7 +1242,12 @@ func (s *Server) PatchFileAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	descChanged := meta.Description != "" || r.FormValue("description") != ""
+	descChanged := meta.Description != nil
+	if !descChanged {
+		if _, ok := r.Form["description"]; ok {
+			descChanged = true
+		}
+	}
 	ownerChanging := meta.OwnerID != nil
 	renaming := newPath != p
 	contentChanging := replace != nil || descChanged
@@ -1267,8 +1282,10 @@ func (s *Server) PatchFileAPI(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	desc := file.Description
-	if meta.Description != "" || r.FormValue("description") != "" {
-		desc = meta.Description
+	if meta.Description != nil {
+		desc = *meta.Description
+	} else if _, ok := r.Form["description"]; ok {
+		desc = r.FormValue("description")
 	}
 	size := file.Size
 	ct := file.ContentType
@@ -1307,9 +1324,9 @@ func (s *Server) PatchFileAPI(w http.ResponseWriter, r *http.Request) {
 		p = newPath
 	}
 	if desc != file.Description {
-		now := time.Now().UTC()
+		// Description is metadata — keep Modified (updated_at) unchanged.
 		if _, err := s.store.Q.UpdateFileMeta(r.Context(), database.UpdateFileMetaParams{
-			Path: p, NewPath: p, Size: size, ContentType: ct, Description: desc, UpdatedAt: now,
+			Path: p, NewPath: p, Size: size, ContentType: ct, Description: desc, UpdatedAt: file.UpdatedAt,
 		}); err != nil {
 			s.writeError(w, r, err, http.StatusInternalServerError)
 			return
@@ -1338,22 +1355,21 @@ func (s *Server) setFileOwner(ctx context.Context, p string, info *UserInfo, cur
 		}
 		uid = database.NullString(&newOwner)
 	}
-	now := time.Now().UTC()
 	if recursive {
 		if err := s.store.Q.UpdateFilesOwnerUnder(ctx, database.UpdateFilesOwnerUnderParams{
-			Path: p, PathLike: acl.LikeUnder(p), UserID: uid, UpdatedAt: now,
+			Path: p, PathLike: acl.LikeUnder(p), UserID: uid,
 		}); err != nil {
 			return err
 		}
 		// Materialize missing intermediate folders so nested dirs keep/show the owner
 		// after sync (S3 often has no placeholder for prefixes that only contain files).
-		return s.ensureDirOwnersUnder(ctx, p, newOwner, now)
+		return s.ensureDirOwnersUnder(ctx, p, newOwner, time.Now().UTC())
 	}
 	if newOwner == currentOwner {
 		return nil
 	}
 	_, err = s.store.Q.UpdateFileOwner(ctx, database.UpdateFileOwnerParams{
-		Path: p, UserID: uid, UpdatedAt: now,
+		Path: p, UserID: uid,
 	})
 	return err
 }

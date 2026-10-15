@@ -33,16 +33,14 @@ type UpdateFileMetaParams struct {
 }
 
 type UpdateFileOwnerParams struct {
-	UserID    sql.NullString `json:"user_id"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	Path      string         `json:"path"`
+	UserID sql.NullString `json:"user_id"`
+	Path   string         `json:"path"`
 }
 
 type UpdateFilesOwnerUnderParams struct {
-	UserID    sql.NullString `json:"user_id"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	Path      string         `json:"path"`
-	PathLike  string         `json:"path_like"`
+	UserID   sql.NullString `json:"user_id"`
+	Path     string         `json:"path"`
+	PathLike string         `json:"path_like"`
 }
 
 type UpsertFileParams struct {

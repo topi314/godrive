@@ -191,15 +191,28 @@
                 target="_blank"
                 rel="noopener"
               >{{ displayName(f) }}</a>
-              <span class="mobile-meta muted">
-                <template v-if="!f.is_dir">{{ formatSize(f.size) }} · </template>{{ formatDate(f.date) }}<template v-if="f.owner"> · {{ f.owner }}</template>
+              <span class="mobile-meta muted" :title="dateTitle(f)">
+                <template v-if="!f.is_dir">{{ formatSize(f.size) }} · </template>{{ formatRelativeDate(f.date) }}<template v-if="f.owner"> · {{ f.owner }}</template>
               </span>
-              <span v-if="f.description" class="mobile-meta mobile-desc muted">{{ f.description }}</span>
+              <button
+                v-if="f.description || rowMenu(f).canDescribe"
+                type="button"
+                class="mobile-meta mobile-desc muted"
+                :class="{ 'desc-editable': rowMenu(f).canDescribe }"
+                :disabled="!rowMenu(f).canDescribe"
+                :title="descTitle(f)"
+                @click.stop="rowMenu(f).canDescribe && openEdit(f, 'description')"
+              >{{ f.description || 'Add description' }}</button>
             </span>
           </td>
           <td class="muted col-size">{{ formatSize(f.size) }}</td>
-          <td class="muted col-date">{{ formatDate(f.date) }}</td>
-          <td class="muted desc col-desc">{{ f.description || '—' }}</td>
+          <td class="muted col-date" :title="dateTitle(f)">{{ formatRelativeDate(f.date) }}</td>
+          <td
+            class="muted desc col-desc"
+            :class="{ 'desc-editable': rowMenu(f).canDescribe }"
+            :title="descTitle(f)"
+            @click.stop="rowMenu(f).canDescribe && openEdit(f, 'description')"
+          >{{ f.description || '—' }}</td>
           <td class="muted col-owner">{{ f.owner || '—' }}</td>
           <td class="col-actions">
             <div class="row-actions">
@@ -241,12 +254,12 @@
                     <AppIcon name="download" /> Download
                   </button>
                   <button
-                    v-if="rowMenu(f).rename"
+                    v-if="rowMenu(f).edit"
                     type="button"
                     role="menuitem"
-                    @click="runMenu(() => openRename(f))"
+                    @click="runMenu(() => openEdit(f))"
                   >
-                    <AppIcon name="edit" /> Rename
+                    <AppIcon name="edit" /> Edit
                   </button>
                   <button
                     v-if="rowMenu(f).share"
@@ -329,26 +342,36 @@
       </div>
     </div>
 
-    <div v-if="renameOpen" class="dialog-backdrop" @click.self="renameOpen = false" @keydown.escape.prevent="renameOpen = false">
-      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="rename-title">
+    <div v-if="editOpen" class="dialog-backdrop" @click.self="editOpen = false" @keydown.escape.prevent="editOpen = false">
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="edit-title">
         <div class="dialog-head">
-          <h2 id="rename-title">Rename</h2>
-          <IconBtn name="x" label="Close" variant="ghost" @click="renameOpen = false" />
+          <h2 id="edit-title">Edit</h2>
+          <IconBtn name="x" label="Close" variant="ghost" @click="editOpen = false" />
         </div>
-        <label>
+        <label v-if="editCanRename">
           Name or path
           <input
-            ref="renameInput"
-            v-model="renameName"
+            ref="editNameInput"
+            v-model="editName"
             placeholder="name or ../folder/name"
-            @keydown.enter.prevent="submitRename"
-            @keydown.escape.prevent="renameOpen = false"
+            @keydown.enter.prevent="submitEdit"
+            @keydown.escape.prevent="editOpen = false"
           >
         </label>
-        <p class="muted">Use <code>../</code> or a folder path to move. Missing folders are created.</p>
-        <p v-if="renameError" class="error">{{ renameError }}</p>
+        <p v-if="editCanRename" class="muted">Use <code>../</code> or a folder path to move. Missing folders are created.</p>
+        <label v-if="editCanDescribe">
+          Description
+          <textarea
+            ref="editDescInput"
+            v-model="editDescription"
+            placeholder="optional"
+            rows="3"
+            @keydown.escape.prevent="editOpen = false"
+          />
+        </label>
+        <p v-if="editError" class="error">{{ editError }}</p>
         <div class="dialog-actions">
-          <IconBtn name="check" label="Rename" variant="primary" :disabled="!renameName.trim()" @click="submitRename" />
+          <IconBtn name="check" label="Save" variant="primary" :disabled="editCanRename && !editName.trim()" @click="submitEdit" />
         </div>
       </div>
     </div>
@@ -513,7 +536,7 @@
 </template>
 
 <script setup lang="ts">
-import { formatDate, formatSize, normalizeClientPath } from '~/composables/format'
+import { formatDate, formatRelativeDate, formatSize, normalizeClientPath } from '~/composables/format'
 import { PERM_FLAGS, cycleAllowDeny, markClass, markLabel } from '~/composables/permBits'
 import {
   fileDownloadUrl,
@@ -645,11 +668,17 @@ const folderOpen = ref(false)
 const folderName = ref('')
 const folderError = ref('')
 const folderInput = ref<HTMLInputElement | null>(null)
-const renameOpen = ref(false)
-const renameName = ref('')
-const renameError = ref('')
-const renamePath = ref('')
-const renameInput = ref<HTMLInputElement | null>(null)
+const editOpen = ref(false)
+const editPath = ref('')
+const editName = ref('')
+const editDescription = ref('')
+const editOrigName = ref('')
+const editOrigDescription = ref('')
+const editCanRename = ref(false)
+const editCanDescribe = ref(false)
+const editError = ref('')
+const editNameInput = ref<HTMLInputElement | null>(null)
+const editDescInput = ref<HTMLTextAreaElement | null>(null)
 const moveOpen = ref(false)
 const moveDest = ref('')
 const moveError = ref('')
@@ -737,6 +766,18 @@ function sortIndicator(key: SortKey) {
   return sortDir.value === 'asc' ? '↑' : '↓'
 }
 
+function dateTitle(f: FileEntry) {
+  const parts: string[] = []
+  if (f.created) parts.push('Created ' + formatDate(f.created))
+  if (f.date) parts.push('Modified ' + formatDate(f.date))
+  return parts.join(' · ')
+}
+
+function descTitle(f: FileEntry) {
+  if (f.description) return f.description
+  return rowMenu(f).canDescribe ? 'Add description' : undefined
+}
+
 const crumbs = computed(() => {
   let path = listedPath.value || '/'
   let acc = ''
@@ -786,9 +827,13 @@ function rowCan(f: FileEntry, bit: number) {
 }
 
 function rowMenu(f: FileEntry) {
+  const canRename = !props.shareId && (rowCan(f, Perm.Update) || rowCan(f, Perm.Delete))
+  const canDescribe = !props.shareId && rowCan(f, Perm.Update)
   return {
     download: rowCan(f, Perm.Read),
-    rename: !props.shareId && (rowCan(f, Perm.Update) || rowCan(f, Perm.Delete)),
+    canRename,
+    canDescribe,
+    edit: canRename || canDescribe,
     share: !props.shareId && rowCan(f, Perm.Share),
     permissions: !props.shareId && rowCan(f, Perm.UpdatePermissions),
     delete: !props.shareId && rowCan(f, Perm.Delete),
@@ -797,7 +842,7 @@ function rowMenu(f: FileEntry) {
 
 function hasRowMenu(f: FileEntry) {
   const m = rowMenu(f)
-  return m.download || m.rename || m.share || m.permissions || m.delete
+  return m.download || m.edit || m.share || m.permissions || m.delete
 }
 
 function streamUrl(f: FileEntry) {
@@ -1149,8 +1194,8 @@ function onKeydown(e: KeyboardEvent) {
     e.preventDefault()
     return
   }
-  if (renameOpen.value) {
-    renameOpen.value = false
+  if (editOpen.value) {
+    editOpen.value = false
     e.preventDefault()
     return
   }
@@ -1307,13 +1352,15 @@ async function createFolder() {
     toast('Folder created')
     const path = created.path
     if (!files.value.some(f => f.path === path)) {
+      const now = new Date().toISOString()
       files.value = [
         {
           path,
           name: path.split('/').filter(Boolean).at(-1) || name,
           is_dir: true,
           size: 0,
-          date: new Date().toISOString(),
+          date: now,
+          created: now,
           permissions: dirPerms.value,
         },
         ...files.value,
@@ -1324,15 +1371,82 @@ async function createFolder() {
   }
 }
 
-async function openRename(f: FileEntry) {
-  if (!rowCan(f, Perm.Update)) return
-  renamePath.value = f.path
-  renameName.value = f.name
-  renameError.value = ''
-  renameOpen.value = true
+async function openEdit(f: FileEntry, focus: 'name' | 'description' = 'name') {
+  const m = rowMenu(f)
+  if (!m.edit) return
+  editPath.value = f.path
+  editName.value = f.name
+  editDescription.value = f.description || ''
+  editOrigName.value = f.name
+  editOrigDescription.value = f.description || ''
+  editCanRename.value = m.canRename
+  editCanDescribe.value = m.canDescribe
+  editError.value = ''
+  editOpen.value = true
   await nextTick()
-  renameInput.value?.focus()
-  renameInput.value?.select()
+  const el = focus === 'description' && m.canDescribe ? editDescInput.value : editNameInput.value
+  el?.focus()
+  el?.select()
+}
+
+async function submitEdit() {
+  const from = editPath.value
+  if (!from) return
+  const spec = editName.value.trim()
+  const description = editDescription.value.trim()
+  editError.value = ''
+
+  if (editCanRename.value && !validRenameSpec(spec)) {
+    editError.value = 'Invalid name'
+    return
+  }
+
+  const nameChanged = editCanRename.value && (
+    spec !== editOrigName.value
+    || spec.includes('/')
+    || spec.includes('\\')
+  )
+  const descChanged = editCanDescribe.value && description !== (editOrigDescription.value || '').trim()
+  if (!nameChanged && !descChanged) {
+    editOpen.value = false
+    return
+  }
+
+  try {
+    let path = from
+    if (nameChanged) {
+      await api.rename(from, spec)
+      const parent = from === '/' ? '/' : from.replace(/\/[^/]+$/, '') || '/'
+      const base = spec.replaceAll('\\', '/').replace(/\/+$/, '').split('/').filter(Boolean).at(-1) || ''
+      const sameDir = !spec.includes('/') && !spec.includes('\\')
+      if (!sameDir || !base) {
+        if (descChanged && base) {
+          const to = parent === '/' ? `/${base}` : `${parent}/${base}`
+          try { await api.setDescription(to, description) } catch { /* force reload below */ }
+        }
+        editOpen.value = false
+        toast('Saved')
+        await load({ force: true })
+        return
+      }
+      path = parent === '/' ? `/${base}` : `${parent}/${base}`
+      files.value = files.value.map((f) => {
+        if (f.path !== from) return f
+        return { ...f, path, name: base, ...(descChanged ? { description } : {}) }
+      })
+      selected.value = selected.value.map(p => (p === from ? path : p))
+    }
+    if (descChanged) {
+      await api.setDescription(path, description)
+      if (!nameChanged) {
+        files.value = files.value.map((f) => (f.path === path ? { ...f, description } : f))
+      }
+    }
+    editOpen.value = false
+    toast('Saved')
+  } catch (e: any) {
+    editError.value = e?.data?.message || e.message || 'Failed to save'
+  }
 }
 
 function resolveMoveDest(spec: string, cwd: string) {
@@ -1394,36 +1508,6 @@ async function submitMove() {
     dropPaths(paths)
   } catch (e: any) {
     moveError.value = e?.data?.message || e.message || 'Failed to move'
-  }
-}
-
-async function submitRename() {
-  const spec = renameName.value.trim()
-  if (!validRenameSpec(spec)) {
-    renameError.value = 'Invalid name'
-    return
-  }
-  renameError.value = ''
-  try {
-    const from = renamePath.value
-    await api.rename(from, spec)
-    renameOpen.value = false
-    toast('Renamed')
-    const parent = from === '/' ? '/' : from.replace(/\/[^/]+$/, '') || '/'
-    const base = spec.replaceAll('\\', '/').replace(/\/+$/, '').split('/').filter(Boolean).at(-1) || ''
-    const sameDir = !spec.includes('/') && !spec.includes('\\')
-    if (!sameDir || !base) {
-      await load({ force: true })
-      return
-    }
-    const to = parent === '/' ? `/${base}` : `${parent}/${base}`
-    files.value = files.value.map((f) => {
-      if (f.path !== from) return f
-      return { ...f, path: to, name: base }
-    })
-    selected.value = selected.value.map(p => (p === from ? to : p))
-  } catch (e: any) {
-    renameError.value = e?.data?.message || e.message || 'Failed to rename'
   }
 }
 

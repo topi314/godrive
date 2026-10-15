@@ -39,15 +39,13 @@ RETURNING *;
 
 -- name: UpdateFileOwner :one
 UPDATE files
-SET user_id = @user_id,
-    updated_at = @updated_at
+SET user_id = @user_id
 WHERE path = @path
 RETURNING *;
 
 -- name: UpdateFilesOwnerUnder :exec
 UPDATE files
-SET user_id = @user_id,
-    updated_at = @updated_at
+SET user_id = @user_id
 WHERE path = @path OR path LIKE @path_like;
 
 -- name: DeleteFile :exec

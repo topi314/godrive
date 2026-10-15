@@ -335,23 +335,37 @@ func (s *Server) listShareDir(ctx context.Context, share database.Share, target 
 		if len(parts) > 1 || storage.IsDirectory(row.ContentType) {
 			name := parts[0]
 			updated := row.UpdatedAt.UTC().Format(time.RFC3339)
+			created := row.CreatedAt.UTC().Format(time.RFC3339)
 			size := row.Size
+			dirRow := len(parts) == 1 && storage.IsDirectory(row.ContentType)
 			if storage.IsDirectory(row.ContentType) {
 				size = 0
 			}
 			if existing, ok := dirs[name]; ok {
-				existing.entry.Size += size
+				if !dirRow {
+					existing.entry.Size += size
+				}
 				if updated > existing.entry.Date {
 					existing.entry.Date = updated
+				}
+				if dirRow || existing.entry.Created == "" || created < existing.entry.Created {
+					existing.entry.Created = created
+				}
+				if dirRow {
+					existing.entry.Description = row.Description
 				}
 				continue
 			}
 			dpath := acl.NormalizePath(path.Join(target, name))
 			dPerms, _ := s.shareEffectivePerms(ctx, share.ID, dpath)
-			dirs[name] = &agg{entry: FileEntry{
+			entry := FileEntry{
 				Path: shareBrowsePath(share, dpath), Name: name, IsDir: true, Size: size,
-				Date: updated, Permissions: uint64(dPerms),
-			}}
+				Date: updated, Created: created, Permissions: uint64(dPerms),
+			}
+			if dirRow {
+				entry.Description = row.Description
+			}
+			dirs[name] = &agg{entry: entry}
 			continue
 		}
 		entry := s.fileEntryFromRow(ctx, row, owner, childPerms)

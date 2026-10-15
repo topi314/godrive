@@ -154,14 +154,13 @@ func (q *Queries) UpdateFileMeta(ctx context.Context, arg UpdateFileMetaParams) 
 
 const updateFileOwner = `-- name: UpdateFileOwner :one
 UPDATE files
-SET user_id = $1,
-    updated_at = $2
-WHERE path = $3
+SET user_id = $1
+WHERE path = $2
 RETURNING path, size, content_type, description, user_id, created_at, updated_at
 `
 
 func (q *Queries) UpdateFileOwner(ctx context.Context, arg UpdateFileOwnerParams) (File, error) {
-	row := q.db.QueryRow(ctx, updateFileOwner, arg.UserID, arg.UpdatedAt, arg.Path)
+	row := q.db.QueryRow(ctx, updateFileOwner, arg.UserID, arg.Path)
 	var i File
 	err := row.Scan(
 		&i.Path,
@@ -177,18 +176,12 @@ func (q *Queries) UpdateFileOwner(ctx context.Context, arg UpdateFileOwnerParams
 
 const updateFilesOwnerUnder = `-- name: UpdateFilesOwnerUnder :exec
 UPDATE files
-SET user_id = $1,
-    updated_at = $2
-WHERE path = $3 OR path LIKE $4
+SET user_id = $1
+WHERE path = $2 OR path LIKE $3
 `
 
 func (q *Queries) UpdateFilesOwnerUnder(ctx context.Context, arg UpdateFilesOwnerUnderParams) error {
-	_, err := q.db.Exec(ctx, updateFilesOwnerUnder,
-		arg.UserID,
-		arg.UpdatedAt,
-		arg.Path,
-		arg.PathLike,
-	)
+	_, err := q.db.Exec(ctx, updateFilesOwnerUnder, arg.UserID, arg.Path, arg.PathLike)
 	return err
 }
 
