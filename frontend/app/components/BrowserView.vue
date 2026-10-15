@@ -58,6 +58,7 @@
         </button>
       </label>
       <IconBtn class="toolbar-sort-btn" name="sort" label="Sort" @click="sortOpen = true" />
+      <IconBtn name="refresh" label="Refresh" :disabled="loading" @click="load({ force: true })" />
       <template v-if="selected.length">
         <IconBtn name="download" label="Download" @click="downloadSelected" />
         <IconBtn name="move" label="Move" :disabled="!canMove || !!shareId" @click="openMove" />
@@ -75,7 +76,7 @@
       <h2 class="load-error-title">{{ errorTitle }}</h2>
       <p class="load-error-detail">{{ error }}</p>
       <p v-if="errorHint" class="muted load-error-hint">{{ errorHint }}</p>
-      <button type="button" class="btn-primary load-error-retry" :disabled="loading" @click="load()">
+      <button type="button" class="btn-primary load-error-retry" :disabled="loading" @click="load({ force: true })">
         <AppIcon name="refresh" />
         {{ loading ? 'Retrying…' : 'Try again' }}
       </button>
@@ -213,59 +214,67 @@
               <IconBtn
                 name="more"
                 :label="'Actions for ' + displayName(f)"
-                @click.stop="toggleMenu(f.path)"
+                @click.stop="toggleMenu(f.path, $event)"
               />
-              <div v-if="menuPath === f.path" class="row-menu-panel" role="menu" @click.stop>
-                <button
-                  v-if="searching && containingFolder(f)"
-                  type="button"
-                  role="menuitem"
-                  @click="runMenu(() => openContainingFolder(f))"
+              <Teleport to="body">
+                <div
+                  v-if="menuPath === f.path"
+                  class="row-menu-panel"
+                  role="menu"
+                  :style="menuStyle"
+                  @click.stop
                 >
-                  <AppIcon name="folder-open" /> Open folder
-                </button>
-                <button
-                  v-if="rowMenu(f).download"
-                  type="button"
-                  role="menuitem"
-                  @click="runMenu(() => downloadOne(f))"
-                >
-                  <AppIcon name="download" /> Download
-                </button>
-                <button
-                  v-if="rowMenu(f).rename"
-                  type="button"
-                  role="menuitem"
-                  @click="runMenu(() => openRename(f))"
-                >
-                  <AppIcon name="edit" /> Rename
-                </button>
-                <button
-                  v-if="rowMenu(f).share"
-                  type="button"
-                  role="menuitem"
-                  @click="runMenu(() => openShare(f.path))"
-                >
-                  <AppIcon name="share" /> Share
-                </button>
-                <button
-                  v-if="rowMenu(f).permissions"
-                  type="button"
-                  role="menuitem"
-                  @click="runMenu(() => openACL(f.path))"
-                >
-                  <AppIcon name="lock" /> Permissions
-                </button>
-                <button
-                  v-if="rowMenu(f).delete"
-                  type="button"
-                  role="menuitem"
-                  class="danger"
-                  @click="runMenu(() => deleteOne(f))"
-                >
-                  <AppIcon name="trash" /> Delete
-                </button>
-              </div>
+                  <button
+                    v-if="searching && containingFolder(f)"
+                    type="button"
+                    role="menuitem"
+                    @click="runMenu(() => openContainingFolder(f))"
+                  >
+                    <AppIcon name="folder-open" /> Open folder
+                  </button>
+                  <button
+                    v-if="rowMenu(f).download"
+                    type="button"
+                    role="menuitem"
+                    @click="runMenu(() => downloadOne(f))"
+                  >
+                    <AppIcon name="download" /> Download
+                  </button>
+                  <button
+                    v-if="rowMenu(f).rename"
+                    type="button"
+                    role="menuitem"
+                    @click="runMenu(() => openRename(f))"
+                  >
+                    <AppIcon name="edit" /> Rename
+                  </button>
+                  <button
+                    v-if="rowMenu(f).share"
+                    type="button"
+                    role="menuitem"
+                    @click="runMenu(() => openShare(f.path))"
+                  >
+                    <AppIcon name="share" /> Share
+                  </button>
+                  <button
+                    v-if="rowMenu(f).permissions"
+                    type="button"
+                    role="menuitem"
+                    @click="runMenu(() => openACL(f.path))"
+                  >
+                    <AppIcon name="lock" /> Permissions
+                  </button>
+                  <button
+                    v-if="rowMenu(f).delete"
+                    type="button"
+                    role="menuitem"
+                    class="danger"
+                    @click="runMenu(() => deleteOne(f))"
+                  >
+                    <AppIcon name="trash" /> Delete
+                  </button>
+                </div>
+              </Teleport>
             </div>
             </div>
           </td>
@@ -531,6 +540,8 @@ const errorStatus = ref(0)
 const loading = ref(false)
 /** Path currently shown in crumbs + list (updated together when a listing arrives). */
 const listedPath = ref(props.basePath || '/')
+/** Normalized path whose listing is already on screen (avoids reload after goTo → navigate). */
+let viewPath = ''
 const searchQ = ref('')
 const searching = computed(() => !props.shareId && searchQ.value.trim().length > 0)
 let loadSeq = 0
@@ -645,6 +656,7 @@ const moveError = ref('')
 const moveInput = ref<HTMLInputElement | null>(null)
 const sortOpen = ref(false)
 const menuPath = ref('')
+const menuStyle = ref<Record<string, string>>({})
 type SortKey = 'type' | 'name' | 'description' | 'owner' | 'size' | 'date'
 const sortKey = ref<SortKey>('name')
 const sortDir = ref<'asc' | 'desc'>('asc')
@@ -805,15 +817,31 @@ function downloadUrl(f: FileEntry) {
 
 const normalizePath = normalizeClientPath
 
-async function load() {
+function applyListing(path: string, res: { files: FileEntry[]; permissions: number }) {
+  files.value = res.files
+  dirPerms.value = res.permissions
+  listedPath.value = path
+  viewPath = normalizePath(path)
+  error.value = ''
+  errorStatus.value = 0
+}
+
+async function load(opts?: { force?: boolean }) {
   const path = props.basePath || '/'
+  const q = routeSearchQ()
+  // goTo applies the listing before navigateTo; skip the duplicate fetch.
+  if (!opts?.force && !q && normalizePath(path) === viewPath) {
+    suppressSearchWatch = true
+    searchQ.value = ''
+    suppressSearchWatch = false
+    return
+  }
   const seq = ++loadSeq
   error.value = ''
   errorStatus.value = 0
   loading.value = true
   selected.value = []
-  menuPath.value = ''
-  const q = routeSearchQ()
+  closeMenu()
   suppressSearchWatch = true
   searchQ.value = q
   suppressSearchWatch = false
@@ -822,6 +850,7 @@ async function load() {
     if (seq === loadSeq) {
       // Keep crumbs on the search root together with the result list.
       listedPath.value = path
+      viewPath = normalizePath(path)
       loading.value = false
     }
     return
@@ -829,13 +858,12 @@ async function load() {
   try {
     const res = await fetchListing(path)
     if (seq !== loadSeq) return
-    files.value = res.files
-    dirPerms.value = res.permissions
-    listedPath.value = path
+    applyListing(path, res)
   } catch (e: any) {
     if (seq !== loadSeq) return
     const status = Number(e?.statusCode || e?.status || e?.response?.status || 0)
     if (!props.shareId && status === 404 && normalizePath(path) !== '/') {
+      viewPath = ''
       await navigateTo('/')
       return
     }
@@ -846,6 +874,7 @@ async function load() {
     files.value = []
     dirPerms.value = 0
     listedPath.value = path
+    viewPath = normalizePath(path)
   } finally {
     if (seq === loadSeq) loading.value = false
   }
@@ -914,13 +943,30 @@ async function goTo(path: string | null | undefined) {
   const cur = props.basePath || '/'
   const next = normalizePath(path)
   if (next === normalizePath(cur) && !routeSearchQ()) return
+  const seq = ++loadSeq
   suppressSearchWatch = true
   searchQ.value = ''
   suppressSearchWatch = false
-  // Prefetch; load() applies files + crumbs together when the route updates.
-  void fetchListing(next)
-  // Drop ?q when leaving search / changing folders.
-  await navigateTo({ path: next, query: {} })
+  selected.value = []
+  closeMenu()
+  // Apply listing first so URL, crumbs, and file list advance together.
+  try {
+    const res = await fetchListing(next)
+    if (seq !== loadSeq) return
+    applyListing(next, res)
+    await navigateTo({ path: next, query: {} })
+  } catch (e: any) {
+    if (seq !== loadSeq) return
+    const status = Number(e?.statusCode || e?.status || e?.response?.status || 0)
+    if (!props.shareId && status === 404 && next !== '/') {
+      viewPath = ''
+      await navigateTo('/')
+      return
+    }
+    if (status !== 401) {
+      toast(loadErrorMessage(e, status))
+    }
+  }
 }
 
 function linkFor(f: FileEntry) {
@@ -1019,24 +1065,70 @@ function onDrop(e: DragEvent) {
 }
 
 async function onUploadDone() {
-  await load()
+  await load({ force: true })
 }
 
 watch(uploadOpen, (v) => {
   if (!v) uploadInitialFiles.value = []
 })
 
-function toggleMenu(path: string) {
-  menuPath.value = menuPath.value === path ? '' : path
+function closeMenu() {
+  menuPath.value = ''
+  menuStyle.value = {}
+}
+
+function isMobileMenu() {
+  return typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches
+}
+
+function positionMenu(anchor: HTMLElement, panelHeight = 0) {
+  if (isMobileMenu()) {
+    // Bottom sheet layout comes from CSS.
+    menuStyle.value = {}
+    return
+  }
+  const gap = 4
+  const r = anchor.getBoundingClientRect()
+  const h = panelHeight || 240
+  let top = r.bottom + gap
+  if (top + h > window.innerHeight - 8) {
+    top = Math.max(8, r.top - gap - h)
+  }
+  menuStyle.value = {
+    position: 'fixed',
+    top: `${Math.round(top)}px`,
+    right: `${Math.round(window.innerWidth - r.right)}px`,
+    left: 'auto',
+    bottom: 'auto',
+  }
+}
+
+async function toggleMenu(path: string, e: MouseEvent) {
+  if (menuPath.value === path) {
+    closeMenu()
+    return
+  }
+  const btn = e.currentTarget as HTMLElement
+  positionMenu(btn)
+  menuPath.value = path
+  await nextTick()
+  const panel = document.querySelector('.row-menu-panel') as HTMLElement | null
+  if (panel && btn.isConnected) positionMenu(btn, panel.offsetHeight)
 }
 
 function runMenu(fn: () => void | Promise<void>) {
-  menuPath.value = ''
+  closeMenu()
   return fn()
 }
 
 function onDocClick() {
-  menuPath.value = ''
+  closeMenu()
+}
+
+function onViewportChange() {
+  if (!menuPath.value) return
+  // Keep the panel from drifting / expanding scroll containers while open.
+  closeMenu()
 }
 
 function onKeydown(e: KeyboardEvent) {
@@ -1068,7 +1160,7 @@ function onKeydown(e: KeyboardEvent) {
     return
   }
   if (uploadOpen.value || aclOpen.value) return
-  menuPath.value = ''
+  closeMenu()
 }
 
 function dropPaths(paths: string[]) {
@@ -1183,13 +1275,13 @@ async function copyShare() {
 }
 
 async function openACL(path: string) {
-  menuPath.value = ''
+  closeMenu()
   aclPath.value = path
   aclOpen.value = true
 }
 
 async function onACLSaved() {
-  await load()
+  await load({ force: true })
   toast('Permissions saved')
 }
 
@@ -1321,7 +1413,7 @@ async function submitRename() {
     const base = spec.replaceAll('\\', '/').replace(/\/+$/, '').split('/').filter(Boolean).at(-1) || ''
     const sameDir = !spec.includes('/') && !spec.includes('\\')
     if (!sameDir || !base) {
-      await load()
+      await load({ force: true })
       return
     }
     const to = parent === '/' ? `/${base}` : `${parent}/${base}`
@@ -1346,16 +1438,20 @@ watch(() => props.basePath, () => load(), { immediate: true })
 
 watch(() => user.value?.sudo, () => {
   if (props.shareId) return
-  load()
+  void load({ force: true })
 })
 
 onMounted(() => {
   document.addEventListener('click', onDocClick)
   document.addEventListener('keydown', onKeydown)
+  window.addEventListener('scroll', onViewportChange, true)
+  window.addEventListener('resize', onViewportChange)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocClick)
   document.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('scroll', onViewportChange, true)
+  window.removeEventListener('resize', onViewportChange)
 })
 </script>

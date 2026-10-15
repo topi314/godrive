@@ -714,10 +714,9 @@ a.icon-btn:hover,
 }
 
 .row-menu-panel {
-  position: absolute;
-  top: calc(100% + 0.25rem);
-  right: 0;
-  z-index: 15;
+  /* Anchored with fixed coords from JS so overflow on .file-table-wrap can't clip it. */
+  position: fixed;
+  z-index: 30;
   min-width: 11.5rem;
   padding: 0.3rem;
   border: 1px solid var(--line);

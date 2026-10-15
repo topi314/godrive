@@ -141,13 +141,11 @@ func (s *Server) listDir(ctx context.Context, dir string, info *UserInfo) ([]Fil
 				if updated > existing.entry.Date {
 					existing.entry.Date = updated
 				}
-				if dirRow && owner != "" && existing.entry.OwnerID == "" {
-					existing.entry.OwnerID = owner
-					if user, err := s.store.Q.GetUser(ctx, owner); err == nil {
-						existing.entry.Owner = user.Username
-					}
-					dPerms, _ := s.EffectivePermissions(ctx, existing.entry.Path, info, nullableStr(owner))
-					existing.entry.Permissions = uint64(dPerms)
+				// Directory index row is authoritative; otherwise keep a unanimous child owner.
+				if dirRow {
+					s.applyDirOwner(ctx, &existing.entry, info, owner, true)
+				} else {
+					s.applyDirOwner(ctx, &existing.entry, info, owner, false)
 				}
 				continue
 			}
@@ -160,11 +158,10 @@ func (s *Server) listDir(ctx context.Context, dir string, info *UserInfo) ([]Fil
 				Path: dpath, Name: name, IsDir: true, Size: size,
 				Date: updated, Permissions: uint64(dPerms),
 			}
-			if dirRow && owner != "" {
-				entry.OwnerID = owner
-				if user, err := s.store.Q.GetUser(ctx, owner); err == nil {
-					entry.Owner = user.Username
-				}
+			if dirRow {
+				s.applyDirOwner(ctx, &entry, info, owner, true)
+			} else {
+				s.applyDirOwner(ctx, &entry, info, owner, false)
 			}
 			dirs[name] = &agg{entry: entry}
 			continue
@@ -178,6 +175,38 @@ func (s *Server) listDir(ctx context.Context, dir string, info *UserInfo) ([]Fil
 	}
 	out = append(out, files...)
 	return out, nil
+}
+
+// applyDirOwner sets folder list ownership. authoritative (real dir index row) always
+// wins, including clearing. Otherwise keep a unanimous owner from child rows so
+// recursive owner changes show up even when intermediate folders lack index rows.
+func (s *Server) applyDirOwner(ctx context.Context, entry *FileEntry, info *UserInfo, owner string, authoritative bool) {
+	if authoritative {
+		entry.OwnerID = owner
+		entry.Owner = ""
+		if owner != "" {
+			if user, err := s.store.Q.GetUser(ctx, owner); err == nil {
+				entry.Owner = user.Username
+			}
+		}
+		dPerms, _ := s.EffectivePermissions(ctx, entry.Path, info, nullableStr(owner))
+		entry.Permissions = uint64(dPerms)
+		return
+	}
+	if owner == "" {
+		return
+	}
+	if entry.OwnerID == "" {
+		entry.OwnerID = owner
+		if user, err := s.store.Q.GetUser(ctx, owner); err == nil {
+			entry.Owner = user.Username
+		}
+		return
+	}
+	if entry.OwnerID != owner {
+		entry.OwnerID = ""
+		entry.Owner = ""
+	}
 }
 
 func (s *Server) fileEntryFromRow(ctx context.Context, row database.File, owner string, eff acl.Permissions) FileEntry {
@@ -1292,7 +1321,7 @@ func (s *Server) PatchFileAPI(w http.ResponseWriter, r *http.Request) {
 var errBadOwner = errors.New("invalid owner")
 
 func (s *Server) setFileOwner(ctx context.Context, p string, info *UserInfo, currentOwner, newOwner string, recursive bool) error {
-	if newOwner == "" || newOwner == "guest" {
+	if newOwner == "guest" {
 		return errBadOwner
 	}
 	perms, err := s.EffectivePermissions(ctx, p, info, nullableStr(currentOwner))
@@ -1302,15 +1331,23 @@ func (s *Server) setFileOwner(ctx context.Context, p string, info *UserInfo, cur
 	if s.cfg.AuthEnabled() && !perms.Has(acl.PermissionUpdatePermissions) && !s.adminSudo(info) {
 		return errForbidden
 	}
-	if _, err := s.store.Q.GetUser(ctx, newOwner); err != nil {
-		return errBadOwner
+	var uid sql.NullString
+	if newOwner != "" {
+		if _, err := s.store.Q.GetUser(ctx, newOwner); err != nil {
+			return errBadOwner
+		}
+		uid = database.NullString(&newOwner)
 	}
 	now := time.Now().UTC()
-	uid := database.NullString(&newOwner)
 	if recursive {
-		return s.store.Q.UpdateFilesOwnerUnder(ctx, database.UpdateFilesOwnerUnderParams{
+		if err := s.store.Q.UpdateFilesOwnerUnder(ctx, database.UpdateFilesOwnerUnderParams{
 			Path: p, PathLike: acl.LikeUnder(p), UserID: uid, UpdatedAt: now,
-		})
+		}); err != nil {
+			return err
+		}
+		// Materialize missing intermediate folders so nested dirs keep/show the owner
+		// after sync (S3 often has no placeholder for prefixes that only contain files).
+		return s.ensureDirOwnersUnder(ctx, p, newOwner, now)
 	}
 	if newOwner == currentOwner {
 		return nil
@@ -1319,6 +1356,51 @@ func (s *Server) setFileOwner(ctx context.Context, p string, info *UserInfo, cur
 		Path: p, UserID: uid, UpdatedAt: now,
 	})
 	return err
+}
+
+// ensureDirOwnersUnder creates any missing directory index rows (and storage markers)
+// for prefixes under root that appear in the file tree, with the given owner.
+func (s *Server) ensureDirOwnersUnder(ctx context.Context, root, newOwner string, now time.Time) error {
+	root = acl.NormalizePath(root)
+	rows, err := s.store.Q.ListFilesUnder(ctx, database.ListFilesUnderParams{
+		Path: root, PathLike: acl.LikeUnder(root),
+	})
+	if err != nil {
+		return err
+	}
+	need := map[string]struct{}{}
+	add := func(d string) {
+		for d != "/" && acl.IsSelfOrUnder(d, root) {
+			need[d] = struct{}{}
+			if d == root {
+				break
+			}
+			parent := path.Dir(d)
+			if parent == d {
+				break
+			}
+			d = parent
+		}
+	}
+	for _, row := range rows {
+		if storage.IsDirectory(row.ContentType) {
+			add(row.Path)
+			continue
+		}
+		add(path.Dir(row.Path))
+	}
+	for d := range need {
+		if _, err := s.store.Q.GetFile(ctx, d); err == nil {
+			continue
+		}
+		if err := s.storage.Mkdir(ctx, d); err != nil {
+			return err
+		}
+		if _, err := s.store.Q.UpsertFile(ctx, dirFileParams(d, now, newOwner)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Server) MoveFilesAPI(w http.ResponseWriter, r *http.Request) {

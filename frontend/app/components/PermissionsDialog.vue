@@ -30,7 +30,7 @@
           <label class="acl-path-field">
             Owner
             <select v-model="ownerDraft">
-              <option v-if="!ownerDraft" value="" disabled>Select owner</option>
+              <option value="">No owner</option>
               <option v-for="u in userOptions(ownerDraft)" :key="u.id" :value="u.id">
                 {{ userLabel(u) }}
               </option>
@@ -540,7 +540,7 @@ async function save() {
       }
     }
     await api.putPermissions(path.value, acl)
-    if (canChangeOwner.value && ownerDraft.value) {
+    if (canChangeOwner.value) {
       const recursive = isDir.value && ownerRecursive.value
       if (ownerDraft.value !== ownerID.value || recursive) {
         await api.setOwner(path.value, ownerDraft.value, { recursive })
