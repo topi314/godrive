@@ -25,6 +25,25 @@ func (s s3LikeList) List(ctx context.Context, prefix string) ([]storage.ObjectIn
 	return s.Storage.List(ctx, prefix)
 }
 
+// filesOnlyList omits directory entries from List, like S3 without folder placeholder keys.
+type filesOnlyList struct {
+	storage.Storage
+}
+
+func (s filesOnlyList) List(ctx context.Context, prefix string) ([]storage.ObjectInfo, error) {
+	objs, err := s.Storage.List(ctx, prefix)
+	if err != nil {
+		return nil, err
+	}
+	out := objs[:0]
+	for _, o := range objs {
+		if !storage.IsDirectory(o.ContentType) {
+			out = append(out, o)
+		}
+	}
+	return out, nil
+}
+
 func TestSyncPrefixPreservesUpdatedAt(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
@@ -110,5 +129,43 @@ func TestSyncPrefixFilePathDoesNotDeleteIndex(t *testing.T) {
 
 	if _, err := store.Q.GetFile(ctx, "/song.mp3"); err != nil {
 		t.Fatalf("file index deleted after syncPrefix on file path: %v", err)
+	}
+}
+
+func TestSyncPrefixCreatesParentFolders(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	store, err := database.NewStore(ctx, config.DatabaseConfig{
+		Type: config.DatabaseTypeSQLite, SQLite: config.DatabaseSQLiteConfig{Path: filepath.Join(dir, "t.db")},
+	}, database.Migrations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	root := filepath.Join(dir, "files")
+	if err := os.MkdirAll(filepath.Join(root, "docs", "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	st, err := storage.New(ctx, config.StorageConfig{Type: config.StorageTypeLocal, Local: config.StorageLocalConfig{Path: root}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "docs", "sub", "b.txt"), []byte("b"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := &Server{store: store, storage: filesOnlyList{Storage: st}}
+	s.syncPrefix(ctx, "/")
+	s.syncPrefix(ctx, "/") // second pass must not purge synthesized parents
+
+	for _, p := range []string{"/docs", "/docs/sub", "/docs/sub/b.txt"} {
+		got, err := store.Q.GetFile(ctx, p)
+		if err != nil {
+			t.Fatalf("%s missing after sync: %v", p, err)
+		}
+		if p != "/docs/sub/b.txt" && !storage.IsDirectory(got.ContentType) {
+			t.Fatalf("%s content_type=%q want directory", p, got.ContentType)
+		}
 	}
 }
