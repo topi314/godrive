@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"path"
 	"strings"
 	"time"
 
@@ -86,7 +87,7 @@ func (s *Server) syncPrefix(ctx context.Context, prefix string) {
 		if acl.IsReservedPath(obj.Path) {
 			continue
 		}
-		seen[obj.Path] = struct{}{}
+		markSeenWithAncestors(seen, obj.Path)
 		s.upsertIndexedFile(ctx, obj)
 	}
 	rows, err := s.store.Q.ListFilesUnder(ctx, database.ListFilesUnderParams{
@@ -102,12 +103,24 @@ func (s *Server) syncPrefix(ctx context.Context, prefix string) {
 	}
 }
 
+func markSeenWithAncestors(seen map[string]struct{}, p string) {
+	p = acl.NormalizePath(p)
+	for p != "/" {
+		seen[p] = struct{}{}
+		parent := path.Dir(p)
+		if parent == p {
+			break
+		}
+		p = parent
+	}
+}
+
 // upsertIndexedFile indexes a storage object. Size is the change signal: list/sync
 // often returns a different MIME than the DB, and GetPath runs sync on every refresh,
 // so comparing content-type (or always writing UpdatedAt=now) would rewrite stamps.
 func (s *Server) upsertIndexedFile(ctx context.Context, info storage.ObjectInfo) {
-	path := acl.NormalizePath(info.Path)
-	if path == "" || acl.IsReservedPath(path) {
+	p := acl.NormalizePath(info.Path)
+	if p == "" || acl.IsReservedPath(p) {
 		return
 	}
 	stamp := time.Now().UTC()
@@ -119,25 +132,41 @@ func (s *Server) upsertIndexedFile(ctx context.Context, info storage.ObjectInfo)
 		ct = "application/octet-stream"
 	}
 
-	existing, err := s.store.Q.GetFile(ctx, path)
+	existing, err := s.store.Q.GetFile(ctx, p)
 	if err == nil {
-		if existing.Size == info.Size {
-			return
+		if existing.Size != info.Size {
+			if existing.ContentType != "" {
+				ct = existing.ContentType
+			}
+			_, _ = s.store.Q.UpsertFile(ctx, database.UpsertFileParams{
+				Path: p, Size: info.Size, ContentType: ct,
+				Description: existing.Description, UserID: existing.UserID,
+				CreatedAt: existing.CreatedAt, UpdatedAt: stamp,
+			})
 		}
-		if existing.ContentType != "" {
-			ct = existing.ContentType
-		}
+	} else {
 		_, _ = s.store.Q.UpsertFile(ctx, database.UpsertFileParams{
-			Path: path, Size: info.Size, ContentType: ct,
-			Description: existing.Description, UserID: existing.UserID,
-			CreatedAt: existing.CreatedAt, UpdatedAt: stamp,
+			Path: p, Size: info.Size, ContentType: ct,
+			CreatedAt: stamp, UpdatedAt: stamp,
 		})
-		return
 	}
-	_, _ = s.store.Q.UpsertFile(ctx, database.UpsertFileParams{
-		Path: path, Size: info.Size, ContentType: ct,
-		CreatedAt: stamp, UpdatedAt: stamp,
-	})
+	// S3 lists often omit directory placeholders; keep parent folders in the index.
+	s.ensureIndexedParents(ctx, p, stamp)
+}
+
+// ensureIndexedParents inserts missing directory index rows (and storage markers) for
+// each ancestor of filePath so nested paths stay browsable as folders.
+func (s *Server) ensureIndexedParents(ctx context.Context, filePath string, stamp time.Time) {
+	for d := path.Dir(acl.NormalizePath(filePath)); d != "/" && d != "."; d = path.Dir(d) {
+		if acl.IsReservedPath(d) {
+			break
+		}
+		if _, err := s.store.Q.GetFile(ctx, d); err == nil {
+			continue
+		}
+		_ = s.storage.Mkdir(ctx, d)
+		_, _ = s.store.Q.UpsertFile(ctx, dirFileParams(d, stamp, ""))
+	}
 }
 
 func (s *Server) reconcileAll(ctx context.Context) error {
