@@ -1,7 +1,21 @@
-.github/
-.gitignore
+# Keep .git so `go build` can embed vcs.revision / vcs.time (runtime/debug).
+.github
+.idea
+.vscode
+*.exe
+*.log
+config.toml
+godrive.toml
+godrive.json
+godrive
+godrive.db
+godrive.db-*
+storage
+frontend/node_modules
+frontend/.nuxt
+frontend/.output
+frontend/.data
+frontend/dist
+tmp
 README.md
 LICENSE
-Dockerfile
-godrive.json
-example.godrive.json
