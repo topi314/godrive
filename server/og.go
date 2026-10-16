@@ -24,9 +24,10 @@ type ogData struct {
 }
 
 func ogPrivate() ogData {
+	// Same card for missing and private paths so previews cannot leak existence.
 	return ogData{
 		Title:       "godrive",
-		Description: "Private file on godrive",
+		Description: "This link is unavailable.",
 		ImageURL:    "/favicon.png",
 		Card:        "summary",
 	}

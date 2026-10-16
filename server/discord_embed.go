@@ -53,7 +53,7 @@ func (s *Server) buildDiscordEmbed(r *http.Request, info discordEmbedInfo) []byt
 
 	var body strings.Builder
 	if info.Private {
-		body.WriteString("# Private file\nThis link is not publicly readable.")
+		body.WriteString("# Unavailable\nThis link is not publicly readable.")
 	} else {
 		fmt.Fprintf(&body, "# **[%s](%s)**\n", escapeDiscordMDLink(title), page)
 		switch {
@@ -225,10 +225,12 @@ func (s *Server) linkPreview(r *http.Request, filePath, description, contentType
 	return og, embed
 }
 
-// serveLinkPreview sends OG + component-embed HTML. Discordbot always gets a
-// minimal document (works under -tags_dev); browsers get the SPA (or Nuxt redirect).
+// serveLinkPreview sends OG + component-embed HTML.
+// Discordbot and -tags destin (no embedded SPA) get a minimal document — destin must
+// not 307 to FrontendURL for the same path, or Vite's file proxy loops forever.
+// Production browsers get the embedded SPA with OG injected.
 func (s *Server) serveLinkPreview(w http.ResponseWriter, r *http.Request, og ogData, embed []byte) {
-	if isDiscordbot(r) {
+	if isDiscordbot(r) || s.public == nil {
 		s.writeLinkPreviewHTML(w, r, og, embed)
 		return
 	}

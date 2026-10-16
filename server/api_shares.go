@@ -74,7 +74,8 @@ func (s *Server) CreateShareAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	perms, err := s.EffectivePermissions(r.Context(), p, info, nil)
 	if err != nil || (s.cfg.AuthEnabled() && !perms.Has(acl.PermissionShare)) {
-		s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
+		err := s.pathACLError(r.Context(), p, info, nil)
+		s.writeError(w, r, err, pathACLStatus(err))
 		return
 	}
 	allow := int64(acl.PermissionRead)

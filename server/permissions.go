@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"log/slog"
+	"net/http"
 	"path"
 	"time"
 
@@ -52,6 +53,47 @@ func (s *Server) CanAnonymousRead(ctx context.Context, filePath string) (bool, e
 		return false, err
 	}
 	return perms.Has(acl.PermissionRead), nil
+}
+
+// canDiscoverPath reports whether info may learn that path exists: it must
+// actually exist and the caller must have read (otherwise denials look like 404).
+func (s *Server) canDiscoverPath(ctx context.Context, p string, info *UserInfo, owner *string) bool {
+	if !s.cfg.AuthEnabled() {
+		return true
+	}
+	ok, err := s.pathExists(ctx, p)
+	if err != nil || !ok {
+		return false
+	}
+	perms, err := s.EffectivePermissions(ctx, p, info, owner)
+	if err != nil {
+		return false
+	}
+	if perms.Has(acl.PermissionRead) {
+		return true
+	}
+	anon, _ := s.CanAnonymousRead(ctx, p)
+	return anon
+}
+
+// pathACLError returns errNotFound when the caller cannot discover the path,
+// otherwise errForbidden — so ACL denials do not leak filename existence.
+func (s *Server) pathACLError(ctx context.Context, p string, info *UserInfo, owner *string) error {
+	if s.canDiscoverPath(ctx, p, info, owner) {
+		return errForbidden
+	}
+	return errNotFound
+}
+
+func pathACLStatus(err error) int {
+	switch {
+	case errors.Is(err, errNotFound):
+		return http.StatusNotFound
+	case errors.Is(err, errForbidden):
+		return http.StatusForbidden
+	default:
+		return http.StatusInternalServerError
+	}
 }
 
 func (s *Server) aclPermsFor(ctx context.Context, filePath string, id *acl.Identity) (acl.Permissions, error) {

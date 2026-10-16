@@ -42,12 +42,12 @@ func TestPermissionsAPIAuthz(t *testing.T) {
 	stranger := &UserInfo{Subject: "stranger", Groups: []string{"godrive"}}
 	admin := &UserInfo{Subject: "admin", Groups: []string{"admin"}}
 
-	t.Run("get forbidden without read", func(t *testing.T) {
+	t.Run("get not found without read", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/acl/docs", nil)
 		req = withChiStar(withUser(req, stranger), "docs")
 		rec := httptest.NewRecorder()
 		e.s.GetPermissionsAPI(rec, req)
-		if rec.Code != http.StatusForbidden {
+		if rec.Code != http.StatusNotFound {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 	})

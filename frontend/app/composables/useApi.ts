@@ -75,9 +75,10 @@ export function fileZipDownloadUrl(dir: string, names: string[]) {
   return base + '?' + params.toString()
 }
 
-/** Inline stream URL — public path, raw bytes for the browser. */
+/** Inline stream URL — public path with raw=1 so destin Nuxt proxies bytes to Go. */
 export function fileStreamUrl(path: string) {
-  return publicFilePath(path)
+  const base = publicFilePath(path)
+  return base + (base.includes('?') ? '&' : '?') + 'raw=1'
 }
 
 export type MediaKind = 'audio' | 'video' | 'image' | 'pdf' | null

@@ -112,8 +112,21 @@ func (s *Server) GetPermissionsAPI(w http.ResponseWriter, r *http.Request) {
 	p := aclPath(r)
 	info := GetUserInfo(r)
 	if !s.canReadPermissions(r.Context(), p, info) {
-		s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
+		err := s.pathACLError(r.Context(), p, info, nil)
+		s.writeError(w, r, err, pathACLStatus(err))
 		return
+	}
+	// Inherited read on a missing path must not differ from a private path.
+	if p != "/" {
+		exists, err := s.pathExists(r.Context(), p)
+		if err != nil {
+			s.writeError(w, r, err, http.StatusInternalServerError)
+			return
+		}
+		if !exists {
+			s.writeError(w, r, errNotFound, http.StatusNotFound)
+			return
+		}
 	}
 	perms, err := s.EffectivePermissions(r.Context(), p, info, nil)
 	if err != nil {
@@ -197,7 +210,8 @@ func (s *Server) PutPermissionsAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	info := GetUserInfo(r)
 	if !s.canUpdatePermissions(r.Context(), p, info) {
-		s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
+		err := s.pathACLError(r.Context(), p, info, nil)
+		s.writeError(w, r, err, pathACLStatus(err))
 		return
 	}
 	var body struct {
@@ -243,7 +257,8 @@ func (s *Server) PatchPermissionsAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	info := GetUserInfo(r)
 	if !s.canUpdatePermissions(r.Context(), p, info) {
-		s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
+		err := s.pathACLError(r.Context(), p, info, nil)
+		s.writeError(w, r, err, pathACLStatus(err))
 		return
 	}
 	var body struct {

@@ -76,10 +76,22 @@
       <h2 class="load-error-title">{{ errorTitle }}</h2>
       <p class="load-error-detail">{{ error }}</p>
       <p v-if="errorHint" class="muted load-error-hint">{{ errorHint }}</p>
-      <button type="button" class="btn-primary load-error-retry" :disabled="loading" @click="load({ force: true })">
-        <AppIcon name="refresh" />
-        {{ loading ? 'Retrying…' : 'Try again' }}
-      </button>
+      <div class="load-error-actions">
+        <NuxtLink v-if="errorStatus === 404" :to="rootLink" class="btn-primary load-error-retry" @click.prevent="goTo(rootLink)">
+          <AppIcon name="home" />
+          Go home
+        </NuxtLink>
+        <button
+          v-else
+          type="button"
+          class="btn-primary load-error-retry"
+          :disabled="loading"
+          @click="load({ force: true })"
+        >
+          <AppIcon name="refresh" />
+          {{ loading ? 'Retrying…' : 'Try again' }}
+        </button>
+      </div>
     </div>
 
     <template v-else>
@@ -607,6 +619,7 @@ const errorHint = computed(() => {
     return 'The API isn’t reachable right now. Check that godrive is running, then try again.'
   }
   if (s === 403) return 'You don’t have permission to view this path.'
+  if (s === 404) return 'Nothing here — it may have been moved, or you don’t have access.'
   if (s >= 500) return 'The server hit an error while loading this folder.'
   return ''
 })
@@ -848,14 +861,17 @@ function hasRowMenu(f: FileEntry) {
 function streamUrl(f: FileEntry) {
   if (props.shareId) {
     const base = (props.basePath || `/s/${props.shareId}`).replace(/\/$/, '')
-    return `${base}/${encodeURIComponent(f.name).replace(/%2F/gi, '/')}`
+    const path = `${base}/${encodeURIComponent(f.name).replace(/%2F/gi, '/')}`
+    return path + (path.includes('?') ? '&' : '?') + 'raw=1'
   }
   return fileStreamUrl(f.path)
 }
 
 function downloadUrl(f: FileEntry) {
   if (props.shareId) {
-    return `${streamUrl(f)}?dl=1`
+    const base = (props.basePath || `/s/${props.shareId}`).replace(/\/$/, '')
+    const path = `${base}/${encodeURIComponent(f.name).replace(/%2F/gi, '/')}`
+    return path + (path.includes('?') ? '&' : '?') + 'dl=1'
   }
   return fileDownloadUrl(f.path)
 }
@@ -907,14 +923,9 @@ async function load(opts?: { force?: boolean }) {
   } catch (e: any) {
     if (seq !== loadSeq) return
     const status = Number(e?.statusCode || e?.status || e?.response?.status || 0)
-    if (!props.shareId && status === 404 && normalizePath(path) !== '/') {
-      viewPath = ''
-      await navigateTo('/')
-      return
-    }
     if (status !== 401) {
       errorStatus.value = status
-      error.value = loadErrorMessage(e, status)
+      error.value = status === 404 ? 'Not found' : loadErrorMessage(e, status)
     }
     files.value = []
     dirPerms.value = 0
@@ -1003,9 +1014,10 @@ async function goTo(path: string | null | undefined) {
   } catch (e: any) {
     if (seq !== loadSeq) return
     const status = Number(e?.statusCode || e?.status || e?.response?.status || 0)
-    if (!props.shareId && status === 404 && next !== '/') {
+    if (status === 404) {
+      // Stay on the requested URL and let load() render the 404 page.
       viewPath = ''
-      await navigateTo('/')
+      await navigateTo({ path: next, query: {} })
       return
     }
     if (status !== 401) {

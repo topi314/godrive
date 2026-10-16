@@ -80,7 +80,11 @@ func (s *Server) validateUploadTarget(ctx context.Context, baseDir, name string,
 	parent := path.Dir(target)
 	perms, err := s.effectiveUploadPerms(ctx, parent, info, ident, nil)
 	if err != nil || !perms.Has(acl.PermissionCreate) {
-		errs = append(errs, "create forbidden")
+		if (ident == nil || ident.ShareID == "") && !s.canDiscoverPath(ctx, parent, info, nil) {
+			errs = append(errs, "not found")
+		} else {
+			errs = append(errs, "create forbidden")
+		}
 	}
 	existing, err := s.store.Q.GetFile(ctx, target)
 	if err == nil {
@@ -93,7 +97,11 @@ func (s *Server) validateUploadTarget(ctx context.Context, baseDir, name string,
 			}
 			up, uerr := s.effectiveUploadPerms(ctx, target, info, ident, nullableStr(owner))
 			if uerr != nil || !up.Has(acl.PermissionUpdate) {
-				errs = append(errs, "replace forbidden")
+				if (ident == nil || ident.ShareID == "") && !s.canDiscoverPath(ctx, target, info, nullableStr(owner)) {
+					errs = append(errs, "not found")
+				} else {
+					errs = append(errs, "replace forbidden")
+				}
 			}
 		}
 	} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -407,11 +415,11 @@ func (s *Server) CompleteUploadSessionAPI(w http.ResponseWriter, r *http.Request
 				s.writeError(w, r, err2, http.StatusInternalServerError)
 				return
 			}
-		} else if !errors.Is(err, errForbidden) {
-			s.writeError(w, r, err, http.StatusInternalServerError)
+		} else if errors.Is(err, errForbidden) || errors.Is(err, errNotFound) {
+			s.writeError(w, r, err, pathACLStatus(err))
 			return
 		} else {
-			s.writeError(w, r, err, http.StatusForbidden)
+			s.writeError(w, r, err, http.StatusInternalServerError)
 			return
 		}
 	}

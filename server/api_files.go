@@ -76,9 +76,8 @@ func (s *Server) listDir(ctx context.Context, dir string, info *UserInfo) ([]Fil
 		}
 		if !perms.Has(acl.PermissionRead) {
 			anon, _ := s.CanAnonymousRead(ctx, dir)
-			// Guests may browse; children are still filtered by ACL (often empty).
-			if !anon && !s.isGuest(info) {
-				return nil, errors.New("forbidden")
+			if !anon {
+				return nil, errNotFound
 			}
 		}
 	}
@@ -283,33 +282,36 @@ func (s *Server) GetPath(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if !canRead && info == nil && s.cfg.AuthEnabled() {
-		// JSON/XHR: 401. HTML: SPA/login UI with a private link preview.
-		if wantsJSON(r) || !wantsHTML(r) {
-			s.writeError(w, r, errors.New("unauthorized"), http.StatusUnauthorized)
-			return
-		}
-		og, embed := s.linkPreview(r, "", "", "", 0, p, "", true)
-		s.serveLinkPreview(w, r, og, embed)
-		return
-	}
-
-	if fileErr != nil {
+	// No read, or no such path → identical responses (no existence leak).
+	// HTML keeps a generic unavailable OG card so social crawlers do not follow
+	// a redirect and unfurl the homepage instead.
+	hidden := !canRead
+	if !hidden && fileErr != nil {
 		exists, err := s.pathExists(r.Context(), p)
 		if err != nil {
 			s.writeError(w, r, err, http.StatusInternalServerError)
 			return
 		}
-		if !exists {
-			if wantsJSON(r) {
-				s.writeError(w, r, errors.New("not found"), http.StatusNotFound)
-				return
-			}
-			if p != "/" {
-				http.Redirect(w, r, "/", http.StatusFound)
+		hidden = !exists
+	}
+	if hidden {
+		if wantsJSON(r) {
+			s.writeError(w, r, errNotFound, http.StatusNotFound)
+			return
+		}
+		// Dev + raw/dl open of a missing/private file: send the browser to the
+		// Nuxt path (no force-proxy query) so the in-app 404 UI renders.
+		if s.public == nil && !isDiscordbot(r) {
+			q := r.URL.Query()
+			if q.Has("raw") || q.Has("dl") || q.Has("download") || q.Has("preview") {
+				target := s.cfg.Server.FrontendURL + p
+				http.Redirect(w, r, target, http.StatusFound)
 				return
 			}
 		}
+		og, embed := s.linkPreview(r, "", "", "", 0, p, "", true)
+		s.serveLinkPreview(w, r, og, embed)
+		return
 	}
 
 	isFolder := p == "/" || fileErr != nil || storage.IsDirectory(file.ContentType)
@@ -321,11 +323,7 @@ func (s *Server) GetPath(w http.ResponseWriter, r *http.Request) {
 	if wantsJSON(r) {
 		entries, err := s.listDir(r.Context(), p, info)
 		if err != nil {
-			status := http.StatusInternalServerError
-			if err.Error() == "forbidden" {
-				status = http.StatusForbidden
-			}
-			s.writeError(w, r, err, status)
+			s.writeError(w, r, err, pathACLStatus(err))
 			return
 		}
 		dirPerms, _ := s.EffectivePermissions(r.Context(), p, info, nil)
@@ -339,12 +337,9 @@ func (s *Server) GetPath(w http.ResponseWriter, r *http.Request) {
 
 	var og ogData
 	var embed []byte
-	switch {
-	case !canRead:
-		og, embed = s.linkPreview(r, "", "", "", 0, p, "", true)
-	case fileErr == nil:
+	if fileErr == nil {
 		og, embed = s.linkPreview(r, file.Path, file.Description, file.ContentType, file.Size, p, "", false)
-	default:
+	} else {
 		og, embed = s.linkPreview(r, p, "", storage.ContentTypeDirectory, 0, p, "", false)
 	}
 	s.serveLinkPreview(w, r, og, embed)
@@ -391,8 +386,8 @@ func (s *Server) QueryFilesAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		if !perms.Has(acl.PermissionRead) {
 			anon, _ := s.CanAnonymousRead(r.Context(), dir)
-			if !anon && !s.isGuest(info) {
-				s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
+			if !anon {
+				s.writeError(w, r, errNotFound, http.StatusNotFound)
 				return
 			}
 		}
@@ -793,7 +788,8 @@ func (s *Server) putRawFile(w http.ResponseWriter, r *http.Request, target strin
 		}
 		up, uerr := s.EffectivePermissions(r.Context(), target, info, nullableStr(owner))
 		if uerr != nil || (s.cfg.AuthEnabled() && !up.Has(acl.PermissionUpdate)) {
-			s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
+			err := s.pathACLError(r.Context(), target, info, nullableStr(owner))
+			s.writeError(w, r, err, pathACLStatus(err))
 			return
 		}
 	case errors.Is(getErr, sql.ErrNoRows):
@@ -803,7 +799,8 @@ func (s *Server) putRawFile(w http.ResponseWriter, r *http.Request, target strin
 			return
 		}
 		if s.cfg.AuthEnabled() && !parentPerms.Has(acl.PermissionCreate) {
-			s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
+			err := s.pathACLError(r.Context(), parent, info, nil)
+			s.writeError(w, r, err, pathACLStatus(err))
 			return
 		}
 	default:
@@ -812,11 +809,7 @@ func (s *Server) putRawFile(w http.ResponseWriter, r *http.Request, target strin
 	}
 
 	if err := s.ensureDir(r.Context(), parent, info); err != nil {
-		status := http.StatusInternalServerError
-		if errors.Is(err, errForbidden) {
-			status = http.StatusForbidden
-		}
-		s.writeError(w, r, err, status)
+		s.writeError(w, r, err, pathACLStatus(err))
 		return
 	}
 
@@ -911,7 +904,8 @@ func (s *Server) mkdirPath(w http.ResponseWriter, r *http.Request, target string
 		return
 	}
 	if s.cfg.AuthEnabled() && !perms.Has(acl.PermissionCreate) {
-		s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
+		err := s.pathACLError(r.Context(), path.Dir(target), info, nil)
+		s.writeError(w, r, err, pathACLStatus(err))
 		return
 	}
 	if _, err := s.store.Q.GetFile(r.Context(), target); err == nil {
@@ -978,7 +972,10 @@ func resolveRenameTarget(from, spec string) (string, error) {
 	return to, nil
 }
 
-var errForbidden = errors.New("forbidden")
+var (
+	errForbidden = errors.New("forbidden")
+	errNotFound  = errors.New("not found")
+)
 
 func (s *Server) ensureDir(ctx context.Context, destDir string, info *UserInfo) error {
 	return s.ensureDirWithOpts(ctx, destDir, info, true)
@@ -1043,7 +1040,7 @@ func (s *Server) ensureDirWithOpts(ctx context.Context, destDir string, info *Us
 		if checkACL && s.cfg.AuthEnabled() {
 			perms, err := s.EffectivePermissions(ctx, path.Dir(p), info, nil)
 			if err != nil || !perms.Has(acl.PermissionCreate) {
-				return errForbidden
+				return s.pathACLError(ctx, path.Dir(p), info, nil)
 			}
 		}
 		if err := s.storage.Mkdir(ctx, p); err != nil {
@@ -1066,19 +1063,19 @@ func (s *Server) authorizeRename(ctx context.Context, from, to string, info *Use
 	}
 	if path.Dir(from) == path.Dir(to) {
 		if !srcPerms.Has(acl.PermissionUpdate) {
-			return errForbidden
+			return s.pathACLError(ctx, from, info, srcOwner)
 		}
 		return nil
 	}
 	if !srcPerms.Has(acl.PermissionDelete) {
-		return errForbidden
+		return s.pathACLError(ctx, from, info, srcOwner)
 	}
 	destPerms, err := s.EffectivePermissions(ctx, path.Dir(to), info, nil)
 	if err != nil {
 		return err
 	}
 	if !destPerms.Has(acl.PermissionCreate) {
-		return errForbidden
+		return s.pathACLError(ctx, path.Dir(to), info, nil)
 	}
 	return nil
 }
@@ -1173,6 +1170,8 @@ func renameHTTPStatus(err error) int {
 	switch {
 	case errors.Is(err, errAlreadyExists):
 		return http.StatusConflict
+	case errors.Is(err, errNotFound):
+		return http.StatusNotFound
 	case errors.Is(err, errForbidden):
 		return http.StatusForbidden
 	}
@@ -1190,7 +1189,7 @@ func (s *Server) PatchFileAPI(w http.ResponseWriter, r *http.Request) {
 	info := GetUserInfo(r)
 	file, err := s.store.Q.GetFile(r.Context(), p)
 	if err != nil {
-		s.writeError(w, r, errors.New("not found"), http.StatusNotFound)
+		s.writeError(w, r, errNotFound, http.StatusNotFound)
 		return
 	}
 	owner := ""
@@ -1277,7 +1276,8 @@ func (s *Server) PatchFileAPI(w http.ResponseWriter, r *http.Request) {
 	if contentChanging {
 		perms, err := s.EffectivePermissions(r.Context(), p, info, nullableStr(owner))
 		if err != nil || (s.cfg.AuthEnabled() && !perms.Has(acl.PermissionUpdate)) {
-			s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
+			err := s.pathACLError(r.Context(), p, info, nullableStr(owner))
+			s.writeError(w, r, err, pathACLStatus(err))
 			return
 		}
 	}
@@ -1291,6 +1291,8 @@ func (s *Server) PatchFileAPI(w http.ResponseWriter, r *http.Request) {
 		if err := s.setFileOwner(r.Context(), p, info, owner, strings.TrimSpace(*meta.OwnerID), meta.OwnerRecursive); err != nil {
 			status := http.StatusInternalServerError
 			switch {
+			case errors.Is(err, errNotFound):
+				status = http.StatusNotFound
 			case errors.Is(err, errForbidden):
 				status = http.StatusForbidden
 			case errors.Is(err, errBadOwner):
@@ -1365,7 +1367,7 @@ func (s *Server) setFileOwner(ctx context.Context, p string, info *UserInfo, cur
 		return err
 	}
 	if s.cfg.AuthEnabled() && !perms.Has(acl.PermissionUpdatePermissions) && !s.adminSudo(info) {
-		return errForbidden
+		return s.pathACLError(ctx, p, info, nullableStr(currentOwner))
 	}
 	var uid sql.NullString
 	if newOwner != "" {
@@ -1451,7 +1453,8 @@ func (s *Server) MoveFilesAPI(w http.ResponseWriter, r *http.Request) {
 	info := GetUserInfo(r)
 	createPerms, err := s.EffectivePermissions(r.Context(), dest, info, nil)
 	if err != nil || (s.cfg.AuthEnabled() && !createPerms.Has(acl.PermissionCreate)) {
-		s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
+		err := s.pathACLError(r.Context(), dest, info, nil)
+		s.writeError(w, r, err, pathACLStatus(err))
 		return
 	}
 	var names []string
@@ -1516,7 +1519,8 @@ func (s *Server) DeleteFilesAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		perms, _ := s.EffectivePermissions(r.Context(), p, info, nullableStr(owner))
 		if s.cfg.AuthEnabled() && !perms.Has(acl.PermissionDelete) {
-			s.writeError(w, r, fmt.Errorf("forbidden: %s", p), http.StatusForbidden)
+			err := s.pathACLError(r.Context(), p, info, nullableStr(owner))
+			s.writeError(w, r, err, pathACLStatus(err))
 			return
 		}
 		rows, _ := s.store.Q.ListFilesUnder(r.Context(), database.ListFilesUnderParams{Path: p, PathLike: acl.LikeUnder(p)})

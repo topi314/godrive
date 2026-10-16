@@ -162,7 +162,7 @@ All bits combined = `63`.
 
 ## Errors
 
-Common statuses: `400` bad input, `401` missing/invalid auth, `403` ACL denied, `404` missing, `409` conflict (exists / upload_offset).
+Common statuses: `400` bad input, `401` missing/invalid auth, `403` ACL denied (path is visible but action not allowed), `404` missing or private (no read — identical responses so existence cannot be probed), `409` conflict (exists / upload_offset).
 
 <details>
 <summary>Example error bodies</summary>
@@ -193,11 +193,13 @@ Common statuses: `400` bad input, `401` missing/invalid auth, `403` ACL denied, 
 
 ```json
 {
-  "message": "forbidden: /home/alice/secret.txt",
-  "status": 403,
+  "message": "not found",
+  "status": 404,
   "path": "/home/alice/secret.txt"
 }
 ```
+
+(Private and missing paths return the same 404 / unavailable preview, so clients cannot probe for names.)
 
 </details>
 

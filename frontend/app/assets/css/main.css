@@ -1788,8 +1788,15 @@ button.btn-primary.danger:hover:not(:disabled),
   font-size: 0.9rem;
 }
 
-.load-error-retry {
+.load-error-actions {
   margin-top: 0.5rem;
+}
+
+.load-error-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  text-decoration: none;
 }
 
 .progress {

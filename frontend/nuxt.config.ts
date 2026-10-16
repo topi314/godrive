@@ -20,21 +20,33 @@ const nuxtPublicExact = new Set([
   '/robots.txt',
 ])
 
+function prefersHTML(accept: string) {
+  const a = accept.toLowerCase()
+  if (!a.includes('text/html')) return false
+  // XHR/fetch listings send application/json; keep those on Go.
+  if (a.includes('application/json')) return false
+  return true
+}
+
 function shouldProxyToGo(url: string, accept: string, method = 'GET') {
   const path = pathOnly(url)
   if (nuxtPublicExact.has(path)) return false
   const m = method.toUpperCase()
   // Mutations always hit Go on the public path (original API style).
   if (m !== 'GET' && m !== 'HEAD') return true
+  if (path.startsWith('/api')) return true
+  // Force file bytes (open in new tab / download / preview).
   if (
-    path.startsWith('/api') ||
+    url.includes('raw=1') ||
     url.includes('dl=1') ||
     url.includes('download=1') ||
-    accept.includes('application/json') ||
-    looksLikeFile(url)
+    url.includes('preview=1')
   ) {
     return true
   }
+  // Browser navigations stay on the Nuxt SPA (in-app 404, folder UI).
+  if (prefersHTML(accept)) return false
+  if (accept.includes('application/json') || looksLikeFile(url)) return true
   return false
 }
 
