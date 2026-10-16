@@ -56,7 +56,7 @@ Environment overrides use the `GODRIVE_` prefix (for example `GODRIVE_DATABASE_P
 
 | Area | Notes |
 |------|--------|
-| `[server]` | `listen_addr`, `frontend_url` ([Nuxt](https://nuxt.com) origin in `-tags dev`) |
+| `[server]` | `listen_addr`, `frontend_url` ([Nuxt](https://nuxt.com) origin in `-tags dev`), `force_download_unsafe` (HTML/SVG as attachment) |
 | `[database]` | `sqlite` or `postgres` |
 | `[storage]` | `local` or `s3`; optional `sync_interval` (defaults 15m local / 1m s3) |
 | `[auth]` | [OIDC](https://openid.net/developers/how-connect-works/); `enabled = false` disables auth and ACLs (open admin mode) |

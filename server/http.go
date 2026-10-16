@@ -51,6 +51,10 @@ func wantsHTML(r *http.Request) bool {
 	return strings.Contains(r.Header.Get("Accept"), "text/html")
 }
 
+func isDiscordbot(r *http.Request) bool {
+	return strings.Contains(strings.ToLower(r.Header.Get("User-Agent")), "discord")
+}
+
 // decodeJSONOptional decodes JSON from the request body. An empty or missing
 // body is success and leaves dst unchanged (zero value / prior contents).
 func decodeJSONOptional(r *http.Request, dst any) error {

@@ -25,11 +25,26 @@ type Config struct {
 type ServerConfig struct {
 	ListenAddr  string `toml:"listen_addr"`
 	FrontendURL string `toml:"frontend_url"` // Nuxt origin in -tags dev (e.g. http://localhost:3000)
+	// ForceDownloadUnsafe serves HTML/SVG/XHTML as attachment with nosniff
+	// so uploaded markup cannot execute on the godrive origin.
+	// nil / omitted defaults to true; set false to allow inline rendering.
+	ForceDownloadUnsafe *bool `toml:"force_download_unsafe"`
+}
+
+// ForceDownloadUnsafeEnabled reports whether unsafe markup must be downloaded.
+// Omitted config defaults to true.
+func (c ServerConfig) ForceDownloadUnsafeEnabled() bool {
+	if c.ForceDownloadUnsafe == nil {
+		return true
+	}
+	return *c.ForceDownloadUnsafe
 }
 
 func (c ServerConfig) String() string {
-	return fmt.Sprintf("\n  ListenAddr: %s\n  FrontendURL: %s", c.ListenAddr, c.FrontendURL)
+	return fmt.Sprintf("\n  ListenAddr: %s\n  FrontendURL: %s\n  ForceDownloadUnsafe: %t",
+		c.ListenAddr, c.FrontendURL, c.ForceDownloadUnsafeEnabled())
 }
+
 
 func LoadConfig(path string) (Config, error) {
 	var cfg Config
@@ -65,6 +80,11 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("GODRIVE_FRONTEND_URL"); v != "" {
 		cfg.Server.FrontendURL = v
+	}
+	if v := os.Getenv("GODRIVE_FORCE_DOWNLOAD_UNSAFE"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.Server.ForceDownloadUnsafe = &b
+		}
 	}
 	if v := os.Getenv("GODRIVE_DATABASE_TYPE"); v != "" {
 		cfg.Database.Type = DatabaseType(v)

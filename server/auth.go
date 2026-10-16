@@ -294,10 +294,6 @@ func (s *Server) RequireAccess(next http.Handler) http.Handler {
 			r = r.WithContext(context.WithValue(r.Context(), UserInfoKey, info))
 		}
 		if info == nil || !s.hasAccess(info) {
-			if r.Method == http.MethodGet && wantsHTML(r) && !isBot(r) {
-				http.Redirect(w, r, "/api/login?rd="+r.URL.RequestURI(), http.StatusFound)
-				return
-			}
 			s.writeError(w, r, errors.New("unauthorized"), http.StatusUnauthorized)
 			return
 		}

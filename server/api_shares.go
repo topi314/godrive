@@ -234,6 +234,14 @@ func (s *Server) resolveShare(r *http.Request) (database.Share, string, error) {
 			rest = strings.TrimPrefix(p, prefix+"/")
 		}
 	}
+	rest = strings.Trim(strings.ReplaceAll(rest, "\\", "/"), "/")
+	root := acl.NormalizePath(share.Path)
+	// File shares: allow /s/{id}/{basename} so Discord media URLs can carry an extension.
+	if rest != "" && !strings.Contains(rest, "/") && rest == path.Base(root) {
+		if f, err := s.store.Q.GetFile(r.Context(), root); err == nil && !storage.IsDirectory(f.ContentType) {
+			return share, root, nil
+		}
+	}
 	target, err := joinShareTarget(share.Path, rest)
 	if err != nil {
 		return share, "", err
@@ -385,30 +393,22 @@ func (s *Server) GetSharePage(w http.ResponseWriter, r *http.Request) {
 	varyAccept(w)
 	share, target, err := s.resolveShare(r)
 	if err != nil {
-		if isBot(r) {
-			s.writeOG(w, r, ogPrivate())
-			return
-		}
 		status := http.StatusNotFound
 		if errors.Is(err, errShareExpired) {
 			status = http.StatusGone
 		} else if err.Error() == "forbidden" {
 			status = http.StatusForbidden
 		}
-		s.writeError(w, r, err, status)
+		if wantsJSON(r) {
+			s.writeError(w, r, err, status)
+			return
+		}
+		og, embed := s.linkPreview(r, "", "", "", 0, r.URL.Path, "", true)
+		s.serveLinkPreview(w, r, og, embed)
 		return
 	}
 	if !acl.IsSelfOrUnder(target, share.Path) {
 		s.writeError(w, r, errors.New("forbidden"), http.StatusForbidden)
-		return
-	}
-
-	if isBot(r) {
-		if file, err := s.store.Q.GetFile(r.Context(), target); err == nil {
-			s.writeOG(w, r, ogPublic(file.Path, file.Description, file.ContentType, file.Size))
-		} else {
-			s.writeOG(w, r, ogPublic(target, "", "", 0))
-		}
 		return
 	}
 
@@ -426,6 +426,13 @@ func (s *Server) GetSharePage(w http.ResponseWriter, r *http.Request) {
 		}
 		if r.URL.Query().Get("preview") == "1" {
 			s.serveImagePreview(w, r, target)
+			return
+		}
+		if wantsDiscordUnfurl(r) {
+			page := shareBrowsePath(share, target)
+			og, embed := s.linkPreview(r, file.Path, file.Description, file.ContentType, file.Size,
+				page, shareMediaPath(share.ID, file.Path, file.ContentType), false)
+			s.serveLinkPreview(w, r, og, embed)
 			return
 		}
 		s.streamFile(w, r, target, file.ContentType, wantsDownload(r))
@@ -467,7 +474,19 @@ func (s *Server) GetSharePage(w http.ResponseWriter, r *http.Request) {
 		}, http.StatusOK)
 		return
 	}
-	s.serveSPA(w, r)
+
+	page := shareBrowsePath(share, target)
+	var og ogData
+	var embed []byte
+	switch {
+	case !sharePerms.Has(acl.PermissionRead):
+		og, embed = s.linkPreview(r, "", "", "", 0, page, "", true)
+	case fileErr == nil:
+		og, embed = s.linkPreview(r, file.Path, file.Description, file.ContentType, file.Size, page, "", false)
+	default:
+		og, embed = s.linkPreview(r, target, "", storage.ContentTypeDirectory, 0, page, "", false)
+	}
+	s.serveLinkPreview(w, r, og, embed)
 }
 
 func (s *Server) GetSharePreview(w http.ResponseWriter, r *http.Request) {

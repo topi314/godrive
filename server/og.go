@@ -8,6 +8,7 @@ import (
 	_ "image/jpeg"
 	"image/png"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 
@@ -26,12 +27,14 @@ func ogPrivate() ogData {
 	return ogData{
 		Title:       "godrive",
 		Description: "Private file on godrive",
-		ImageURL:    "/api/og-card.png",
+		ImageURL:    "/favicon.png",
 		Card:        "summary",
 	}
 }
 
-func ogPublic(filePath, description, contentType string, size int64) ogData {
+// ogPublic builds Open Graph metadata for a publicly reachable path.
+// publicPath is the URL path crawlers should use for media (e.g. /s/{id}/clip.jpg).
+func ogPublic(filePath, description, contentType string, size int64, publicPath string) ogData {
 	title := path.Base(filePath)
 	if title == "/" || title == "." || title == "" {
 		title = "godrive"
@@ -47,11 +50,14 @@ func ogPublic(filePath, description, contentType string, size int64) ogData {
 			desc = fmt.Sprintf("%s · %s", desc, humanBytes(size))
 		}
 	}
+	if publicPath == "" {
+		publicPath = filePath
+	}
 	card := "summary"
-	img := "/api/og-card.png"
+	img := "/favicon.png"
 	if strings.HasPrefix(contentType, "image/") {
 		card = "summary_large_image"
-		img = filePath + "?preview=1"
+		img = withQuery(publicPath, "preview", "1")
 	}
 	return ogData{
 		Title:       title,
@@ -61,62 +67,32 @@ func ogPublic(filePath, description, contentType string, size int64) ogData {
 	}
 }
 
-func (s *Server) writeOG(w http.ResponseWriter, r *http.Request, data ogData) {
-	if data.URL == "" {
-		data.URL = r.URL.RequestURI()
+func withQuery(rawPath, key, value string) string {
+	u, err := url.Parse(rawPath)
+	if err != nil {
+		sep := "?"
+		if strings.Contains(rawPath, "?") {
+			sep = "&"
+		}
+		return rawPath + sep + url.QueryEscape(key) + "=" + url.QueryEscape(value)
 	}
+	q := u.Query()
+	q.Set(key, value)
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+
+func (s *Server) publicBase(r *http.Request) string {
 	scheme := "http"
 	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
 		scheme = "https"
 	}
-	base := scheme + "://" + r.Host
-	img := data.ImageURL
-	if strings.HasPrefix(img, "/") {
-		img = base + img
-	}
-	canon := base + data.URL
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = fmt.Fprintf(w, `<!doctype html>
-<html><head>
-<meta charset="utf-8">
-<title>%s</title>
-<meta property="og:title" content="%s">
-<meta property="og:description" content="%s">
-<meta property="og:url" content="%s">
-<meta property="og:type" content="website">
-<meta property="og:image" content="%s">
-<meta name="twitter:card" content="%s">
-<meta name="twitter:title" content="%s">
-<meta name="twitter:description" content="%s">
-<meta name="twitter:image" content="%s">
-</head><body><p>%s</p></body></html>`,
-		htmlEscape(data.Title),
-		htmlEscape(data.Title), htmlEscape(data.Description), htmlEscape(canon), htmlEscape(img),
-		htmlEscape(data.Card),
-		htmlEscape(data.Title), htmlEscape(data.Description), htmlEscape(img),
-		htmlEscape(data.Description),
-	)
+	return scheme + "://" + r.Host
 }
 
 func htmlEscape(s string) string {
 	r := strings.NewReplacer(`&`, "&amp;", `"`, "&quot;", `<`, "&lt;", `>`, "&gt;")
 	return r.Replace(s)
-}
-
-func isBot(r *http.Request) bool {
-	ua := strings.ToLower(r.Header.Get("User-Agent"))
-	bots := []string{
-		"bot", "slack", "twitter", "facebook", "discord", "linkedin", "telegram",
-		"whatsapp", "preview", "crawler", "spider", "embedly", "quora", "pinterest",
-		"reddit", "vkshare", "w3c_validator", "applebot", "bingpreview",
-	}
-	for _, b := range bots {
-		if strings.Contains(ua, b) {
-			return true
-		}
-	}
-	return false
 }
 
 func (s *Server) serveImagePreview(w http.ResponseWriter, r *http.Request, filePath string) {
@@ -127,12 +103,12 @@ func (s *Server) serveImagePreview(w http.ResponseWriter, r *http.Request, fileP
 	}
 	defer rc.Close()
 	if !strings.HasPrefix(info.ContentType, "image/") && info.ContentType != "application/octet-stream" {
-		http.Redirect(w, r, "/api/og-card.png", http.StatusFound)
+		http.Redirect(w, r, "/favicon.png", http.StatusFound)
 		return
 	}
 	src, _, err := image.Decode(rc)
 	if err != nil {
-		http.Redirect(w, r, "/api/og-card.png", http.StatusFound)
+		http.Redirect(w, r, "/favicon.png", http.StatusFound)
 		return
 	}
 	const max = 1200

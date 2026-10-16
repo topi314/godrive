@@ -3,6 +3,9 @@ listen_addr = ":80"
 # Nuxt origin when the API is built with -tags dev (no embedded UI).
 # default: "http://localhost:3000"
 frontend_url = "https://godrive.zip"
+# Serve HTML/SVG/XHTML as attachment + nosniff (blocks XSS via uploaded markup).
+# default: true
+# force_download_unsafe = false
 
 [log]
 # DEBUG, INFO, WARN, ERROR

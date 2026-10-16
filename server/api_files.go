@@ -261,20 +261,17 @@ func (s *Server) GetPath(w http.ResponseWriter, r *http.Request) {
 		if !canRead {
 			canRead, _ = s.CanAnonymousRead(r.Context(), p)
 		}
-		if isBot(r) {
-			if canRead {
-				s.writeOG(w, r, ogPublic(file.Path, file.Description, file.ContentType, file.Size))
-			} else {
-				s.writeOG(w, r, ogPrivate())
-			}
-			return
-		}
 		if canRead && r.URL.Query().Get("preview") == "1" && !storage.IsDirectory(file.ContentType) {
 			s.serveImagePreview(w, r, p)
 			return
 		}
-		// Real files always stream (inline or attachment); SPA is only for directories.
 		if canRead && !storage.IsDirectory(file.ContentType) {
+			if wantsDiscordUnfurl(r) {
+				og, embed := s.linkPreview(r, file.Path, file.Description, file.ContentType, file.Size,
+					p, mediaPublicPath(p, file.ContentType), false)
+				s.serveLinkPreview(w, r, og, embed)
+				return
+			}
 			s.streamFile(w, r, p, file.ContentType, wantsDownload(r))
 			return
 		}
@@ -284,23 +281,16 @@ func (s *Server) GetPath(w http.ResponseWriter, r *http.Request) {
 		if !canRead {
 			canRead, _ = s.CanAnonymousRead(r.Context(), p)
 		}
-		if isBot(r) {
-			if canRead {
-				s.writeOG(w, r, ogPublic(p, "", "", 0))
-			} else {
-				s.writeOG(w, r, ogPrivate())
-			}
-			return
-		}
 	}
 
 	if !canRead && info == nil && s.cfg.AuthEnabled() {
-		// JSON/XHR clients cannot follow the OIDC redirect; return 401 so the SPA can send the browser to login.
+		// JSON/XHR: 401. HTML: SPA/login UI with a private link preview.
 		if wantsJSON(r) || !wantsHTML(r) {
 			s.writeError(w, r, errors.New("unauthorized"), http.StatusUnauthorized)
 			return
 		}
-		http.Redirect(w, r, "/api/login?rd="+r.URL.RequestURI(), http.StatusFound)
+		og, embed := s.linkPreview(r, "", "", "", 0, p, "", true)
+		s.serveLinkPreview(w, r, og, embed)
 		return
 	}
 
@@ -347,7 +337,17 @@ func (s *Server) GetPath(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.serveSPA(w, r)
+	var og ogData
+	var embed []byte
+	switch {
+	case !canRead:
+		og, embed = s.linkPreview(r, "", "", "", 0, p, "", true)
+	case fileErr == nil:
+		og, embed = s.linkPreview(r, file.Path, file.Description, file.ContentType, file.Size, p, "", false)
+	default:
+		og, embed = s.linkPreview(r, p, "", storage.ContentTypeDirectory, 0, p, "", false)
+	}
+	s.serveLinkPreview(w, r, og, embed)
 }
 
 func wantsJSON(r *http.Request) bool {
@@ -485,6 +485,24 @@ func sniffContentType(filePath, contentType string) string {
 func wantsDownload(r *http.Request) bool {
 	q := r.URL.Query()
 	return q.Get("dl") == "1" || q.Get("download") == "1"
+}
+
+// isUnsafeInlineContent reports markup that can execute in the browser when
+// served inline on the godrive origin (stored XSS / phishing).
+func isUnsafeInlineContent(contentType, filePath string) bool {
+	ct := strings.ToLower(strings.TrimSpace(contentType))
+	if i := strings.IndexByte(ct, ';'); i >= 0 {
+		ct = strings.TrimSpace(ct[:i])
+	}
+	switch ct {
+	case "text/html", "application/xhtml+xml", "image/svg+xml":
+		return true
+	}
+	switch strings.ToLower(path.Ext(filePath)) {
+	case ".html", ".htm", ".xhtml", ".svg":
+		return true
+	}
+	return false
 }
 
 func zipEntryName(root, filePath string, isDir bool) string {
@@ -705,8 +723,9 @@ func (s *Server) streamFile(w http.ResponseWriter, r *http.Request, p, contentTy
 	defer rc.Close()
 
 	name := path.Base(p)
-	if download {
-		// Force save-as even for playable MIME types (audio/video/pdf).
+	if download || (s.cfg.Server.ForceDownloadUnsafeEnabled() && isUnsafeInlineContent(contentType, p)) {
+		// Force save-as even for playable MIME types (audio/video/pdf),
+		// or for HTML/SVG when force_download_unsafe is enabled.
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Header().Set("Content-Disposition", "attachment; filename=\""+name+"\"")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
